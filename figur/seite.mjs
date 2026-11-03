@@ -175,5 +175,6 @@ export function seite({
       script: kitScript() + HAUS_LAUFZEIT + laufzeit,
     })
     .replace('<html lang="en">', '<html lang="de">')
+    .replace("</head>", '<link rel="icon" type="image/svg+xml" href="favicon.svg"></head>')
     .replace(/(<body class="iso" data-theme="dark">)/, `$1${bootSkript()}`);
 }

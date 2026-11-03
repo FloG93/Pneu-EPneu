@@ -81,9 +81,26 @@ function vorschau(k) {
   return "";
 }
 
-// Placeholder until the figure is built; step 8 replaces it with a still
-// lifted from the real drawing.
-const VORSCHAU_ZYLINDER = "";
+// A schematic section, not a miniature of the figure: at 240 x 135 the real
+// drawing would be a grey smudge, while this says in one glance what the page
+// is about — two chambers, a piston between them, and which air is which.
+const VORSCHAU_ZYLINDER = `<svg viewBox="0 0 240 135" role="img" aria-label="Schnitt durch einen doppeltwirkenden Zylinder: links die gefüllte Kammer, rechts die entlüftete, dazwischen der Kolben">
+            <g class="kachel-zyl">
+              <path class="luft-druck" d="M28 50H110V86H28Z"/>
+              <path class="luft-abluft" d="M122 50H186V86H122Z"/>
+              <path class="zyl-wand" d="M14 44H26V92H14ZM186 44H202V92H186ZM26 44H186V50H26ZM26 86H186V92H26Z"/>
+              <path class="zyl-kolben" d="M110 48H122V88H110Z"/>
+              <path class="zyl-stange" d="M122 63H236V73H122Z"/>
+              <path class="zyl-linie" d="M18 36H198M18 100H198"/>
+              <path class="zyl-schlauch" d="M40 92V110H96M172 92V110H120"/>
+              <path class="zyl-ventil" d="M96 102H120V124H96Z"/>
+              <circle class="zyl-punkt" cx="52" cy="68" r="3.2"/>
+              <circle class="zyl-punkt" cx="74" cy="60" r="3.2"/>
+              <circle class="zyl-punkt" cx="92" cy="76" r="3.2"/>
+              <circle class="zyl-punkt hell" cx="140" cy="60" r="3.2"/>
+              <circle class="zyl-punkt hell" cx="162" cy="76" r="3.2"/>
+            </g>
+          </svg>`;
 
 function rubrikAbschnitt(r) {
   const fertig = r.kacheln.filter((k) => k.zustand === "fertig");
@@ -226,6 +243,20 @@ const STIL = `
       background: var(--chip); color: var(--text-muted); font-size: 13px;
     }
     .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 3px; }
+
+    .kachel-zyl .zyl-wand { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; stroke-linejoin: round; }
+    .kachel-zyl .zyl-kolben { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1; }
+    .kachel-zyl .zyl-stange { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; }
+    .kachel-zyl .zyl-linie, .kachel-zyl .zyl-schlauch { fill: none; stroke: var(--plate-edge); stroke-width: 1.4; stroke-linecap: round; }
+    .kachel-zyl .zyl-linie { stroke-width: 0.8; opacity: 0.55; }
+    .kachel-zyl .zyl-ventil { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1.2; }
+    /* The two air tones, the same ones the figure measures (figur/luft.mjs). */
+    .kachel-zyl .luft-druck { fill: #123f87; }
+    .kachel-zyl .luft-abluft { fill: #5a8cbf; }
+    .kachel-zyl .zyl-punkt { fill: #123f87; }
+    .kachel-zyl .zyl-punkt.hell { fill: #5a8cbf; }
+    :root[data-theme="dark"] .kachel-zyl .luft-druck, :root[data-theme="dark"] .kachel-zyl .zyl-punkt { fill: #7cb8f5; }
+    :root[data-theme="dark"] .kachel-zyl .luft-abluft, :root[data-theme="dark"] .kachel-zyl .zyl-punkt.hell { fill: #3f6e9e; }
 
     .kachel.geplant {
       gap: 9px; padding: 16px 18px 18px;

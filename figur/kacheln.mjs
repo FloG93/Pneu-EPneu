@@ -22,9 +22,9 @@ export const RUBRIKEN = [
         name: "Doppeltwirkender Zylinder",
         satz:
           "Schnitt durch einen Normzylinder nach ISO 15552 mit dem 5/2-Wegeventil, das ihn umschaltet. "
-          + "Die Druckluft strömt sichtbar: dunkelblau unter Druck, hellblau als Abluft. "
+          + "Die Druckluft strömt sichtbar: kräftiges Blau steht unter Druck, blasses ist Abluft. "
           + "Ein Knopf zerlegt ihn in seine Baugruppen, die Kraft nach F = p · A wird live gerechnet.",
-        zustand: "geplant",
+        zustand: "fertig",
         ordner: "Zylinder-Doppeltwirkend",
         schaltzeichen: "Zylinder doppelt wirkend mit beidseitiger Endlagendämpfung",
         marken: ["ISO 15552", "Ø 50 mm", "Hub 200 mm", "mit 5/2-Wegeventil"],

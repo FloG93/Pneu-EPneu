@@ -138,6 +138,20 @@
     }
     .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 3px; }
 
+    .kachel-zyl .zyl-wand { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; stroke-linejoin: round; }
+    .kachel-zyl .zyl-kolben { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1; }
+    .kachel-zyl .zyl-stange { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; }
+    .kachel-zyl .zyl-linie, .kachel-zyl .zyl-schlauch { fill: none; stroke: var(--plate-edge); stroke-width: 1.4; stroke-linecap: round; }
+    .kachel-zyl .zyl-linie { stroke-width: 0.8; opacity: 0.55; }
+    .kachel-zyl .zyl-ventil { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1.2; }
+    /* The two air tones, the same ones the figure measures (figur/luft.mjs). */
+    .kachel-zyl .luft-druck { fill: #123f87; }
+    .kachel-zyl .luft-abluft { fill: #5a8cbf; }
+    .kachel-zyl .zyl-punkt { fill: #123f87; }
+    .kachel-zyl .zyl-punkt.hell { fill: #5a8cbf; }
+    :root[data-theme="dark"] .kachel-zyl .luft-druck, :root[data-theme="dark"] .kachel-zyl .zyl-punkt { fill: #7cb8f5; }
+    :root[data-theme="dark"] .kachel-zyl .luft-abluft, :root[data-theme="dark"] .kachel-zyl .zyl-punkt.hell { fill: #3f6e9e; }
+
     .kachel.geplant {
       gap: 9px; padding: 16px 18px 18px;
       background: transparent; border-style: dashed; border-color: var(--line-strong);
@@ -186,15 +200,40 @@
     <section class="rubrik" id="aktoren" aria-labelledby="aktoren-titel">
       <div class="rubrik-kopf">
         <h2 id="aktoren-titel">Aktoren</h2>
-        <span class="zaehler">0 von 6 fertig</span>
+        <span class="zaehler">1 von 6 fertig</span>
       </div>
       <p class="rubrik-text">Bauteile, die aus Druckluft eine Bewegung machen.</p>
-      <ul class="raster eng">
-        <li class="kachel geplant">
-          <h3>Doppeltwirkender Zylinder</h3>
-          <p>Schnitt durch einen Normzylinder nach ISO 15552 mit dem 5/2-Wegeventil, das ihn umschaltet. Die Druckluft strömt sichtbar: dunkelblau unter Druck, hellblau als Abluft. Ein Knopf zerlegt ihn in seine Baugruppen, die Kraft nach F = p · A wird live gerechnet.</p>
-          <span class="chip">in Arbeit</span>
+      <ul class="raster weit">
+        <li class="kachel fertig">
+          <a class="kachel-bild" href="Zylinder-Doppeltwirkend/" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 240 135" role="img" aria-label="Schnitt durch einen doppeltwirkenden Zylinder: links die gefüllte Kammer, rechts die entlüftete, dazwischen der Kolben">
+            <g class="kachel-zyl">
+              <path class="luft-druck" d="M28 50H110V86H28Z"/>
+              <path class="luft-abluft" d="M122 50H186V86H122Z"/>
+              <path class="zyl-wand" d="M14 44H26V92H14ZM186 44H202V92H186ZM26 44H186V50H26ZM26 86H186V92H26Z"/>
+              <path class="zyl-kolben" d="M110 48H122V88H110Z"/>
+              <path class="zyl-stange" d="M122 63H236V73H122Z"/>
+              <path class="zyl-linie" d="M18 36H198M18 100H198"/>
+              <path class="zyl-schlauch" d="M40 92V110H96M172 92V110H120"/>
+              <path class="zyl-ventil" d="M96 102H120V124H96Z"/>
+              <circle class="zyl-punkt" cx="52" cy="68" r="3.2"/>
+              <circle class="zyl-punkt" cx="74" cy="60" r="3.2"/>
+              <circle class="zyl-punkt" cx="92" cy="76" r="3.2"/>
+              <circle class="zyl-punkt hell" cx="140" cy="60" r="3.2"/>
+              <circle class="zyl-punkt hell" cx="162" cy="76" r="3.2"/>
+            </g>
+          </svg></a>
+          <div class="kachel-text">
+            <h3><a href="Zylinder-Doppeltwirkend/">Doppeltwirkender Zylinder</a></h3>
+            <p>Schnitt durch einen Normzylinder nach ISO 15552 mit dem 5/2-Wegeventil, das ihn umschaltet. Die Druckluft strömt sichtbar: dunkelblau unter Druck, hellblau als Abluft. Ein Knopf zerlegt ihn in seine Baugruppen, die Kraft nach F = p · A wird live gerechnet.</p>
+            <ul class="marken" aria-label="Eckdaten"><li>ISO 15552</li><li>Ø 50 mm</li><li>Hub 200 mm</li><li>mit 5/2-Wegeventil</li></ul>
+            <p class="sinnbild">Schaltzeichen: Zylinder doppelt wirkend mit beidseitiger Endlagendämpfung</p>
+            <div class="knoepfe">
+              <a class="knopf wichtig" href="Zylinder-Doppeltwirkend/">Ansehen</a>
+            </div>
+          </div>
         </li>
+      </ul>
+      <ul class="raster eng">
         <li class="kachel geplant">
           <h3>Einfachwirkender Zylinder</h3>
           <p>Druckluft schiebt nur in eine Richtung, zurück drückt eine Feder. Warum das Kraft kostet und wann es trotzdem reicht.</p>

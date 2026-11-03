@@ -116,7 +116,7 @@ body{margin:0;background:var(--anatomy-page);color:var(--anatomy-text);font:14px
 .kammer { stroke: none; opacity: .82 }
 .strom circle { stroke: none }
 .pfeil { fill: none; stroke-linecap: round; stroke-linejoin: round }
-</style></head><body class="iso" data-theme="dark"><script>
+</style><link rel="icon" type="image/svg+xml" href="favicon.svg"></head><body class="iso" data-theme="dark"><script>
 (function () {
   var Q = {"dark":{"shade-0":"#0f0f0f","shade-1":"#121212","shade-2":"#151515","shade-3":"#181818","top":"#1c1c1c","face":"#1b1b1b","lit-top":"#262626","lit-shade":"#1d1d1d","faint":"#2a2a2a","lo":"#3e3e3e","mid":"#6a6a6a","hi":"#d4d4d4"},"light":{"shade-0":"#dcdcd9","shade-1":"#e5e5e2","shade-2":"#ededea","shade-3":"#f4f4f1","top":"#ffffff","face":"#ffffff","lit-top":"#ffffff","lit-shade":"#eeeeeb","faint":"#d4d4d6","lo":"#b4b4b8","mid":"#8a8a8f","hi":"#26262a"}}, S = {"dark":{"shade-0":"#353535","shade-1":"#5e5e5e","shade-2":"#868686","shade-3":"#afafaf","top":"#c9c9c9","face":"#676767","lit-top":"#eaeaea","lit-shade":"#a5a5a5","faint":"#717171","lo":"#b4b4b4","mid":"#e6e6e6","hi":"#ffffff"},"light":{"shade-0":"#8e8e85","shade-1":"#b0b0a6","shade-2":"#d0d0c9","shade-3":"#edede8","top":"#ffffff","face":"#ffffff","lit-top":"#ffffff","lit-shade":"#cfcfc7","faint":"#88888f","lo":"#5b5b64","mid":"#33333f","hi":"#0b0b0f"}};
   function mix(a, b, t) {
@@ -1544,7 +1544,7 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
 const zustand = neuerZustand(MASSE, { weg: WEG0, stellung: "ausfahren" });
 let druck = 6;
 let auto = true;
-let laeuft = false;
+let angehalten = false;
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
@@ -1617,7 +1617,7 @@ function tick(now) {
         zyklus = 0;
       }
     }
-    schritt(zustand, MASSE, ruhig ? dt * 0.4 : dt, druck);
+    if (!angehalten) schritt(zustand, MASSE, ruhig ? dt * 0.4 : dt, druck);
     zeichneHub();
     zeichneLuft(dt);
     zeichneAnzeige();
@@ -1637,6 +1637,7 @@ const druckRegler = document.getElementById("druck");
 const druckWert = document.getElementById("druck-wert");
 
 function schalte() {
+  angehalten = false;
   zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren";
   zyklus = 0;
   run();
@@ -1648,6 +1649,7 @@ knopfVentil.addEventListener("click", () => {
 });
 knopfAuto.addEventListener("click", () => {
   auto = !auto;
+  angehalten = false;
   knopfAuto.setAttribute("aria-pressed", String(auto));
   zyklus = 0;
   run();
@@ -1655,6 +1657,7 @@ knopfAuto.addEventListener("click", () => {
 knopfAuto.setAttribute("aria-pressed", "true");
 druckRegler.addEventListener("input", () => {
   druck = druckRegler.valueAsNumber;
+  angehalten = false;
   druckWert.textContent = druck.toFixed(1).replace(".", ",") + " bar";
   zeichneAnzeige();
   run();
@@ -1727,6 +1730,7 @@ window.__figur = {
   zustand, MASSE,
   stelle(weg, stellung) {
     auto = false;
+    angehalten = true;
     knopfAuto.setAttribute("aria-pressed", "false");
     zustand.weg = weg;
     zustand.v = 0;
@@ -1746,6 +1750,7 @@ window.__figur = {
   zerlegt: () => zerlegt,
   spiele,
   waehle,
+  weiter: () => { angehalten = false; },
 };
 void haltezeit; void urSchedule; void RS; void DL; void X_KOPF;
 
