@@ -27,16 +27,26 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Prüfen, ob GitHub Pages aktiviert ist
+      - name: GitHub Pages einschalten, falls noch nicht geschehen
         id: pages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh api "repos/${{ github.repository }}/pages" --silent 2>/dev/null; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Das Token des Workflows hat "Pages: write" und darf die Seite damit
+          # selbst anlegen. Schlägt das fehl (zu wenig Rechte, privates Repo
+          # ohne passenden Tarif), bleibt der Lauf grün und sagt, was zu tun ist –
+          # ein roter Haken wäre hier nur Lärm.
+          if gh api -X POST "repos/${{ github.repository }}/pages" \
+               -f "build_type=workflow" --silent 2>/dev/null; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=GitHub Pages eingeschaltet::Die Seite war noch nicht aktiviert und wurde von diesem Lauf angelegt."
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=GitHub Pages ist noch nicht aktiviert::Settings → Pages → Build and deployment → Source: GitHub Actions wählen und diesen Workflow erneut starten."
+            echo "::notice title=GitHub Pages ist noch nicht aktiviert::Automatisch einschalten hat nicht geklappt. Settings → Pages → Build and deployment → Source: GitHub Actions wählen und diesen Workflow erneut starten."
           fi
       - uses: actions/checkout@v4
         if: steps.pages.outputs.enabled == 'true'
