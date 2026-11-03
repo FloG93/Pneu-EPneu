@@ -1,0 +1,69 @@
+name: GitHub Pages
+
+# Veröffentlicht die Übersichtsseite und alle Bauteilseiten bei jedem Push auf den
+# Standard-Branch: index.html → /Pneu-EPneu/, jeder Ordner mit einer index.html
+# (z. B. Zylinder-Doppeltwirkend/) → /Pneu-EPneu/<Ordner>/.
+# Ordner ohne index.html (figur/, docs/) kommen nicht auf die Seite.
+# Einmalig nötig: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Prüfen, ob GitHub Pages aktiviert ist
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" --silent 2>/dev/null; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=GitHub Pages ist noch nicht aktiviert::Settings → Pages → Build and deployment → Source: GitHub Actions wählen und diesen Workflow erneut starten."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.pages.outputs.enabled == 'true'
+      - name: Seite zusammenstellen
+        if: steps.pages.outputs.enabled == 'true'
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          # Gemeinsamer Code der Seiten (Design, Bedienelemente, Kontrastregler).
+          cp -r shared _site/shared
+          rm -f _site/shared/README.md
+          rm -rf _site/shared/tests
+          for dir in */; do
+            page="${dir%/}"
+            [ "$page" != _site ] && [ "$page" != shared ] && [ -f "$page/index.html" ] || continue
+            # Nicht auf die Seite: Tests, Bauskripte, Doku-Bilder.
+            cp -r "$page" "_site/$page"
+            rm -rf "_site/$page/tests" "_site/$page/docs" "_site/$page/README.md"
+            echo "Veröffentlicht: /$page/"
+          done
+      - uses: actions/configure-pages@v5
+        if: steps.pages.outputs.enabled == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.enabled == 'true'
+        with:
+          path: _site
+      - name: Veröffentlichen
+        id: deployment
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/deploy-pages@v4

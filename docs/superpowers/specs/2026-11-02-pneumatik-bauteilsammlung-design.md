@@ -233,18 +233,46 @@ Das ergibt von selbst die drei Dinge, die Azubis verstehen sollen:
 
 - Nach dem Umschalten passiert **kurz nichts**, bis sich der Druck aufgebaut
   und die Gegenkammer entlüftet hat.
-- Das **Einfahren ist schneller** als das Ausfahren, weil die Ringfläche
-  kleiner ist und bei gleichem Volumenstrom eher gefüllt ist.
+- **Welche Richtung schneller ist, hängt davon ab, wo die Engstelle sitzt.**
+  Das war im Entwurf noch anders angesetzt und hat sich beim Bauen als falsch
+  erwiesen; der Befund steht unten in 4.4.
 - Vor der Endlage **wird der Kolben langsamer**, weil die Abluft nur noch durch
   die Drosselschraube abfließen kann.
 
 Keiner dieser drei Effekte wird eigens programmiert. Sie fallen aus dem Modell.
 Das ist die Probe darauf, dass das Modell stimmt.
 
-**Grenzen des Modells**, die so in der README stehen: die Luft wird als
-inkompressibel gerechnet, soweit es den Volumenstrom betrifft, und der
-Druckaufbau über eine einfache Annäherung statt über die Gasgleichung. Das ist
-für die Anschauung richtig und für die Auslegung einer Anlage zu grob.
+**Grenzen des Modells**, die so in der README stehen: die Luft wird isotherm
+gerechnet (die Erwärmung beim Verdichten fehlt), der Durchfluss durch Ventil
+und Drossel als linearer Leitwert statt über die Düsengleichung mit ihrem
+kritischen Druckverhältnis. Das ist für die Anschauung richtig und für die
+Auslegung einer Anlage zu grob.
+
+### 4.4 Nachtrag: die Faustregel „Einfahren ist schneller" stimmt so nicht
+
+Der Entwurf behauptete, das Einfahren sei schneller, weil die kleinere
+Ringfläche bei gleichem Volumenstrom eher gefüllt ist. Als das Modell stand,
+sagte es das Gegenteil. Nachgeprüft: die Regel `v = Q / A` stammt aus der
+Hydraulik, wo der Volumenstrom eingeprägt ist. **In der Pneumatik gibt es
+keinen eingeprägten Volumenstrom** — die Geschwindigkeit ergibt sich daraus,
+wie frei die Luft hinein *und wieder hinaus* kommt.
+
+Damit hängt alles daran, wo die Engstelle sitzt:
+
+| Engstelle | Schneller ist | Warum |
+|---|---|---|
+| **Zuluft** (Regel aus der Hydraulik) | Einfahren | Die kleinere Ringfläche ist mit weniger Luft gefüllt. |
+| **Abluft** (Normalfall: Abluftdrosselung) | Ausfahren | Beim Einfahren muss die große Kolbenkammer entleert werden. |
+| beide gleich (so gebaut) | ungefähr gleich schnell | Die beiden Wirkungen heben sich weitgehend auf. |
+
+Das Modell lässt beides zu und wird nicht auf eine der Regeln gezwungen; zwei
+Tests halten beide Fälle fest. **Der Erklärtext behauptet daher nicht, eine
+Richtung sei schneller**, sondern erklärt, wovon es abhängt — was zugleich
+vorbereitet, wozu das Drosselrückschlagventil da ist.
+
+Nebenbefund, der bleibt: **die Endlagendämpfung kostet beim Einfahren mehr
+Zeit**, weil dieselbe Drossel die größere Kolbenkammer leeren muss. Das ist
+unabhängig von der Engstellenfrage und steht als eigener Test.
 
 ---
 
