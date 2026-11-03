@@ -1691,10 +1691,6 @@ function spiele(on) {
 knopfExplode.addEventListener("click", () => spiele(!zerlegt));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zerlegt) spiele(false); });
 
-// Taking apart in one go: out, hold, then back together assembly by assembly.
-let haltezeit = 0;
-const urSchedule = schedule;
-
 // --- legend ---------------------------------------------------------------
 let gewaehlt = null;
 const pickKnoepfe = Array.from(document.querySelectorAll(".pickbtn"));
@@ -1752,6 +1748,4 @@ window.__figur = {
   waehle,
   weiter: () => { angehalten = false; },
 };
-void haltezeit; void urSchedule; void RS; void DL; void X_KOPF;
-
 </script></body></html>

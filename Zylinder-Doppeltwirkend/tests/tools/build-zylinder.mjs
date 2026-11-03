@@ -215,13 +215,8 @@ const RING_DECKEL = deckelRing(DHW);
  * hose along the cylinder. Without the elbow the hose would leave straight at
  * the viewer and then turn, which pinches to a V on screen.
  */
-const WINKEL_RAUS = 22;
-function anschlussFrame(x, hin) {
-  return G.frameOf([x, DHW + 8, ZC], [hin, 0, 0], [0, 1, 0], [0, 0, 1]);
-}
-function anschluss(x, hin) {
+function anschluss(x) {
   const F = quer(x, ZC);
-  void hin;
   return [
     SV(G.disc(DHW, DHW + 8, 8, F, P), { tone: "mid" }),
     SV(G.disc(DHW + 8, DHW + 15, 6.5, F, P, { steps: 6 }), { tone: "mid" }),
@@ -239,7 +234,7 @@ function zylinderboden() {
     L(SCH.bogenPfad(FZ, X_BODEN[0] + 4, DHW - 5, NAH - 1.2, NAH + 1.2, P), { tone: "faint" }),
   ].join(""), [rec(A.prism(FZ, RING_DECKEL, X_BODEN[0], X_BODEN[1], { name: "boden.deckel" }))],
     { name: "boden.deckel" });
-  put([12, DHW + 8, ZC], anschluss(12, 1), [
+  put([12, DHW + 8, ZC], anschluss(12), [
     rec(A.disc(quer(12, ZC), DHW, DHW + 15, 8, { name: "boden.anschluss" })),
   ], { name: "boden.anschluss" });
 }
@@ -257,7 +252,7 @@ function zylinderkopf() {
     rec(A.prism(FZ, RING_DECKEL, X_KOPF[0], X_KOPF[1], { name: "kopf.deckel" })),
     rec(A.ring(FZ, X_KOPF[1], X_KOPF[1] + 9, RS, 17, { name: "kopf.buchse" })),
   ], { name: "kopf.deckel" });
-  put([276, DHW + 8, ZC], anschluss(276, -1), [
+  put([276, DHW + 8, ZC], anschluss(276), [
     rec(A.disc(quer(276, ZC), DHW, DHW + 15, 8, { name: "kopf.anschluss" })),
   ], { name: "kopf.anschluss" });
 }
@@ -576,7 +571,6 @@ A.settle(R, P);
   const innen = R.items.filter((it) => it.clip);
   const rohr = R.items.find((it) => it.name === "rohr.wand");
   if (rohr && innen.length) rohr.key = Math.min(rohr.key, ...innen.map((it) => it.key)) - 0.5;
-  void innen;
 }
 
 // The air sits in the bore: in front of the tube's far wall, behind the piston
@@ -805,10 +799,6 @@ function spiele(on) {
 knopfExplode.addEventListener("click", () => spiele(!zerlegt));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zerlegt) spiele(false); });
 
-// Taking apart in one go: out, hold, then back together assembly by assembly.
-let haltezeit = 0;
-const urSchedule = schedule;
-
 // --- legend ---------------------------------------------------------------
 let gewaehlt = null;
 const pickKnoepfe = Array.from(document.querySelectorAll(".pickbtn"));
@@ -866,7 +856,6 @@ window.__figur = {
   waehle,
   weiter: () => { angehalten = false; },
 };
-void haltezeit; void urSchedule; void RS; void DL; void X_KOPF;
 `;
 
 const INFO =
@@ -944,7 +933,7 @@ writeFileSync(ZIEL, seite({
   legende: LEG.knoepfe(LEGENDE),
   infoText: INFO,
   lesetext: LESETEXT,
-  laufzeit: live + `\n${LU.CSS ? "" : ""}`,
+  laufzeit: live,
   breite: 1220,
   buehneLabel: "Doppeltwirkender Zylinder mit 5/2-Wegeventil: Luftweg, Kolben und Baugruppen",
 }).replace("</style>", `${LU.CSS}</style>`));
@@ -1005,4 +994,3 @@ if (process.argv.includes("--audit")) {
     cover: ["stange.aussen", "stange.innen"],
   });
 }
-void TOT; void R_ANKER;
