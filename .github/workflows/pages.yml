@@ -1,10 +1,11 @@
 name: GitHub Pages
 
 # Veröffentlicht die Übersichtsseite und alle Bauteilseiten bei jedem Push auf den
-# Standard-Branch: index.html → /Pneu-EPneu/, jeder Ordner mit einer index.html
-# (z. B. Zylinder-Doppeltwirkend/) → /Pneu-EPneu/<Ordner>/.
+# Standard-Branch: index.html → /<Repo>/, jeder Ordner mit einer index.html
+# (z. B. Zylinder-Doppeltwirkend/) → /<Repo>/<Ordner>/.
 # Ordner ohne index.html (figur/, docs/) kommen nicht auf die Seite.
-# Einmalig nötig: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# GitHub Pages schaltet der erste Lauf selbst ein (Quelle "GitHub Actions");
+# klappt das nicht, sagt der Lauf, was in den Einstellungen zu tun ist.
 
 on:
   push:

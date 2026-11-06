@@ -12,7 +12,7 @@
     "bau:zylinder": "node Zylinder-Doppeltwirkend/tests/tools/build-zylinder.mjs",
     "pruef:zylinder": "node Zylinder-Doppeltwirkend/tests/tools/build-zylinder.mjs --audit && node Zylinder-Doppeltwirkend/tests/tools/build-zylinder.mjs --apart",
     "bau:uebersicht": "node figur/tests/tools/build-uebersicht.mjs",
-    "pruef:browser": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Zylinder-Doppeltwirkend/",
+    "pruef:browser": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Zylinder-Doppeltwirkend/ Zylinder-Doppeltwirkend/tests/tools/pruefe-zylinder.mjs",
     "pruef:linien": "node .claude/skills/anatomy/scripts/lines.mjs Zylinder-Doppeltwirkend/index.html"
   },
   "engines": {

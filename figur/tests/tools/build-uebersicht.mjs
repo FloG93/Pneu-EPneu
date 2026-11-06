@@ -4,32 +4,33 @@
 //
 // The page itself stays plain HTML with no build step at run time; this script
 // only spares us from keeping twenty near-identical cards in sync by hand.
-import { writeFileSync } from "node:fs";
+// It knows no subject: titles, texts, the two medium tones and the optional
+// logo all come from SEITE in kacheln.mjs, each tile picture from
+// <ordner>/vorschau.svg.
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RUBRIKEN } from "../../kacheln.mjs";
+import { RUBRIKEN, SEITE } from "../../kacheln.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
-const ZIEL = join(HIER, "..", "..", "..", "index.html");
+const WURZEL = join(HIER, "..", "..", "..");
+const ZIEL = join(WURZEL, "index.html");
 
 /** HTML-escape. Every string from the table goes through this. */
 const e = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-const MARKE = `<svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="2" y="2" width="28" height="28" rx="7" fill="#ff9f43"/>
-        <g fill="none" stroke="#1a1206" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="5.5" y="11" width="13" height="10" rx="1.5"/>
-          <path d="M11.5 11v10M18.5 16h8M24 13.5 26.5 16 24 18.5"/>
-        </g>
-      </svg>`;
-
-const FAVICON =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
-  + "%3Crect x='2' y='2' width='28' height='28' rx='7' fill='%23ff9f43'/%3E"
-  + "%3Cg fill='none' stroke='%231a1206' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E"
-  + "%3Crect x='5.5' y='11' width='13' height='10' rx='1.5'/%3E"
-  + "%3Cpath d='M11.5 11v10M18.5 16h8M24 13.5 26.5 16 24 18.5'/%3E%3C/g%3E%3C/svg%3E";
+// The logo: an orange tile with a dark line drawing on it. SEITE.marke may
+// replace the drawing (SVG elements in a 32 x 32 box); the default is a
+// cylinder with its rod, which reads as "technical component" in any trade.
+const ZEICHEN = SEITE.marke
+  ?? '<rect x="5.5" y="11" width="13" height="10" rx="1.5"/><path d="M11.5 11v10M18.5 16h8M24 13.5 26.5 16 24 18.5"/>';
+const LOGO =
+  '<rect x="2" y="2" width="28" height="28" rx="7" fill="#ff9f43"/>'
+  + `<g fill="none" stroke="#1a1206" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ZEICHEN}</g>`;
+const MARKE = `<svg class="mark" viewBox="0 0 32 32" aria-hidden="true">${LOGO}</svg>`;
+const FAVICON = "data:image/svg+xml,"
+  + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">${LOGO}</svg>`);
 
 const SONNE =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"'
@@ -50,7 +51,7 @@ function fertigeKachel(k) {
             <h3><a href="${e(k.ordner)}/">${e(k.name)}</a></h3>
             <p>${e(k.satz)}</p>
             ${marken ? `<ul class="marken" aria-label="Eckdaten">${marken}</ul>` : ""}
-            <p class="sinnbild">Schaltzeichen: ${e(k.schaltzeichen)}</p>
+            ${k.sinnbild ? `<p class="sinnbild">${e(SEITE.sinnbildName ?? "Symbol")}: ${e(k.sinnbild)}</p>` : ""}
             <div class="knoepfe">
               <a class="knopf wichtig" href="${e(k.ordner)}/">Ansehen</a>
             </div>
@@ -60,7 +61,7 @@ function fertigeKachel(k) {
 
 /**
  * A component that is not drawn yet: named and described, but not a link.
- * The symbol its tile will carry stays in the table (`k.schaltzeichen`) and is
+ * The symbol its tile will carry stays in the table (`k.sinnbild`) and is
  * deliberately not written out here — on most tiles it would only repeat the
  * heading, and a name is not a symbol.
  */
@@ -73,34 +74,16 @@ function geplanteKachel(k) {
 }
 
 /**
- * The tile preview. Drawn per component; a component without its own drawing
- * falls back to nothing, and `fertigeKachel` is only used once a page exists.
+ * The tile picture: <ordner>/vorschau.svg, drawn per component as a schematic
+ * rather than a miniature — at 240 x 135 the real figure would be a grey
+ * smudge. It is inlined, so it can use the page's classes (see STIL: v-wand,
+ * v-teil, v-stark, v-blass …) and follows light and dark with the page.
  */
 function vorschau(k) {
-  if (k.id === "zylinder-doppeltwirkend") return VORSCHAU_ZYLINDER;
-  return "";
+  const datei = join(WURZEL, k.ordner, "vorschau.svg");
+  if (!existsSync(datei)) return "";
+  return readFileSync(datei, "utf8").trim().replace(/\n/g, "\n          ");
 }
-
-// A schematic section, not a miniature of the figure: at 240 x 135 the real
-// drawing would be a grey smudge, while this says in one glance what the page
-// is about — two chambers, a piston between them, and which air is which.
-const VORSCHAU_ZYLINDER = `<svg viewBox="0 0 240 135" role="img" aria-label="Schnitt durch einen doppeltwirkenden Zylinder: links die gefüllte Kammer, rechts die entlüftete, dazwischen der Kolben">
-            <g class="kachel-zyl">
-              <path class="luft-druck" d="M28 50H110V86H28Z"/>
-              <path class="luft-abluft" d="M122 50H186V86H122Z"/>
-              <path class="zyl-wand" d="M14 44H26V92H14ZM186 44H202V92H186ZM26 44H186V50H26ZM26 86H186V92H26Z"/>
-              <path class="zyl-kolben" d="M110 48H122V88H110Z"/>
-              <path class="zyl-stange" d="M122 63H236V73H122Z"/>
-              <path class="zyl-linie" d="M18 36H198M18 100H198"/>
-              <path class="zyl-schlauch" d="M40 92V110H96M172 92V110H120"/>
-              <path class="zyl-ventil" d="M96 102H120V124H96Z"/>
-              <circle class="zyl-punkt" cx="52" cy="68" r="3.2"/>
-              <circle class="zyl-punkt" cx="74" cy="60" r="3.2"/>
-              <circle class="zyl-punkt" cx="92" cy="76" r="3.2"/>
-              <circle class="zyl-punkt hell" cx="140" cy="60" r="3.2"/>
-              <circle class="zyl-punkt hell" cx="162" cy="76" r="3.2"/>
-            </g>
-          </svg>`;
 
 function rubrikAbschnitt(r) {
   const fertig = r.kacheln.filter((k) => k.zustand === "fertig");
@@ -244,19 +227,17 @@ const STIL = `
     }
     .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 3px; }
 
-    .kachel-zyl .zyl-wand { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; stroke-linejoin: round; }
-    .kachel-zyl .zyl-kolben { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1; }
-    .kachel-zyl .zyl-stange { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; }
-    .kachel-zyl .zyl-linie, .kachel-zyl .zyl-schlauch { fill: none; stroke: var(--plate-edge); stroke-width: 1.4; stroke-linecap: round; }
-    .kachel-zyl .zyl-linie { stroke-width: 0.8; opacity: 0.55; }
-    .kachel-zyl .zyl-ventil { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1.2; }
-    /* The two air tones, the same ones the figure measures (figur/luft.mjs). */
-    .kachel-zyl .luft-druck { fill: #123f87; }
-    .kachel-zyl .luft-abluft { fill: #5a8cbf; }
-    .kachel-zyl .zyl-punkt { fill: #123f87; }
-    .kachel-zyl .zyl-punkt.hell { fill: #5a8cbf; }
-    :root[data-theme="dark"] .kachel-zyl .luft-druck, :root[data-theme="dark"] .kachel-zyl .zyl-punkt { fill: #7cb8f5; }
-    :root[data-theme="dark"] .kachel-zyl .luft-abluft, :root[data-theme="dark"] .kachel-zyl .zyl-punkt.hell { fill: #3f6e9e; }
+    /* Tile pictures (vorschau.svg). The two medium tones are the measured pair
+       the figures draw with, taken from SEITE.toene. */
+    .kachel-bild { --ton-stark: ${SEITE.toene.light.stark}; --ton-blass: ${SEITE.toene.light.blass}; }
+    :root[data-theme="dark"] .kachel-bild { --ton-stark: ${SEITE.toene.dark.stark}; --ton-blass: ${SEITE.toene.dark.blass}; }
+    .kachel-bild .v-wand { fill: var(--plate); stroke: var(--plate-edge); stroke-width: 1; stroke-linejoin: round; }
+    .kachel-bild .v-teil { fill: var(--chip); stroke: var(--plate-edge); stroke-width: 1; }
+    .kachel-bild .v-geraet { stroke-width: 1.2; }
+    .kachel-bild .v-leitung, .kachel-bild .v-hilfslinie { fill: none; stroke: var(--plate-edge); stroke-width: 1.4; stroke-linecap: round; }
+    .kachel-bild .v-hilfslinie { stroke-width: 0.8; opacity: 0.55; }
+    .kachel-bild .v-stark { fill: var(--ton-stark); }
+    .kachel-bild .v-blass { fill: var(--ton-blass); }
 
     .kachel.geplant {
       gap: 9px; padding: 16px 18px 18px;
@@ -284,14 +265,14 @@ const seite = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Pneumatik und E-Pneumatik</title>
-  <meta name="description" content="Pneumatik-Bauteile für Auszubildende: Zylinder, Wegeventile und E-Pneumatik als interaktive Schnittzeichnungen, in denen die Druckluft sichtbar strömt. Ohne Installation im Browser.">
+  <title>${e(SEITE.titel)}</title>
+  <meta name="description" content="${e(SEITE.beschreibung)}">
   <meta name="theme-color" content="#0e0f12">
   <link rel="icon" type="image/svg+xml" href="${FAVICON}">
   <script>
     // Hell ist der Grundzustand: ein dunkel eingestellter Rechner am Beamer
     // zeigte sonst eine Seite, die im hellen Raum niemand lesen kann.
-    // Derselbe Schlüssel wie im Repo 3D-Druck – beide Seiten sollen sich gleich anfühlen.
+    // Derselbe Schlüssel wie alle Seiten aus shared/ – sie sollen sich gleich anfühlen.
     try {
       const t = localStorage.getItem('3d-druck.theme');
       document.documentElement.dataset.theme = t === 'dark' ? 'dark' : 'light';
@@ -306,13 +287,13 @@ const seite = `<!doctype html>
   <header class="site-head">
     <div class="wrap head">
       ${MARKE}
-      <h1>Pneumatik und E-Pneumatik</h1>
+      <h1>${e(SEITE.titel)}</h1>
       <button type="button" class="knopf thema" id="btn-theme" title="Hell/Dunkel umschalten">
         <span class="wenn-dunkel">${SONNE}</span>
         <span class="wenn-hell">${MOND}</span>
         <span class="wenn-dunkel themaname">Hell</span><span class="wenn-hell themaname">Dunkel</span>
       </button>
-      <p class="lead">Bauteile zum Anschauen: jedes als Schnittzeichnung, in der man sieht, was im Inneren passiert und wohin die Druckluft strömt. Für Auszubildende in Metall- und Elektroberufen – ohne Anmeldung, ohne Installation.</p>
+      <p class="lead">${e(SEITE.lead)}</p>
     </div>
   </header>
 
@@ -322,7 +303,7 @@ ${RUBRIKEN.map(rubrikAbschnitt).join("\n\n")}
 
   <footer class="wrap site-foot">
     <p>Die Sammlung wächst: die gestrichelten Kacheln sind die Bauteile, die als Nächstes dazukommen. Jede angezeigte Zahl wird gerechnet, nicht behauptet; wo ein Maß nicht aus Norm oder Katalog stammt, steht es in der Anleitung der Figur als Annahme.</p>
-    <p>Alles läuft lokal im Browser. Quelltext: <a href="https://github.com/FloG93/Pneu-EPneu">github.com/FloG93/Pneu-EPneu</a></p>
+    <p>Alles läuft lokal im Browser.${SEITE.quelle ? ` Quelltext: <a href="${e(SEITE.quelle)}">${e(SEITE.quelle.replace(/^https?:\/\//, ""))}</a>` : ""}</p>
   </footer>
   <script>
     document.getElementById('btn-theme').addEventListener('click', () => {

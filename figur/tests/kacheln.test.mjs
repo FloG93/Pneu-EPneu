@@ -37,7 +37,7 @@ test("Jede Kachel hat Name, Satz und Schaltzeichen", () => {
     assert.match(k.id, /^[a-z0-9-]+$/, `Kennung "${k.id}"`);
     assert.ok(k.name.length > 3, `${k.id} ohne Namen`);
     assert.ok(k.satz.length > 30, `${k.id}: der Satz erklärt zu wenig`);
-    assert.ok(k.schaltzeichen.length > 5, `${k.id} ohne benanntes Schaltzeichen`);
+    assert.ok(k.sinnbild.length > 5, `${k.id} ohne benanntes Schaltzeichen`);
     assert.ok(["fertig", "geplant"].includes(k.zustand), `${k.id}: Zustand "${k.zustand}"`);
   }
 });

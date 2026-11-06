@@ -1,21 +1,34 @@
 // The browser test every figure in the collection has to pass.
 //
 //   python3 -m http.server 8311 --bind 127.0.0.1 &
-//   node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Zylinder-Doppeltwirkend/
+//   node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/ [<Ordner>/tests/tools/pruefe-<name>.mjs]
 //
 // It checks what the browser actually draws, never "is the class set": a class
 // nobody styled does nothing, and that mistake has been shipped before. Every
 // check runs in both colour modes.
 //
+// The checks here hold for any figure. What only one component can promise
+// (which chamber fills, which number the readout shows) lives in an optional
+// second module: its default export is called once per colour mode as
+// `await extra({ seite, V, modus })`, after the legend checks and before the
+// figure is taken apart.
+//
 // Playwright lives outside the repo (repo rule: no npm packages here).
-import pwRaw from "/opt/node-tools/node_modules/playwright/index.js";
+// PLAYWRIGHT and CHROME_PATH override where it is looked for.
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 
+const pwRaw = (await import(process.env.PLAYWRIGHT ?? "/opt/node-tools/node_modules/playwright/index.js")).default;
 const { chromium } = pwRaw;
+const CHROME = process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium";
 const URL = process.argv[2];
 if (!URL) {
-  console.error("Aufruf: node pruefe-figur.mjs <url>");
+  console.error("Aufruf: node pruefe-figur.mjs <url> [zusatzpruefungen.mjs]");
   process.exit(2);
 }
+const extra = process.argv[3]
+  ? (await import(pathToFileURL(resolve(process.argv[3])).href)).default
+  : null;
 
 const fehler = [];
 const ok = [];
@@ -47,7 +60,7 @@ function farbe(text) {
 }
 
 async function laufe(modus) {
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--no-sandbox"] });
+  const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
   const seite = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const konsole = [];
   seite.on("console", (m) => m.type() === "error" && konsole.push(m.text()));
@@ -71,7 +84,7 @@ async function laufe(modus) {
     knoepfe: document.querySelectorAll(".pickbtn").length,
     nummern: document.querySelectorAll(".iso-nums > g").length,
   }));
-  V(`eine Nummer je Legendeneintrag (${zahlen.knoepfe}/${zahlen.nummern})`, zahlen.knoepfe === zahlen.nummern && zahlen.knoepfe >= 8);
+  V(`eine Nummer je Legendeneintrag (${zahlen.knoepfe}/${zahlen.nummern})`, zahlen.knoepfe === zahlen.nummern && zahlen.knoepfe >= 3);
 
   // --- hovering shows, clicking remembers; they are not the same ----------
   const ersterKnopf = ".pickbtn:first-child";
@@ -104,43 +117,8 @@ async function laufe(modus) {
   await seite.click(ersterKnopf);
   V("ein zweiter Klick hebt die Auswahl auf", (await seite.evaluate(() => document.querySelectorAll("[data-g].mark").length)) === 0);
 
-  // --- the air ------------------------------------------------------------
-  const luft = async (stellung) => {
-    await seite.evaluate((st) => window.__figur.stelle(100, st), stellung);
-    await seite.waitForTimeout(120);
-    return seite.evaluate(() => {
-      const f = (s) => document.querySelector(s).getAttribute("fill");
-      const sicht = (name) => {
-        const g = document.querySelector(`[data-strom="${name}"]`);
-        return Math.max(...[...g.querySelectorAll("circle")].map((c) => Number(c.getAttribute("opacity") || 0)));
-      };
-      return { a: f('[data-kammer="a"]'), b: f('[data-kammer="b"]'), e5: sicht("E5"), e3: sicht("E3") };
-    });
-  };
-  const hell = (hex) => {
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  };
-  const aus = await luft("ausfahren");
-  const ein = await luft("einfahren");
-  const dunkelIstDruck = modus === "light";
-  const unterDruck = (voll, leer) => (dunkelIstDruck ? hell(voll) < hell(leer) : hell(voll) > hell(leer));
-  V("beim Ausfahren steht Kammer A unter Druck", unterDruck(aus.a, aus.b));
-  V("beim Einfahren steht Kammer B unter Druck", unterDruck(ein.b, ein.a));
-
-  // --- the display -------------------------------------------------------
-  const anzeigeBei = async (bar) => {
-    await seite.fill("#druck", String(bar));
-    await seite.dispatchEvent("#druck", "input");
-    await seite.waitForTimeout(60);
-    return seite.textContent("[data-readout]");
-  };
-  const bei6 = await anzeigeBei(6);
-  const bei3 = await anzeigeBei(3);
-  const zahl = (t) => Number((t.match(/(\d+) N aus/) || [])[1]);
-  V(`bei 6 bar zeigt die Anzeige 1178 N (${zahl(bei6)})`, zahl(bei6) === 1178);
-  V(`halber Druck, halbe Kraft (${zahl(bei3)})`, Math.abs(zahl(bei3) * 2 - zahl(bei6)) <= 1);
-  await anzeigeBei(6);
+  // --- what only this component can promise -----------------------------
+  if (extra) await extra({ seite, V, modus });
 
   // --- take apart and rebuild --------------------------------------------
   const legendeOben = async () => (await (await seite.$(".iso-keys")).boundingBox()).y;
@@ -150,11 +128,22 @@ async function laufe(modus) {
   const offen = await seite.evaluate(() => window.__figur.offen());
   V(`zerlegt sich wirklich (offen ${offen.toFixed(2)})`, offen > 0.8);
   V("die Legende springt beim Zoomen nicht", Math.abs((await legendeOben()) - vorher) < 2);
-  V("beim Zerlegen strömt keine Luft", (await seite.evaluate(() =>
-    Number(getComputedStyle(document.querySelector("[data-luftlage]")).opacity))) < 0.1);
-  const nummernSichtbar = await seite.evaluate(() =>
-    [...document.querySelectorAll(".iso-nums > g")].filter((g) => Number(g.getAttribute("opacity")) > 0.5).length);
-  V(`im zerlegten Zustand tragen die Baugruppen Nummern (${nummernSichtbar})`, nummernSichtbar >= 8);
+  // A medium layer (air, oil, current) must not flow through a machine that
+  // lies in pieces. Only checked where the figure has one.
+  const medium = await seite.evaluate(() => {
+    const m = document.querySelector("[data-luftlage]");
+    return m ? Number(getComputedStyle(m).opacity) : null;
+  });
+  if (medium !== null) V("beim Zerlegen strömt nichts", medium < 0.1);
+  // Outside first, 300 ms apart: the innermost assembly only starts moving
+  // after (n - 1) * 300 ms. Wait for that rather than a time tuned to one figure.
+  const sichtbar = () => [...document.querySelectorAll(".iso-nums > g")]
+    .filter((g) => Number(g.getAttribute("opacity")) > 0.5).length;
+  await seite.waitForFunction((n) => [...document.querySelectorAll(".iso-nums > g")]
+    .filter((g) => Number(g.getAttribute("opacity")) > 0.5).length >= n, zahlen.knoepfe,
+  { timeout: zahlen.knoepfe * 300 + 3000 }).catch(() => {});
+  const nummernSichtbar = await seite.evaluate(sichtbar);
+  V(`im zerlegten Zustand tragen die Baugruppen Nummern (${nummernSichtbar}/${zahlen.knoepfe})`, nummernSichtbar === zahlen.knoepfe);
 
   // Theme and contrast may change mid-flight without anything springing back.
   await seite.click("#btn-theme");
@@ -167,10 +156,10 @@ async function laufe(modus) {
   await seite.fill("#kontrast", "45");
   await seite.dispatchEvent("#kontrast", "input");
 
-  // Escape breaks off and rebuilds. Twelve assemblies at 950 ms is a good
-  // eleven seconds, plus the springs settling.
+  // Escape breaks off and rebuilds: one assembly every 950 ms, plus the springs
+  // settling. Waited for, not guessed, with a ceiling for a figure that hangs.
   await seite.keyboard.press("Escape");
-  await seite.waitForTimeout(14000);
+  await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
   V(`setzt sich wieder zusammen (offen ${(await seite.evaluate(() => window.__figur.offen())).toFixed(2)})`,
     (await seite.evaluate(() => window.__figur.offen())) < 0.02);
 
