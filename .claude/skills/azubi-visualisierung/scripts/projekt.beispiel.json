@@ -1,0 +1,40 @@
+{
+  "titel": "Hydraulik",
+  "paket": "hydraulik",
+  "beschreibung": "Hydraulik-Bauteile für Auszubildende: Zylinder, Pumpen und Ventile als interaktive Schnittzeichnungen, in denen das Öl sichtbar strömt. Ohne Installation im Browser.",
+  "lead": "Bauteile zum Anschauen: jedes als Schnittzeichnung, in der man sieht, was im Inneren passiert und wohin das Öl strömt. Für Auszubildende in Metall- und Mechatronikberufen.",
+  "sinnbildName": "Schaltzeichen",
+  "quelle": "",
+  "medium": {
+    "name": "Hydrauliköl",
+    "stark": "Öl unter Druck, von der Pumpe zum Verbraucher",
+    "blass": "Rücklauf, drucklos zurück zum Tank",
+    "toene": {
+      "light": { "stark": "#0b5d5a", "blass": "#4f9693", "rand": "#06403e" },
+      "dark": { "stark": "#7fd6cf", "blass": "#3a7d78", "rand": "#c4efeb" }
+    }
+  },
+  "festlegungen": [
+    "Normbezug: ISO 1219-1 für Schaltzeichen, ISO 6020/6022 für Zylinder.",
+    "Drücke in bar, Volumenströme in l/min."
+  ],
+  "rubriken": [
+    {
+      "id": "energieversorgung",
+      "titel": "Energieversorgung",
+      "einleitung": "Woher der Druck kommt: Pumpe, Tank, Druckbegrenzung.",
+      "kacheln": [
+        { "id": "zahnradpumpe", "name": "Außenzahnradpumpe", "satz": "Zwei Zahnräder fördern das Öl außen an der Gehäusewand entlang von der Saug- zur Druckseite.", "ordner": "Zahnradpumpe", "sinnbild": "Hydropumpe mit einer Förderrichtung", "marken": ["Verdrängerpumpe"] },
+        { "id": "druckbegrenzungsventil", "name": "Druckbegrenzungsventil", "satz": "Eine Feder hält den Kegel zu, bis der Druck sie überwindet und das Öl zum Tank abfließt.", "sinnbild": "Druckbegrenzungsventil, direkt gesteuert" }
+      ]
+    },
+    {
+      "id": "antriebe",
+      "titel": "Antriebe",
+      "einleitung": "Bauteile, die aus Öldruck eine Bewegung machen.",
+      "kacheln": [
+        { "id": "differentialzylinder", "name": "Differentialzylinder", "satz": "Gleicher Druck, verschiedene Flächen: warum der Zylinder beim Einfahren schneller ist als beim Ausfahren.", "sinnbild": "Zylinder doppelt wirkend" }
+      ]
+    }
+  ]
+}

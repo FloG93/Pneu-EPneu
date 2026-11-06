@@ -1,0 +1,215 @@
+// The browser test every figure in the collection has to pass.
+//
+//   python3 -m http.server 8311 --bind 127.0.0.1 &
+//   node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/ [<Ordner>/tests/tools/pruefe-<name>.mjs]
+//
+// It checks what the browser actually draws, never "is the class set": a class
+// nobody styled does nothing, and that mistake has been shipped before. Every
+// check runs in both colour modes.
+//
+// The checks here hold for any figure. What only one component can promise
+// (which chamber fills, which number the readout shows) lives in an optional
+// second module: its default export is called once per colour mode as
+// `await extra({ seite, V, modus })`, after the legend checks and before the
+// figure is taken apart.
+//
+// Playwright lives outside the repo (repo rule: no npm packages here).
+// PLAYWRIGHT and CHROME_PATH override where it is looked for.
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+
+const pwRaw = (await import(process.env.PLAYWRIGHT ?? "/opt/node-tools/node_modules/playwright/index.js")).default;
+const { chromium } = pwRaw;
+const CHROME = process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium";
+const URL = process.argv[2];
+if (!URL) {
+  console.error("Aufruf: node pruefe-figur.mjs <url> [zusatzpruefungen.mjs]");
+  process.exit(2);
+}
+const extra = process.argv[3]
+  ? (await import(pathToFileURL(resolve(process.argv[3])).href)).default
+  : null;
+
+const fehler = [];
+const ok = [];
+const pruefe = (bedingung, was) => (bedingung ? ok : fehler).push(was);
+
+/** WCAG contrast between two sRGB triples. */
+function kontrast(a, b) {
+  const kanal = (v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const leucht = ([r, g, b2]) => 0.2126 * kanal(r) + 0.7152 * kanal(g) + 0.0722 * kanal(b2);
+  const la = leucht(a);
+  const lb = leucht(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Parse a computed colour. getComputedStyle also returns
+ * `color(srgb 0.64 0.64 0.64 / 0.7)` — floats, not bytes. Read as bytes that
+ * once came out as 1.13:1 and hid a text nobody could read.
+ */
+function farbe(text) {
+  const srgb = text.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+  if (srgb) return [1, 2, 3].map((i) => Math.round(Number(srgb[i]) * 255));
+  const zahlen = text.match(/[\d.]+/g);
+  if (!zahlen) return null;
+  return zahlen.slice(0, 3).map(Number);
+}
+
+async function laufe(modus) {
+  const browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
+  const seite = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const konsole = [];
+  seite.on("console", (m) => m.type() === "error" && konsole.push(m.text()));
+  seite.on("pageerror", (e) => konsole.push(String(e)));
+  await seite.addInitScript((m) => {
+    try { localStorage.setItem("3d-druck.theme", m); localStorage.removeItem("3d-druck.kontrast"); } catch (e) { /* ignore */ }
+  }, modus);
+  await seite.goto(URL, { waitUntil: "networkidle" });
+  const V = (name, wert) => pruefe(wert, `${modus}: ${name}`);
+
+  // --- the figure must be there and assembled -----------------------------
+  const haken = await seite.evaluate(() => Boolean(window.__figur));
+  V("die Figur bietet einen Prüfhaken", haken);
+  if (!haken) { await browser.close(); return; }
+
+  V("startet zusammengebaut", (await seite.evaluate(() => window.__figur.offen())) < 0.01);
+  V("der Kontrastregler startet bei 45 %", (await seite.inputValue("#kontrast")) === "45");
+
+  // --- legend: one number per entry ---------------------------------------
+  const zahlen = await seite.evaluate(() => ({
+    knoepfe: document.querySelectorAll(".pickbtn").length,
+    nummern: document.querySelectorAll(".iso-nums > g").length,
+  }));
+  V(`eine Nummer je Legendeneintrag (${zahlen.knoepfe}/${zahlen.nummern})`, zahlen.knoepfe === zahlen.nummern && zahlen.knoepfe >= 3);
+
+  // --- hovering shows, clicking remembers; they are not the same ----------
+  const ersterKnopf = ".pickbtn:first-child";
+  await seite.hover(ersterKnopf);
+  const beimZeigen = await seite.evaluate(() => document.querySelectorAll("[data-g].mark").length);
+  V("Darüberfahren hebt hervor", beimZeigen > 0);
+  await seite.mouse.move(5, 5);
+  V("Darüberfahren merkt sich nichts", (await seite.evaluate(() => document.querySelectorAll("[data-g].mark").length)) === 0);
+
+  await seite.click(ersterKnopf);
+  await seite.waitForTimeout(320);          // the fade has a 0.2 s transition
+  const nachKlick = await seite.evaluate(() => ({
+    markiert: document.querySelectorAll("[data-g].mark").length,
+    gedimmt: document.querySelectorAll("[data-g].dim").length,
+    gedrueckt: document.querySelector(".pickbtn:first-child").getAttribute("aria-pressed"),
+  }));
+  V("ein Klick wählt aus und hält", nachKlick.markiert > 0 && nachKlick.gedimmt > 0 && nachKlick.gedrueckt === "true");
+
+  // Not "is the class set" but what the browser draws with it.
+  const gezeichnet = await seite.evaluate(() => {
+    const m = document.querySelector("[data-g].mark");
+    const d = document.querySelector("[data-g].dim");
+    return { markDeckkraft: getComputedStyle(m).opacity, dimDeckkraft: getComputedStyle(d).opacity,
+      markTon: getComputedStyle(m).getPropertyValue("--anatomy-mid").trim() };
+  });
+  V("die gewählte Baugruppe bleibt voll sichtbar", Number(gezeichnet.markDeckkraft) > 0.9);
+  V("der Rest tritt wirklich zurück", Number(gezeichnet.dimDeckkraft) < 0.3);
+  V("die Hervorhebung ändert die Töne wirklich", /^#|rgb/.test(gezeichnet.markTon));
+
+  await seite.click(ersterKnopf);
+  V("ein zweiter Klick hebt die Auswahl auf", (await seite.evaluate(() => document.querySelectorAll("[data-g].mark").length)) === 0);
+
+  // --- what only this component can promise -----------------------------
+  if (extra) await extra({ seite, V, modus });
+
+  // --- take apart and rebuild --------------------------------------------
+  const legendeOben = async () => (await (await seite.$(".iso-keys")).boundingBox()).y;
+  const vorher = await legendeOben();
+  await seite.click("#btn-explode");
+  await seite.waitForTimeout(2600);
+  const offen = await seite.evaluate(() => window.__figur.offen());
+  V(`zerlegt sich wirklich (offen ${offen.toFixed(2)})`, offen > 0.8);
+  V("die Legende springt beim Zoomen nicht", Math.abs((await legendeOben()) - vorher) < 2);
+  // A medium layer (air, oil, current) must not flow through a machine that
+  // lies in pieces. Only checked where the figure has one.
+  const medium = await seite.evaluate(() => {
+    const m = document.querySelector("[data-luftlage]");
+    return m ? Number(getComputedStyle(m).opacity) : null;
+  });
+  if (medium !== null) V("beim Zerlegen strömt nichts", medium < 0.1);
+  // Outside first, 300 ms apart: the innermost assembly only starts moving
+  // after (n - 1) * 300 ms. Wait for that rather than a time tuned to one figure.
+  const sichtbar = () => [...document.querySelectorAll(".iso-nums > g")]
+    .filter((g) => Number(g.getAttribute("opacity")) > 0.5).length;
+  await seite.waitForFunction((n) => [...document.querySelectorAll(".iso-nums > g")]
+    .filter((g) => Number(g.getAttribute("opacity")) > 0.5).length >= n, zahlen.knoepfe,
+  { timeout: zahlen.knoepfe * 300 + 3000 }).catch(() => {});
+  const nummernSichtbar = await seite.evaluate(sichtbar);
+  V(`im zerlegten Zustand tragen die Baugruppen Nummern (${nummernSichtbar}/${zahlen.knoepfe})`, nummernSichtbar === zahlen.knoepfe);
+
+  // Theme and contrast may change mid-flight without anything springing back.
+  await seite.click("#btn-theme");
+  await seite.fill("#kontrast", "80");
+  await seite.dispatchEvent("#kontrast", "input");
+  await seite.waitForTimeout(120);
+  V("Themenwechsel mitten im Lauf wirft nichts um",
+    (await seite.evaluate(() => window.__figur.offen())) > 0.5);
+  await seite.click("#btn-theme");
+  await seite.fill("#kontrast", "45");
+  await seite.dispatchEvent("#kontrast", "input");
+
+  // Escape breaks off and rebuilds: one assembly every 950 ms, plus the springs
+  // settling. Waited for, not guessed, with a ceiling for a figure that hangs.
+  await seite.keyboard.press("Escape");
+  await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+  V(`setzt sich wieder zusammen (offen ${(await seite.evaluate(() => window.__figur.offen())).toFixed(2)})`,
+    (await seite.evaluate(() => window.__figur.offen())) < 0.02);
+
+  // --- every text readable ------------------------------------------------
+  const schwach = await seite.evaluate(() => {
+    const kanal = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+    const leucht = ([r, g, b]) => 0.2126 * kanal(r) + 0.7152 * kanal(g) + 0.0722 * kanal(b);
+    const lies = (t) => {
+      const srgb = t.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+      if (srgb) return [1, 2, 3].map((i) => Math.round(Number(srgb[i]) * 255));
+      const n = t.match(/[\d.]+/g);
+      return n ? n.slice(0, 3).map(Number) : null;
+    };
+    const grund = (el) => {
+      for (let e = el; e; e = e.parentElement) {
+        const c = getComputedStyle(e).backgroundColor;
+        if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) return lies(c);
+      }
+      return lies(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255];
+    };
+    const schlecht = [];
+    for (const el of document.querySelectorAll("button, label, output, p, h2, a, .picknr, text")) {
+      const t = (el.textContent || "").trim();
+      if (!t || el.offsetParent === null) continue;
+      const vorn = lies(getComputedStyle(el).color);
+      const hinten = grund(el);
+      if (!vorn || !hinten) continue;
+      const v = (Math.max(leucht(vorn), leucht(hinten)) + 0.05) / (Math.min(leucht(vorn), leucht(hinten)) + 0.05);
+      if (v < 4.5) schlecht.push(`${t.slice(0, 28)} ${v.toFixed(2)}:1`);
+    }
+    return schlecht;
+  });
+  V(`jeder Text hält 4,5:1${schwach.length ? " — " + schwach.slice(0, 4).join(", ") : ""}`, schwach.length === 0);
+
+  // --- phone --------------------------------------------------------------
+  await seite.setViewportSize({ width: 390, height: 844 });
+  await seite.waitForTimeout(250);
+  const quer = await seite.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  V(`kein Seitwärtsscrollen bei 390 px (${quer})`, quer <= 1);
+
+  V(`keine Konsolenfehler${konsole.length ? " — " + konsole[0].slice(0, 80) : ""}`, konsole.length === 0);
+  await browser.close();
+}
+
+await laufe("light");
+await laufe("dark");
+
+for (const z of ok) console.log("  ok   ", z);
+for (const z of fehler) console.log("  FEHLT", z);
+console.log(fehler.length ? `\n${fehler.length} von ${ok.length + fehler.length} Prüfungen fehlgeschlagen` : `\nall checks passed (${ok.length})`);
+process.exit(fehler.length ? 1 : 0);
+void kontrast;
+void farbe;

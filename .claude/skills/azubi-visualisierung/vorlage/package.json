@@ -1,0 +1,16 @@
+{
+  "name": "{{PAKET}}",
+  "private": true,
+  "type": "module",
+  "description": "{{BESCHREIBUNG}}",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "npm run test:shared && npm run test:figur",
+    "test:shared": "node --test \"shared/tests/*.test.mjs\"",
+    "test:figur": "node --test \"figur/tests/*.test.mjs\"",
+    "bau:uebersicht": "node figur/tests/tools/build-uebersicht.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

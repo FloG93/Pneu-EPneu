@@ -1,0 +1,15 @@
+<svg viewBox="0 0 240 135" role="img" aria-label="Schnitt durch einen doppeltwirkenden Zylinder: links die gefüllte Kammer, rechts die entlüftete, dazwischen der Kolben">
+  <path class="v-stark" d="M28 50H110V86H28Z"/>
+  <path class="v-blass" d="M122 50H186V86H122Z"/>
+  <path class="v-wand" d="M14 44H26V92H14ZM186 44H202V92H186ZM26 44H186V50H26ZM26 86H186V92H26Z"/>
+  <path class="v-teil" d="M110 48H122V88H110Z"/>
+  <path class="v-wand" d="M122 63H236V73H122Z"/>
+  <path class="v-hilfslinie" d="M18 36H198M18 100H198"/>
+  <path class="v-leitung" d="M40 92V110H96M172 92V110H120"/>
+  <path class="v-teil v-geraet" d="M96 102H120V124H96Z"/>
+  <circle class="v-stark" cx="52" cy="68" r="3.2"/>
+  <circle class="v-stark" cx="74" cy="60" r="3.2"/>
+  <circle class="v-stark" cx="92" cy="76" r="3.2"/>
+  <circle class="v-blass" cx="140" cy="60" r="3.2"/>
+  <circle class="v-blass" cx="162" cy="76" r="3.2"/>
+</svg>

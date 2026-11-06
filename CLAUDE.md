@@ -2,6 +2,8 @@
 
 Lernseite für Auszubildende: Pneumatik- und E-Pneumatik-Bauteile als interaktive isometrische Figuren. Übersicht und Aufbau: `README.md`. Entwurf: `docs/superpowers/specs/2026-11-02-pneumatik-bauteilsammlung-design.md`.
 
+Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`.claude/skills/azubi-visualisierung/`). Er trägt Kopien von `figur/`, `shared/`, `pages.yml` und dem Zylinder; **wer eines dieser Originale ändert, kopiert es in den Skill** – `figur/tests/skill.test.mjs` schlägt sonst fehl und nennt die Datei.
+
 ## Regeln, die überall gelten
 
 - Reines HTML/CSS/JavaScript (ES-Module), **kein Build-Schritt, keine npm-Pakete im Repo**. Hilfsprogramme (Playwright) nur in `*/tests/tools/` und außerhalb des Repos installiert. Ausgenommen ist `.claude/skills/`: Agent Skills, kein Code der Seite — wird weder veröffentlicht noch getestet.
@@ -61,7 +63,7 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | Geometrie in Ruhe | `node <Ordner>/tests/tools/build-<name>.mjs --audit` | `audit passed` |
 | Geometrie zerlegt | `… --apart` | `auseinandergefahren: sauber` |
 | Linienenden | `CHROME_PATH=/opt/pw-browsers/chromium node .claude/skills/anatomy/scripts/lines.mjs <Ordner>/index.html` | `line ends: 0 of N` |
-| Verhalten im Browser | `node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/` | `all checks passed` |
+| Verhalten im Browser | `node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/ <Ordner>/tests/tools/pruefe-<name>.mjs` | `all checks passed` |
 | Rest | `npm test` | alles grün |
 
 **Messen statt ansehen.** Geprüft wird nie „Klasse gesetzt", sondern was der Browser danach zeichnet. Ein Bild, das „fast richtig" aussieht, ist der Normalfall.

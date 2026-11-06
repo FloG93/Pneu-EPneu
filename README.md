@@ -26,7 +26,7 @@ Jede angezeigte Zahl wird gerechnet, nicht behauptet. Wo ein Maß nicht aus Norm
 index.html                  Übersichtsseite (Startseite auf GitHub Pages)
 Zylinder-Doppeltwirkend/    Bauteilseite
   index.html                erzeugt, nicht von Hand geschrieben
-  favicon.svg, README.md
+  favicon.svg, vorschau.svg (Kachelbild), README.md
   tests/tools/build-zylinder.mjs   Geometrie + vier Datentabellen
 figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
                             wird deshalb nicht veröffentlicht)
@@ -37,6 +37,9 @@ figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
   seite.mjs                 Karte, Bedienleiste, Thema, Kontrast
 shared/                     Design und Bedienelemente (aus dem Repo 3D-Druck)
 .claude/skills/anatomy/     Zeichen-Kit (nicht veröffentlicht, nicht getestet)
+.claude/skills/azubi-visualisierung/
+                            Skill „Azubi Visualisierung": dieses Vorgehen für jedes Fach,
+                            mit Vorlage, Anlege-Skript und dem Zylinder als Beispiel
 docs/superpowers/specs/     Entwurf
 .github/workflows/          Tests (tests.yml) und Veröffentlichung (pages.yml)
 ```
@@ -51,15 +54,23 @@ Veröffentlicht wird nach festen Regeln ([`pages.yml`](.github/workflows/pages.y
 ### Neues Bauteil hinzufügen
 
 1. Ordner anlegen, z. B. `Ventil-5-2/`, mit `tests/tools/build-ventil.mjs`. Das Skript liefert **nur** Geometrie und die vier Datentabellen; alles Allgemeine kommt aus `figur/`.
-2. Auf der Übersichtsseite (`index.html`) die passende Kachel von „in Arbeit" auf fertig stellen.
+2. In `figur/kacheln.mjs` die Kachel auf `zustand: "fertig"` stellen, `vorschau.svg` in den Ordner legen und `npm run bau:uebersicht` laufen lassen.
 3. Tests in `<Ordner>/tests/` ablegen und in `package.json` und [`tests.yml`](.github/workflows/tests.yml) eintragen.
 4. `index.html` **erst committen, wenn die Seite vorzeigbar ist** — sie geht beim Push sofort live.
 
-## GitHub Pages einrichten (einmalig)
+## GitHub Pages
 
-1. Im Repository **Settings → Pages** öffnen.
-2. Unter **Build and deployment → Source** den Eintrag **GitHub Actions** wählen.
-3. Der Workflow veröffentlicht danach bei jedem Push auf den Standard-Branch.
+Nichts einzurichten: der erste Lauf von [`pages.yml`](.github/workflows/pages.yml) schaltet GitHub Pages selbst ein (Quelle „GitHub Actions"). Klappt das nicht, sagt der Lauf, was unter **Settings → Pages** zu tun ist.
+
+## Dasselbe für ein anderes Fach
+
+Der Skill [`azubi-visualisierung`](.claude/skills/azubi-visualisierung/SKILL.md) hält fest, wie diese Sammlung entstanden ist – Fragen, Reihenfolge, Prüftore, Fallstricke – und legt mit einem Befehl ein neues Projekt an, z. B. für Hydraulik:
+
+```bash
+node .claude/skills/azubi-visualisierung/scripts/anlegen.mjs ../Hydraulik projekt.json
+```
+
+`figur/tests/skill.test.mjs` hält die Kopien im Skill im Gleichlauf mit diesem Repo.
 
 ## Lokal starten und testen
 
