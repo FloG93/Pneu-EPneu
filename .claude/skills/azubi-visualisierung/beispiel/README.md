@@ -7,6 +7,7 @@ Das erste fertige Bauteil der Sammlung **Pneumatik und E-Pneumatik** (FloG93/Pne
 | Datei | gehört im Projekt nach | zeigt |
 |---|---|---|
 | `pneumatik.mjs` | `figur/pneumatik.mjs` | Rechenmodell: Flächen, Kräfte, Kammerdrücke, Kolbenbewegung, Dämpfung, Schieber |
+| `ventil.mjs` | `figur/ventil.mjs` | Gemeinsamer Kern aller Ventile: Öffnung der zwei Wegesätze, Kammerdruck-Schritt; vom Zylinder und von jedem Ventil genutzt |
 | `pneumatik.test.mjs` | `figur/tests/` | 34 von Hand nachgerechnete Tests, auch „Bedingung statt Faustregel" |
 | `build-zylinder.mjs` | `Zylinder-Doppeltwirkend/tests/tools/` | Geometrie, Schnittfenster, Schläuche, vier Tabellen, Laufzeit, Prüfhaken, `--audit`/`--apart` |
 | `legende-zylinder.mjs` | `Zylinder-Doppeltwirkend/tests/tools/` | `LEGENDE`: zwölf Baugruppen mit Nummer, Name, Erklärsatz |

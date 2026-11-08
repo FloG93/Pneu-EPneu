@@ -5,7 +5,7 @@
 //
 // This script holds geometry and four data tables and nothing else: springs,
 // depth sorting, legend, air and page shell all come from ../../figur/.
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
@@ -17,7 +17,7 @@ import * as PN from "../../../figur/pneumatik.mjs";
 import * as EX from "../../../figur/explode.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import * as LEG from "../../../figur/legende.mjs";
-import { seite, knopf, schieber, hausBedienung } from "../../../figur/seite.mjs";
+import { seite, knopf, schieber, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
 import { LEGENDE } from "./legende-zylinder.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -615,7 +615,6 @@ const svg = k.figureSvg({
 });
 
 // --- The page ------------------------------------------------------------
-const quelle = (datei) => readFileSync(join(WURZEL, datei), "utf8").replace(/^export /gm, "");
 
 const live = `
 const MASSE = ${JSON.stringify(Z)};
@@ -644,7 +643,7 @@ const readout = document.querySelector("[data-readout]");
 const info = document.querySelector(".pickinfo");
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 
-${quelle("figur/pneumatik.mjs")}
+${modulQuelle(WURZEL, ["figur/ventil.mjs", "figur/pneumatik.mjs"])}
 ${EX.LAUFZEIT}
 ${LU.LAUFZEIT}
 

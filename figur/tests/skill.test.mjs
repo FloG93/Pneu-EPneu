@@ -27,6 +27,7 @@ const PAARE = [
   ["vorlage/shared/tests/kontrast.test.mjs", "shared/tests/kontrast.test.mjs"],
   ["vorlage/.github/workflows/pages.yml", ".github/workflows/pages.yml"],
   ["beispiel/zylinder-doppeltwirkend/pneumatik.mjs", "figur/pneumatik.mjs"],
+  ["beispiel/zylinder-doppeltwirkend/ventil.mjs", "figur/ventil.mjs"],
   ["beispiel/zylinder-doppeltwirkend/pneumatik.test.mjs", "figur/tests/pneumatik.test.mjs"],
   ...["build-zylinder", "legende-zylinder", "pruefe-zylinder"].map((d) =>
     [`beispiel/zylinder-doppeltwirkend/${d}.mjs`, `Zylinder-Doppeltwirkend/tests/tools/${d}.mjs`]),

@@ -3,6 +3,8 @@
 // script that sets theme and contrast *before* the first paint, so the drawing
 // never flashes once in the wrong step.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as k from "../.claude/skills/anatomy/kit/iso-kit.mjs";
 import { kitScript } from "../.claude/skills/anatomy/scripts/inline-kit.mjs";
 import { TONE_CSS, TONE_TABELLE, K_DEFAULT } from "./toene.mjs";
@@ -177,4 +179,17 @@ export function seite({
     .replace('<html lang="en">', '<html lang="de">')
     .replace("</head>", '<link rel="icon" type="image/svg+xml" href="favicon.svg"></head>')
     .replace(/(<body class="iso" data-theme="dark">)/, `$1${bootSkript()}`);
+}
+
+/**
+ * Model files as one classic-script text: `import` lines and the `export `
+ * prefix are stripped, the files are joined in the order given. The files must
+ * therefore not share a top-level name, and list their dependencies first.
+ */
+export function modulQuelle(wurzel, dateien) {
+  return dateien
+    .map((datei) => readFileSync(join(wurzel, datei), "utf8")
+      .replace(/^import .*;$/gm, "")
+      .replace(/^export /gm, ""))
+    .join("\n");
 }

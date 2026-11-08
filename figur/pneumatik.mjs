@@ -15,8 +15,10 @@
 // the model is left free to say so rather than made to reproduce a rule of
 // thumb carried over from hydraulics.
 
+import { AUSSEN, wegeOffen, kammerSchritt } from "./ventil.mjs";
+
 /** Ambient pressure, bar absolute. Teaching value, not 1.01325. */
-export const UMGEBUNG = 1;
+export const UMGEBUNG = AUSSEN;
 
 /** bar → N/mm² */
 const NMM2_JE_BAR = 0.1;
@@ -119,17 +121,7 @@ export function daempftB(z, masse) {
  * that is the moment the piston stands still and both chambers hold their air.
  */
 export function oeffnung(z, masse) {
-  const rand = (1 - masse.ueberdeckung) / 2;
-  return {
-    a: rampe(z.schieber, 0.5 + masse.ueberdeckung / 2, 0.5 + masse.ueberdeckung / 2 + rand),
-    b: rampe(1 - z.schieber, 0.5 + masse.ueberdeckung / 2, 0.5 + masse.ueberdeckung / 2 + rand),
-  };
-}
-
-function rampe(x, von, bis) {
-  if (x <= von) return 0;
-  if (x >= bis) return 1;
-  return (x - von) / (bis - von);
+  return wegeOffen(z.schieber, masse.ueberdeckung);
 }
 
 /**
@@ -194,13 +186,8 @@ function teilschritt(z, masse, h, druckBar) {
   const dVb = -f.ring * z.v;
   const qA = aZu * (quelle - z.pA) + aAb * (UMGEBUNG - z.pA);
   const qB = bZu * (quelle - z.pB) + bAb * (UMGEBUNG - z.pB);
-  z.pA += (h * (qA - z.pA * dVa)) / Math.max(v.a, 1);
-  z.pB += (h * (qB - z.pB * dVb)) / Math.max(v.b, 1);
-
-  // A chamber is never pushed past the supply nor sucked below ambient: the
-  // one-way nature of the seats, which a linear conductance does not carry.
-  z.pA = klemme(z.pA, UMGEBUNG, quelle);
-  z.pB = klemme(z.pB, UMGEBUNG, quelle);
+  z.pA = kammerSchritt(z.pA, qA, dVa, v.a, h, quelle);
+  z.pB = kammerSchritt(z.pB, qB, dVb, v.b, h, quelle);
 
   // Newton on the piston, with Coulomb friction and a little seal drag.
   const treibend = kraftNetto(z, masse) - (masse.viskos * z.v) / 1000;
