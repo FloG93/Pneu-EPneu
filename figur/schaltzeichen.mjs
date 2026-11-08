@@ -15,9 +15,10 @@
 /**
  * 5/2 valve. Field 0 (left) is position 14, field 1 (right) position 12.
  * A pair is `[from, to]`: the arrow runs from the first port to the second.
- * `unten` and `oben` list the ports along the bottom and top edge.
+ * `unten` and `oben` list the ports along the bottom and top edge; `zufuhr`
+ * is the supply port: paths leaving it are drawn strong, all others pale.
  */
-export const VENTIL_5_2 = { felder: [[[1, 4], [2, 3]], [[1, 2], [4, 5]]], unten: [5, 1, 3], oben: [4, 2] };
+export const VENTIL_5_2 = { felder: [[[1, 4], [2, 3]], [[1, 2], [4, 5]]], unten: [5, 1, 3], oben: [4, 2], zufuhr: 1 };
 
 const STRICH = 1.6;
 const PILOT_NUMMERN = [14, 12];
@@ -46,8 +47,7 @@ function pfeil(art, paar, x0, yUnten, yOben, f) {
   const a = anschlussBruchteil(art, von), b = anschlussBruchteil(art, nach);
   const ax = x0 + a.x * f, ay = a.unten ? yUnten : yOben;
   const bx = x0 + b.x * f, by = b.unten ? yUnten : yOben;
-  const supply = art.unten[Math.floor(art.unten.length / 2)];
-  const rolle = von === supply ? "druck" : "abluft";
+  const rolle = von === art.zufuhr ? "druck" : "abluft";
   const d = `M${zahl(ax)} ${zahl(ay)}L${zahl(bx)} ${zahl(by)}${spitze(bx, by, bx - ax, by - ay, f * 0.17, f * 0.06)}`;
   return `<path class="sz-weg" data-weg="${von}-${nach}" data-rolle="${rolle}" d="${d}" fill="currentColor" stroke="currentColor" stroke-width="${STRICH}" stroke-linejoin="miter"/>`;
 }
@@ -108,10 +108,13 @@ export function wegeventilSymbol(art, { links = "pneumatisch", rechts = "feder",
   const yOben = rand + tH + 2 + anschl;
   const yUnten = yOben + f;
   const hoehe = Math.ceil(yUnten + anschl + tH + 2 + rand);
-  // The ports stand over the slot at x0; position "last field" (anteil 1)
-  // has field 0 in that slot, position "first field" has it shifted left.
+  // The ports stand over the slot at x0. At anteil 1 (no shift) field 0 is in
+  // the slot and the row reaches to x0 + n·f + lang on the right; at anteil 0
+  // the row is shifted left by (n−1)·f and reaches to x0 − (n−1)·f − lang on
+  // the left. The viewBox spans both reaches plus a margin, so it holds the
+  // whole symbol in either end position — and before the first symbolStellen.
   const x0 = rand + (n - 1) * f + lang;
-  const breite = Math.ceil(x0 + f + lang + rand);
+  const breite = Math.ceil(x0 + n * f + lang + rand);
 
   const alle = [...art.unten, ...art.oben].sort((a, b) => a - b);
   const feldTeile = art.felder.map((paare, i) => {

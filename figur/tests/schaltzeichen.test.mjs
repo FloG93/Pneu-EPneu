@@ -64,7 +64,7 @@ function fakeSvg(svg, feld) {
     return { set, add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) };
   };
   const wege = [...svg.matchAll(/<path [^>]*data-weg="([^"]+)"[^>]*data-rolle="([^"]+)"/g)].map((m, i) => ({
-    weg: m[1], rolle: m[2], feld: i < 2 ? "0" : "1", classList: klassen("sz-weg"),
+    weg: m[1], rolle: m[2], feld: i < (svg.match(/data-feld="0"[^]*?data-feld="1"/)[0].match(/data-weg=/g) || []).length ? "0" : "1", classList: klassen("sz-weg"),
     getAttribute(n) { return n === "data-weg" ? this.weg : n === "data-rolle" ? this.rolle : null; },
     closest() { return { getAttribute: () => this.feld }; },
   }));
@@ -97,4 +97,41 @@ test("Laufzeit schiebt die Felder und färbt nur offene Wege", () => {
   for (const w of el.wege) assert.ok(!/stark|blass/.test([...w.classList.set].join(" ")), w.weg);
   stellen(el, 7, { a: 1, b: 1 });   // out of range is clamped, both sets may be open
   assert.match(el.gruppe.attrs.transform, /translate\((-?0) 0\)/);
+});
+
+// Horizontal reach of everything inside the sliding group, read from the
+// coordinates actually written, at a given shift.
+function reichweite(svg, schub) {
+  const gruppe = svg.slice(svg.indexOf("<g data-felder"), svg.indexOf("</g><!--felder-->"));
+  const xs = [];
+  for (const m of gruppe.matchAll(/<rect[^>]*x="([\d.]+)"[^>]*width="([\d.]+)"/g)) xs.push(+m[1], +m[1] + +m[2]);
+  for (const m of gruppe.matchAll(/ d="([^"]+)"/g)) for (const p of m[1].matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)) xs.push(+p[1]);
+  return [Math.min(...xs) + schub, Math.max(...xs) + schub];
+}
+
+const VENTIL_3_2 = { felder: [[[1, 2]], [[2, 3]]], unten: [1, 3], oben: [2], zufuhr: 1 };
+
+test("Die viewBox fasst das Symbol in beiden Endlagen", () => {
+  for (const art of [VENTIL_5_2, VENTIL_3_2]) {
+    for (const feld of [60, 90]) {
+      const { svg, breite } = wegeventilSymbol(art, { links: "pneumatisch", rechts: "feder", feld });
+      const n = art.felder.length;
+      const a = reichweite(svg, 0);
+      const b = reichweite(svg, -(n - 1) * feld);
+      assert.ok(Math.min(a[0], b[0]) >= 0 && Math.max(a[1], b[1]) <= breite, `${feld}: ${a} ${b} in ${breite}`);
+      assert.ok(Math.min(a[0], b[0]) < 10 && breite - Math.max(a[1], b[1]) < 10, "kein großer leerer Streifen");
+    }
+  }
+});
+
+test("Starke und blasse Wege richten sich nach dem Zufuhr-Anschluss", () => {
+  const { svg } = wegeventilSymbol(VENTIL_3_2);
+  assert.match(svg, /data-weg="1-2" data-rolle="druck"/);
+  assert.match(svg, /data-weg="2-3" data-rolle="abluft"/);
+  const el = fakeSvg(svg, 60);
+  const stellen = new Function(`${SYMBOL_LAUFZEIT}; return symbolStellen;`)();
+  stellen(el, 1, { a: 1, b: 0 });
+  assert.match([...el.wege[0].classList.set].join(" "), /stark/);
+  stellen(el, 0, { a: 0, b: 1 });
+  assert.match([...el.wege[1].classList.set].join(" "), /blass/);
 });
