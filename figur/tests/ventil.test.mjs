@@ -91,3 +91,29 @@ test("Gleichlauf: Schaltzeit des Zylinders ±30 % der Ventilrechnung bei 6 bar",
   const t = ventilSchaltzeit(M, 6);
   assert.ok(Math.abs(PN.ISO_15552_50.schaltzeit - t) <= 0.3 * t, `Zylinder 25 ms, Ventil ${(t * 1000).toFixed(1)} ms`);
 });
+
+test("Monostabil: Rückstellung durch die Feder bei 6 bar im Bereich der Datenblätter (12–52 ms)", () => {
+  // The chamber must vent from 7 bar abs to where 0,1·(p − 1)·314,16 = 30 + 8 N gives way,
+  // p ≈ 2,2 bar; the spool then crosses 7 mm in a few ms. Venting is faster than filling.
+  const t = ventilSchaltzeit(M, 6, { richtung: "12" });
+  assert.ok(t >= 0.012 && t <= 0.052, `${(t * 1000).toFixed(1)} ms`);
+});
+test("Bistabil: Schaltzeit 12 bei 6 bar im Bereich der Datenblätter (12–52 ms)", () => {
+  // Chamber 12 fills like chamber 14 does (≈ 22 ms) while 14 vents; the pilot force
+  // difference reverses once p12 > p14, a little later than the filling alone.
+  const t = ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12" });
+  assert.ok(t >= 0.012 && t <= 0.052, `${(t * 1000).toFixed(1)} ms`);
+});
+test("Ein wiederholtes Signal startet die Zeitmessung nicht neu", () => {
+  // Auto-repeat of a held key calls the same signal again: the clock keeps running.
+  const v = neuesVentil(M); ventilSignal(v, "14", true);
+  for (let i = 0; i < 100; i++) ventilSchritt(v, M, 0.0001, 6);   // 10 ms
+  const vorher = v.schaltStart; assert.ok(vorher > 0.0099 && vorher < 0.0101);
+  ventilSignal(v, "14", true);
+  assert.equal(v.schaltStart, vorher);
+});
+test("Anzeige: ohne Messung und ohne Schalten (0 bar) steht null, nie Infinity", () => {
+  // 0 bar: no pilot force at all, the valve never switches, ventilSchaltzeit = Infinity.
+  const v = neuesVentil(M, { druckBar: 0 });
+  assert.equal(ventilAnzeige(v, M, 0).schaltzeitMs, null);
+});

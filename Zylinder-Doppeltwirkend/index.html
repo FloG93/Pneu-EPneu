@@ -1096,7 +1096,8 @@ const ISO_5599_GR1 = {
   haftreibung: 8,       // N
   gleitreibung: 5,      // N
   viskos: 2,            // N·s/m
-  leitwertSteuer: 8e4,  // mm³/s per bar, pilot path
+  leitwertSteuer: 8e4,  // mm³/s per bar, pilot filling path
+  leitwertEntlueft: 6e5,  // mm³/s per bar, pilot venting path (via the signal valve exhaust) – Annahme, set so the spring return at 6 bar lands in 12–52 ms
   volumenSteuer: 5000,  // mm³, one pilot chamber
   leitwertZu: 3.2e5,    // mm³/s per bar, supply path 1→2 / 1→4
   leitwertAb: 3.2e5,    // mm³/s per bar, exhaust path 2→3 / 4→5
@@ -1151,7 +1152,9 @@ function ventilZiel(v) {
 function ventilSignal(v, name, an) {
   if (name === "12" && v.bauart === "monostabil") return v;
   v.hand = null;
+  const alt = name === "12" ? v.signal12 : v.signal14;
   if (name === "12") v.signal12 = an; else v.signal14 = an;
+  if (alt === an) return v;   // key auto-repeat: keep the running timing
   const ziel = ventilZiel(v);
   const unterwegs = ziel === 1 ? v.anteil < ventilAnkunft : ziel === 0 && v.anteil > 1 - ventilAnkunft;
   v.schaltStart = unterwegs ? 0 : null;
@@ -1177,8 +1180,11 @@ function ventilTeilschritt(v, masse, h, druckBar) {
   //    otherwise vented through the pilot valve.
   const q14 = v.signal14 ? quelle : AUSSEN;
   const q12 = v.signal12 ? quelle : AUSSEN;
-  v.p14 = kammerSchritt(v.p14, masse.leitwertSteuer * (q14 - v.p14), 0, masse.volumenSteuer, h, Math.max(q14, v.p14));
-  v.p12 = kammerSchritt(v.p12, masse.leitwertSteuer * (q12 - v.p12), 0, masse.volumenSteuer, h, Math.max(q12, v.p12));
+  //    Venting runs through a different path than filling.
+  const leit14 = q14 < v.p14 ? masse.leitwertEntlueft : masse.leitwertSteuer;
+  const leit12 = q12 < v.p12 ? masse.leitwertEntlueft : masse.leitwertSteuer;
+  v.p14 = kammerSchritt(v.p14, leit14 * (q14 - v.p14), 0, masse.volumenSteuer, h, Math.max(q14, v.p14));
+  v.p12 = kammerSchritt(v.p12, leit12 * (q12 - v.p12), 0, masse.volumenSteuer, h, Math.max(q12, v.p12));
 
   if (v.hand !== null) {
     // 5. Held by hand: no dynamics.
@@ -1252,10 +1258,11 @@ function ventilSchaltzeit(masse, druckBar, { bauart = "monostabil", richtung = "
 /** Rounded values for the card's readout; pressures are gauge, in bar. */
 function ventilAnzeige(v, masse, druckBar) {
   const bar = (p) => Math.round((p - AUSSEN) * 10) / 10;
+  const zeit = v.schaltzeit ?? ventilSchaltzeit(masse, druckBar);
   return {
     p2: bar(v.p2),
     p4: bar(v.p4),
-    schaltzeitMs: Math.round((v.schaltzeit ?? ventilSchaltzeit(masse, druckBar)) * 1000),
+    schaltzeitMs: Number.isFinite(zeit) ? Math.round(zeit * 1000) : null,   // never Infinity on the card
   };
 }
 
