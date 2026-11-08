@@ -18,6 +18,7 @@ const SKILL = join(WURZEL, ".claude", "skills", "azubi-visualisierung");
 const PAARE = [
   ...["explode", "legende", "schnitt", "toene", "seite", "luft"]
     .map((m) => [`vorlage/figur/${m}.mjs`, `figur/${m}.mjs`]),
+  ["vorlage/figur/schaltzeichen.mjs", "figur/schaltzeichen.mjs"],
   ["vorlage/figur/tests/luft.test.mjs", "figur/tests/luft.test.mjs"],
   ["vorlage/figur/tests/tools/build-uebersicht.mjs", "figur/tests/tools/build-uebersicht.mjs"],
   ["vorlage/figur/tests/tools/pruefe-figur.mjs", "figur/tests/tools/pruefe-figur.mjs"],
