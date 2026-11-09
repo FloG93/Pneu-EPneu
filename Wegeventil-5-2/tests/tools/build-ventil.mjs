@@ -18,6 +18,7 @@ import * as G from "../../../.claude/skills/anatomy/kit/lathe.mjs";
 import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mjs";
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
 import * as SCH from "../../../figur/schnitt.mjs";
+import * as EX from "../../../figur/explode.mjs";
 import { ISO_5599_GR1, wegeOffen } from "../../../figur/ventil.mjs";
 import { TONE_CSS } from "../../../figur/toene.mjs";
 import { LEGENDE } from "./legende-ventil.mjs";
@@ -288,6 +289,32 @@ function kanalInnen(x, z0, z1, n = 24) {
 const aufNut = (p) => ZA - Math.sqrt(R_NUT ** 2 - p[1] ** 2);
 const aufGewinde = (x) => (p) => ZP + Math.sqrt(Math.max(0, R_GEWINDE ** 2 - (p[0] - x) ** 2));
 
+// --- Assemblies: the three explode tables (all the maths lives in figur/explode.mjs) --
+// Looking from +x/+y/+z: the kept half is y <= 0, ports and fittings point +y, towards the viewer.
+const PIECE_OF = {
+  grundplatte: "grundplatte", dichtung: "dichtung", gehaeuse: "gehaeuse", schieber: "schieber",
+  ringe: "ringe", kappe14: "kappe14", rueckstell: "rueckstell", schrauben: "schrauben",
+  daempfer: "daempfer", leitung: "leitung", steuerleitung: "steuerleitung",
+};
+// Outside first; closing walks it backwards. Rings sit directly before the spool and leave with it.
+const STAGGER = [
+  "steuerleitung", "leitung", "daempfer", "schrauben", "rueckstell", "kappe14",
+  "ringe", "schieber", "gehaeuse", "dichtung", "grundplatte",
+];
+const MOVE = {
+  steuerleitung: [0, 0, 70],      // pilot lines straight up out of their cap threads
+  leitung: [0, 60, 0],            // hoses and fittings out of the ports, towards the viewer
+  daempfer: [0, 60, 0],           // silencers the same way (other x, no collision)
+  schrauben: [0, 0, 62],          // top screws up and clear of the lifted housing
+  rueckstell: [146, 0, 0],        // return side beyond the end of the pulled spool
+  kappe14: [-45, 0, 0],           // cap 14 with its piston, off to the left
+  ringe: [138, 0, 15],            // leaves with the spool, lifted so the rings stay distinct
+  schieber: [138, 0, 0],          // out of the bore until clear of the housing
+  gehaeuse: [0, 0, 50],           // housing straight up
+  dichtung: [0, 0, 22],           // gasket between housing and base
+  grundplatte: [0, 0, -35],       // base straight down
+};
+
 // --- Recording ------------------------------------------------------------------
 const R = A.recorder(P);
 const rec = R.solid;
@@ -299,7 +326,7 @@ function put(pos, svg, shapes = [], extra = {}) {
   // the outer group stays where it is.
   if (hub) inhalt = `<g data-hub="">${inhalt}</g>`;
   if (variante) inhalt = `<g data-variante="${variante}">${inhalt}</g>`;
-  R.put({ name: R.nameFor(name), piece: gruppe, label: gruppe, at: pos, pos, bias, gruppe, svg: inhalt, shapes: shapes.flat(), ...rest });
+  R.put({ name: R.nameFor(name), piece: PIECE_OF[gruppe], label: PIECE_OF[gruppe], move: MOVE[PIECE_OF[gruppe]], at: pos, pos, bias, gruppe, svg: inhalt, shapes: shapes.flat(), ...rest });
 }
 /**
  * Recorded material is a set of axis boxes. A long block is split along x:
@@ -874,7 +901,7 @@ function schlaeuche() {
     GRUPPE = gruppe;
     const name = `${gruppe}.schlauch${nr}`;
     // The far end is cut off in the air on purpose: it is no tip that must land on a part.
-    R.route(name, punkte, r, { piece: gruppe, ends: [true, false], free: [true, false] });
+    R.route(name, punkte, r, { piece: PIECE_OF[gruppe], move: MOVE[PIECE_OF[gruppe]], ends: [true, false], free: [true, false] });
     const stuecke = tubePieces(punkte, r, P, { maxLength: 14 });
     stuecke.forEach((teil, i) => {
       const letztes = i === stuecke.length - 1;
@@ -972,6 +999,11 @@ for (const it of R.items) {
 A.settle(R, P);
 R.items.sort((a, b) => a.key - b.key);
 
+const { VIEW1 } = EX.vorbereiten(R, P, MOVE, W, H);
+if (STAGGER.length !== LEGENDE_IDS.length || !LEGENDE_IDS.every((id) => STAGGER.includes(id))) {
+  throw new Error("STAGGER und LEGENDE nennen nicht dieselben Baugruppen");
+}
+
 const svg = k.figureSvg({
   width: W,
   height: H,
@@ -990,6 +1022,12 @@ console.log(`Überdeckung: 1→4 öffnet bei ${UEBERDECKUNG.oeffnetA.toFixed(2)}
   + `→ ${(UEBERDECKUNG.gemessen * 100).toFixed(1)} % des Hubs (Modell ${M.ueberdeckung * 100} %)`);
 console.log(FEDERTEXT);
 
+// Preview of the fully apart state: each assembly shifted by its projected MOVE (no depth re-sorting).
+const ZERLEGT_CSS = Object.entries(MOVE).map(([id, m]) => {
+  const a = at([0, 0, 0]), b = at(m);
+  return `[data-piece="${id}"]{transform:translate(${(b[0] - a[0]).toFixed(2)}px,${(b[1] - a[1]).toFixed(2)}px)}`;
+}).join("") + "svg{overflow:visible}";
+
 // A plain preview to look at while the page does not exist yet (Task 6).
 const vorschau = process.argv.find((a) => a.startsWith("--vorschau="));
 if (vorschau) {
@@ -999,10 +1037,23 @@ if (vorschau) {
   writeFileSync(ziel, `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Vorschau 5/2-Wegeventil</title>
 <style>${k.ISO_CSS}${TONE_CSS}${SCHNITT_CSS}
 body{margin:0;background:var(--anatomy-card)} .buehne{width:${W}px;margin:0 auto}
+${process.argv.includes("--zerlegt") ? ZERLEGT_CSS : ""}
 ${process.argv.includes("--feder") ? '[data-variante="kolben12"]{display:none}' : ""}
 ${process.argv.includes("--kolben") ? '[data-variante="feder"]{display:none}' : ""}
 </style></head><body class="iso" data-theme="${thema}"><div class="buehne">${svg}</div></body></html>`);
   console.log(`Vorschau: ${ziel}`);
+}
+
+if (process.argv.includes("--apart")) {
+  // Everything at the end of its escape path: do the assemblies pass through one another?
+  for (const shape of R.solids) shape.move = MOVE[shape.piece] ?? [0, 0, 0];
+  const probleme = A.solidClearances(R.solids, { state: 1 });
+  for (const p of probleme.slice(0, 20)) {
+    console.log(`  ${p.a ?? p.one ?? ""} × ${p.b ?? p.two ?? ""}  ${JSON.stringify(p).slice(0, 150)}`);
+  }
+  console.log(`Ansicht auseinandergefahren: ${VIEW1.map((v) => v.toFixed(0)).join(" ")}`);
+  console.log(probleme.length ? `auseinandergefahren: ${probleme.length} Durchdringungen` : "auseinandergefahren: sauber");
+  if (probleme.length) process.exit(1);
 }
 
 if (process.argv.includes("--audit")) {
