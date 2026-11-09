@@ -15,7 +15,7 @@
     "bau:ventil": "node Wegeventil-5-2/tests/tools/build-ventil.mjs",
     "pruef:ventil": "node Wegeventil-5-2/tests/tools/build-ventil.mjs --audit && node Wegeventil-5-2/tests/tools/build-ventil.mjs --apart",
     "bau:ventil32": "node Wegeventil-3-2/tests/tools/build-ventil-3-2.mjs",
-    "pruef:ventil32": "node Wegeventil-3-2/tests/tools/build-ventil-3-2.mjs --audit",
+    "pruef:ventil32": "node Wegeventil-3-2/tests/tools/build-ventil-3-2.mjs --audit && node Wegeventil-3-2/tests/tools/build-ventil-3-2.mjs --apart",
     "bau:uebersicht": "node figur/tests/tools/build-uebersicht.mjs",
     "pruef:browser": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Zylinder-Doppeltwirkend/ Zylinder-Doppeltwirkend/tests/tools/pruefe-zylinder.mjs",
     "pruef:browser:ventil": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Wegeventil-5-2/ Wegeventil-5-2/tests/tools/pruefe-ventil.mjs",

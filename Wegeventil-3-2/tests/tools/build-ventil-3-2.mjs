@@ -29,7 +29,7 @@ import * as EX from "../../../figur/explode.mjs";
 import * as LEG from "../../../figur/legende.mjs";
 import { ISO_5599_GR1, wegeOffen, ventilWege } from "../../../figur/ventil.mjs";
 import { VENTIL_3_2_NC, VENTIL_3_2_NO } from "../../../figur/schaltzeichen.mjs";
-import { seite } from "../../../figur/seite.mjs";
+import { seite, knopf } from "../../../figur/seite.mjs";
 import { gehaeuseSchnitt, bogen, nahtlos } from "../../../figur/gehaeuse.mjs";
 import { normteile, stummel, sechskant, federPruefen, SCHNITT_CSS } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-ventil-3-2.mjs";
@@ -101,18 +101,20 @@ const R_RINGNUT = R_BUND - 1;
  *    (open at rest, shuts after s_b). End lands only seal the ends.
  *  - NO: rest 1→2, actuated 2→3. A long left land (its right edge S_B before
  *    web 1|2) and a long right land (its left edge S_A inside web 2|3).
- * Each ring sits on a web in the position in which it seals.
+ * Each ring sits on a web in the position in which it seals. Both spools carry
+ * a ring at x = 4 and one at x = 81, in the same place: the legend number of
+ * the rings hangs on one of these, so it points at a ring in either variant.
  */
 const SPULEN = {
   nc: {
     art: VENTIL_3_2_NC,
     bunde: [[SP[0], 11], [STEGE[1][1] - S_A, STEGE[2][0] - S_B], [64, SP[1]]],
-    ringe: [3, 9, STEGE[1][1] - S_A + 2.6, STEGE[2][0] - S_B - 2.6, 76, 82],
+    ringe: [4, 9, STEGE[1][1] - S_A + 2.6, STEGE[2][0] - S_B - 2.6, 76, 81],
   },
   no: {
     art: VENTIL_3_2_NO,
     bunde: [[SP[0], STEGE[1][0] - S_B], [STEGE[2][1] - S_A, SP[1]]],
-    ringe: [4, STEGE[1][0] - S_B - 2.6, STEGE[2][1] - S_A + 2.6, 80],
+    ringe: [4, STEGE[1][0] - S_B - 2.6, STEGE[2][1] - S_A + 2.6, 81],
   },
 };
 
@@ -767,11 +769,32 @@ if (STAGGER.length !== LEGENDE_IDS.length || !LEGENDE_IDS.every((id) => STAGGER.
 A.settle(R, P);
 R.items.sort((a, b) => a.key - b.key);
 
-// A number hangs on a part that is drawn in both variants: the parts of one
-// variant only are hidden in the other and would leave the leader pointing at nothing.
-const { MITTE } = EX.vorbereiten(R, P, MOVE, W, H, {
-  anker: (it) => !/data-variante=/.test(it.svg ?? ""),
-});
+// A number hangs on a part that is visible in every variant: a part of one
+// variant only is hidden in the other and would leave the leader pointing at
+// nothing (or at the other spool's neck). A part counts as visible in both when
+// it carries no variant, or when each other variant has a part of the same
+// assembly at exactly the same place (the spool's middle, the rings at x = 4 and 81).
+const VARIANTEN_NAMEN = Object.keys(SPULEN).filter((v) => !NUR || v === NUR);
+const eigeneVariante = (it) => /^<g data-variante="(\w+)"/.exec(it.svg ?? "")?.[1] ?? null;
+const gleicherOrt = (a, b) => a.pos.every((v, i) => Math.abs(v - b.pos[i]) < 1e-6);
+const inAllenVarianten = (it) => {
+  if (!/data-variante=/.test(it.svg ?? "")) return true;
+  const eigene = eigeneVariante(it);
+  if (!eigene) return false;                    // a variant only inside (the pilot number)
+  return VARIANTEN_NAMEN.every((v) => v === eigene
+    || R.items.some((o) => o.piece === it.piece && eigeneVariante(o) === v && gleicherOrt(o, it)));
+};
+const { KEYS, LIFT, VIEW0, VIEW1, MITTE } = EX.vorbereiten(R, P, MOVE, W, H, { anker: inAllenVarianten });
+
+// Proof, for every variant: each number's anchor is the place of a part of its
+// assembly that this variant shows.
+for (const v of VARIANTEN_NAMEN) {
+  for (const [id, c] of Object.entries(MITTE)) {
+    const sichtbar = R.items.some((it) => it.piece === id && it.pos && gleicherOrt(it, { pos: c })
+      && (!/data-variante=/.test(it.svg ?? "") || eigeneVariante(it) === v));
+    if (!sichtbar) throw new Error(`Nummer ${id}: im ${v.toUpperCase()}-Ventil hängt sie an keinem sichtbaren Teil (${c.join(", ")})`);
+  }
+}
 
 const svg = k.figureSvg({
   width: W,
@@ -792,13 +815,34 @@ const svg = k.figureSvg({
 
 // --- Preview ---------------------------------------------------------------------------------------------
 // The finished page is built in a later step. Until then `--vorschau=<file>`
-// writes the drawing with its legend, so the figure can be looked at; add
-// `?variante=no` to the address to see the normally open spool.
+// writes the drawing with its legend and the take-apart run, so the figure can
+// be looked at; add `?variante=no` to the address to see the normally open spool.
 const vorschauArg = process.argv.find((a) => a.startsWith("--vorschau="));
 if (vorschauArg) {
   const ziel = vorschauArg.slice("--vorschau=".length);
   mkdirSync(dirname(ziel), { recursive: true });
   const vorschauLauf = `
+const P = ${JSON.stringify(P)};
+const MOVE = ${JSON.stringify(MOVE)};
+const ORDER = ${JSON.stringify(STAGGER)};
+const SPR = ${JSON.stringify(EX.SPRING)};
+const TAKT = ${JSON.stringify(EX.TAKT)};
+const KEYS = ${JSON.stringify(KEYS)};
+const LIFT = ${JSON.stringify(LIFT)};
+const VIEW0 = ${JSON.stringify(VIEW0)};
+const VIEW1 = ${JSON.stringify(VIEW1.map((v) => Math.round(v * 10) / 10))};
+const MITTE = ${JSON.stringify(Object.fromEntries(Object.entries(MITTE).map(([a, b]) => [a, b.map((v) => Math.round(v * 10) / 10)])))};
+const STEP = ${JSON.stringify(LEG.tabelle(LEGENDE))};
+const stage = document.querySelector(".iso-stage");
+const svg = stage.querySelector("svg");
+const groups = Array.from(svg.querySelectorAll("[data-g]"));
+const info = document.querySelector(".pickinfo");
+${EX.LAUFZEIT}
+${LEG.LAUFZEIT}
+${EX.ABLAUF}
+function bildZeichnen() {}
+function vorDemZerlegen() {}
+window.__vorschau = { offen: offenAnteil, spiele, MITTE, MOVE, P };
 const q = new URLSearchParams(location.search).get("variante");
 if (q === "no" || q === "nc") for (const el of document.querySelectorAll("[data-variante]")) {
   if (el.dataset.variante === q) el.removeAttribute("hidden");
@@ -809,7 +853,7 @@ if (q === "no" || q === "nc") for (const el of document.querySelectorAll("[data-
     titel: "3/2-Wegeventil – Vorschau",
     fig: "Bild 1",
     kartenTitel: "3/2-Wegeventil, Längsschieber",
-    hinweis: "Vorschau der Geometrie in Ruhestellung",
+    hinweis: "Vorschau der Geometrie",
     anzeige: "Vorschau",
     schluessel: [
       { mark: "lit", label: "Schieber, Dichtringe und Steuerkolben – was sich bewegt" },
@@ -817,9 +861,9 @@ if (q === "no" || q === "nc") for (const el of document.querySelectorAll("[data-
     ],
     caption: "Längsschieberventil nach ISO 5599-1, Größe 1 (G1/4), in Ruhestellung.",
     svg,
-    leiste: "",
+    leiste: knopf("btn-explode", "Zerlegen und zusammenbauen"),
     legende: LEG.knoepfe(LEGENDE),
-    infoText: "",
+    infoText: "Vorschau der Legende und des Zerlegens.",
     lesetext: "",
     laufzeit: vorschauLauf,
     breite: 1240,
@@ -835,6 +879,18 @@ for (const u of UEBERDECKUNG) {
 }
 console.log(FEDERTEXT);
 console.log(`Nummern an: ${Object.keys(MITTE).join(", ")}`);
+
+if (process.argv.includes("--apart")) {
+  // Everything at the end of its escape path: do the assemblies pass through one another?
+  for (const shape of R.solids) shape.move = MOVE[shape.piece] ?? [0, 0, 0];
+  const probleme = A.solidClearances(R.solids, { state: 1 });
+  for (const p of probleme.slice(0, 20)) {
+    console.log(`  ${p.a ?? p.one ?? ""} × ${p.b ?? p.two ?? ""}  ${JSON.stringify(p).slice(0, 150)}`);
+  }
+  console.log(`Ansicht auseinandergefahren: ${VIEW1.map((v) => v.toFixed(0)).join(" ")}`);
+  console.log(probleme.length ? `auseinandergefahren: ${probleme.length} Durchdringungen` : "auseinandergefahren: sauber");
+  if (probleme.length) process.exit(1);
+}
 
 if (process.argv.includes("--audit")) {
   A.auditOrExit(R, P, {
