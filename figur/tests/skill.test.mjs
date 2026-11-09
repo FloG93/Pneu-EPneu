@@ -21,6 +21,8 @@ const PAARE = [
   ["vorlage/figur/schaltzeichen.mjs", "figur/schaltzeichen.mjs"],
   ["vorlage/figur/normteile.mjs", "figur/normteile.mjs"],
   ["vorlage/figur/bedienung.mjs", "figur/bedienung.mjs"],
+  ["vorlage/figur/gehaeuse.mjs", "figur/gehaeuse.mjs"],
+  ["vorlage/figur/tests/gehaeuse.test.mjs", "figur/tests/gehaeuse.test.mjs"],
   ["vorlage/figur/tests/normteile.test.mjs", "figur/tests/normteile.test.mjs"],
   ["vorlage/figur/tests/luft.test.mjs", "figur/tests/luft.test.mjs"],
   ["vorlage/figur/tests/tools/build-uebersicht.mjs", "figur/tests/tools/build-uebersicht.mjs"],
