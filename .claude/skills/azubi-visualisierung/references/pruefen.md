@@ -17,9 +17,15 @@ Ein Seitentest je Bauteil (`<Ordner>/tests/seite.test.mjs`, Muster im Beispiel) 
 
 ## Zusatzprüfungen je Bauteil
 
-Ein Modul mit `export default async function ({ seite, V, modus })`, das als zweites Argument an `pruefe-figur.mjs` geht. Es wird je Farbmodus einmal aufgerufen, nach den Legendenprüfungen und vor dem Zerlegen; `V(name, bedingung)` meldet eine Prüfung. Vorbild: `beispiel/zylinder-doppeltwirkend/pruefe-zylinder.mjs` (Kammerdruck je Ventilstellung, 1178 N bei 6 bar, halber Druck → halbe Kraft).
+Ein Modul mit `export default async function ({ seite, V, modus, fuehrungen })`, das als zweites Argument an `pruefe-figur.mjs` geht. Es wird je Farbmodus einmal aufgerufen, nach den Legendenprüfungen und vor dem Zerlegen; `V(name, bedingung)` meldet eine Prüfung. `fuehrungen(seite)` ist die Messung der Führungslinien (unten), für ein Bauteil, das sich in einer eigenen Variante zerlegt und dort dieselbe Regel prüfen will (beim Ventil: bistabil). Vorbild: `beispiel/zylinder-doppeltwirkend/pruefe-zylinder.mjs` (Kammerdruck je Ventilstellung, 1178 N bei 6 bar, halber Druck → halbe Kraft).
 
 Geprüft wird am gezeichneten Ergebnis (`getAttribute("fill")`, `getComputedStyle`), nicht an Klassen. „Unter Druck" heißt: im Hellen dunkler, im Dunkeln heller als die Gegenkammer.
+
+## Was der gemeinsame Browsertest prüft
+
+Für jede Figur, in beiden Modi: Prüfhaken, zusammengebaut beim Start, Kontrast 45 %, eine Nummer je Legendeneintrag, Zeigen und Merken getrennt, Hervorhebung wirklich gezeichnet, Zerlegen mit festgenagelter Legende, kein strömendes Medium im zerlegten Zustand, alle Nummern sichtbar, **jede Nummer zeigt auf ein Teil ihrer Baugruppe**, Thema und Kontrast mitten im Lauf, Escape baut zusammen, jeder Text 4,5:1, kein Seitwärtsscrollen bei 390 px, keine Konsolenfehler.
+
+Die Führungslinien werden am Bildschirm gemessen: Jede sichtbare Linie wird von ihrem nahen Ende zurück bis zu dem Punkt verlängert, an dem sie hängt, und diese Strecke muss (auf 4 px genau) die Box eines gezeichneten Teils ihrer Baugruppe treffen. Verborgene Teile haben keine Box. Gemessen wird erst, wenn alles auseinander ist und die Federn ausgeschwungen sind. Gilt eine Variante, die erst das Zusatzmodul einschaltet, misst es dort mit `fuehrungen(seite)` noch einmal.
 
 ## Fallstricke
 
@@ -51,3 +57,6 @@ Jeder ist einmal veröffentlicht worden.
 | 22 | Kachel „geplant", Seite existiert schon (oder umgekehrt) | `kacheln.test.mjs` fängt es – Zustand umstellen |
 | 23 | Übersicht mit altem Text veröffentlicht | nach jeder Änderung an `kacheln.mjs` neu bauen und mitcommitten |
 | 24 | 404 in der Konsole | `favicon.svg` im Bauteilordner |
+| 25 | Legende springt nach einem Klick unter dem Zeiger, der zweite Klick trifft den Nachbarn | Chromes Scroll-Verankerung an den Eckmarken der Karte: `overflow-anchor: none` (steht in `seite.mjs`); nur auf einer Seite, die länger als das Fenster ist, darum flackerte der Test |
+| 26 | Nummer zeigt im zerlegten Zustand ins Leere | Nummer am nächsten eigenen Teil statt am Schwerpunkt; verborgene Varianten mit `anker` ausschließen; der gemeinsame Browsertest misst es |
+| 27 | Legende, Erzählung und Zerlegen-Knopf im Bauskript kopiert | stehen in `LEG.LAUFZEIT` und `EX.ABLAUF`; das Bauteil liefert nur `bildZeichnen` und `vorDemZerlegen` |

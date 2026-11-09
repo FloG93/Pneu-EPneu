@@ -11,9 +11,11 @@ Baugruppen: PIECE_OF, STAGGER (außen zuerst), MOVE (Weg je Baugruppe in mm)
 Körper je Baugruppe → R.put / R.solid / R.route
 A.settle(R, P)  → Tiefenschlüssel
 Korrekturen, die der Löser nicht wissen kann (Schnitt, Medium)
-EX.vorbereiten(R, P, MOVE, W, H)  → KEYS, LIFT, VIEW0, VIEW1, MITTE
+EX.vorbereiten(R, P, MOVE, W, H, { anker })  → KEYS, LIFT, VIEW0, VIEW1, MITTE
 Medienwege: LU.bahn(punkte3, P, k.iso)
-seite({...}) mit LEG.knoepfe(LEGENDE), EX.LAUFZEIT, LU.LAUFZEIT, eigener Laufzeit
+Laufzeit: modulQuelle(WURZEL, [Modelldateien]), EX.LAUFZEIT, LEG.LAUFZEIT, EX.ABLAUF, LU.LAUFZEIT,
+          dann die eigene: bildZeichnen(dt, offen, bewegt), vorDemZerlegen(), Bedienung, window.__figur
+seite({...}) mit LEG.knoepfe(LEGENDE) und – wenn es eines gibt – beiFigur
 --apart und --audit am Ende
 ```
 
@@ -50,6 +52,20 @@ Das Kit dreht nur volle Körper und kennt keine Teilkreise; `prismOf` ist nur ko
 - Last, die an der Stange hängt, fährt mit ihr (`A.disc` an der Stangenfläche statt eines Schlittens auf Abstand).
 - Winzige Teile (< ~30 px) fahren mit der Nachbarin, behalten aber ihre Nummer.
 - Clip der inneren Gruppen beim Zerlegen abschalten (`explode.mjs` macht das), Hub vorher auf 0.
+- **Die Nummer hängt am nächsten eigenen Teil**, nicht am Schwerpunkt der Baugruppe: Der liegt im Leeren, sobald die Teile auseinanderliegen (zwei Schrauben an beiden Enden, zwei Schalldämpfer). `EX.vorbereiten` wählt das Teil, das dem Schwerpunkt am nächsten liegt. Mit `anker: (it) => …` schließt man Teile aus, die in einem Zustand der Figur verborgen sind – beim 5/2-Ventil alles mit `data-variante`, sonst zeigt die Nummer 11 im monostabilen Ventil auf die unsichtbare Steuerleitung 12. Darf kein Teil halten, gilt wieder jedes. Geprüft wird das im gemeinsamen Browsertest (siehe `pruefen.md`).
+
+## Die gemeinsame Laufzeit
+
+Die Seite ist ein einziges klassisches Skript; die Teile werden als Quelltext hintereinandergehängt. Darum dürfen ihre Namen auf oberster Ebene nicht doppelt vorkommen, und in `String.raw`-Laufzeiten steht kein Backtick.
+
+| Stück | liefert | erwartet |
+|---|---|---|
+| `modulQuelle(WURZEL, dateien)` (`figur/seite.mjs`) | die Modelldateien ohne `import`/`export` (nur einzeilige Importe werden entfernt), Abhängigkeiten zuerst | keine gemeinsamen Namen in den Dateien |
+| `EX.LAUFZEIT` | Federn, `schedule`, `poseExplode`, Nummern, Sortierung je Bild | `P`, `MOVE`, `ORDER`, `SPR`, `KEYS`, `LIFT`, `VIEW0`, `VIEW1`, `MITTE`, `STEP`, `TAKT`, `svg`, `stage`, `groups` |
+| `LEG.LAUFZEIT` | Auswahl in der Legende (`zeige`, `waehle`), Erklärzeile beim Zusammenbau (`erzaehle`), `INFO_RUHE` | `groups`, `info`, `STEP`, `ORDER`, `TAKT` |
+| `EX.ABLAUF` | Bildschleife (`run`, nur solange die Bühne sichtbar ist), Knopf „Zerlegen und zusammenbauen", Escape, `spiele`, `zerlegt` | vom Bauteil genau zwei Funktionen: `bildZeichnen(dt, offen, bewegt)` und `vorDemZerlegen()` |
+
+`bildZeichnen` zeichnet ein Bild des Bauteils, nachdem die Explosion sich bewegt hat; das Modell läuft nur, solange `offen < 0.01` und keine Feder unterwegs ist. `vorDemZerlegen` setzt zurück, was sich von selbst bewegt (Automatik, Signale, Handbetrieb), damit die Fluchtwege von der Ruhelage aus beginnen; der Zylinder braucht nichts und lässt sie leer.
 
 ## Audit lesen
 
@@ -65,7 +81,8 @@ Jeder Eintrag bekommt einen Kommentar, **warum**. Ein Eintrag, um eine Meldung l
 
 ## Die Seite
 
-- `seite({ titel, … })` aus `figur/seite.mjs` liefert Karte, Bedienleiste, Startskript und `<link rel="icon" href="favicon.svg">` – das Bauteil legt **`favicon.svg`** und **`vorschau.svg`** (Kachelbild 240×135 mit den Klassen `v-wand`, `v-teil`, `v-leitung`, `v-hilfslinie`, `v-stark`, `v-blass`) in seinen Ordner.
+- `seite({ titel, … })` aus `figur/seite.mjs` liefert Karte, Bedienleiste, Startskript und `<link rel="icon" href="favicon.svg">`. Mit `beiFigur` (Markup) und `beiFigurLabel` steht ein Begleitbild in einem eigenen `aside` neben der Karte, etwa das Schaltzeichen beim Ventil; unter 900 px rutscht es darunter. Seiten ohne Begleitbild bleiben Byte für Byte gleich. Das Bauteil legt **`favicon.svg`** und **`vorschau.svg`** (Kachelbild 240×135 mit den Klassen `v-wand`, `v-teil`, `v-leitung`, `v-hilfslinie`, `v-stark`, `v-blass`) in seinen Ordner.
 - Die Anzeige steht schon im erzeugten HTML (ohne JavaScript nicht leer).
+- **Scroll-Verankerung:** Ändert sich die Länge der Erklärzeile unter der Legende, wandert der untere Rand der Karte. Chrome verankert das Scrollen an einem Element darin – ohne Gegenmittel an den Eckmarken der Karte – und scrollt mit: Die Legende springt unter dem Zeiger, der gerade geklickt hat, und der nächste Klick trifft den Nachbarn. `figur/seite.mjs` setzt darum `overflow-anchor: none` auf `.iso-plate-corners`. Wer eigene Elemente über die ganze Karte legt, gibt ihnen dasselbe.
 - `window.__figur = { offen(), zerlegt(), stelle(…), … }` als Prüfhaken – der Browsertest setzt Zustände, statt auf den richtigen Moment zu hoffen.
 - Erklärtext (`LESETEXT`) in ganzen deutschen Sätzen: was man sieht, warum es so ist, was man ausprobieren kann.

@@ -23,13 +23,17 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 
 | Modul | Verantwortung |
 |---|---|
-| `figur/pneumatik.mjs` | Das Rechenmodell: Flächen, Kräfte, Kammerdrücke, Kolbenbewegung. Reine Funktionen, keine Zeichnung. |
-| `figur/explode.mjs` | Wege, Federn, Staffelung, Sortierung nach echter Tiefe je Bild |
-| `figur/legende.mjs` | Legendenliste, Nummern mit Führungslinie, Erklärzeile, Auswahl |
+| `figur/pneumatik.mjs` | Das Rechenmodell des Zylinders: Flächen, Kräfte, Kammerdrücke, Kolbenbewegung. Reine Funktionen, keine Zeichnung. |
+| `figur/ventil.mjs` | Das Rechenmodell des 5/2-Wegeventils: Öffnung der Wegesätze, Kammerdruck-Schritt (beides nutzt auch der Zylinder), Schieber, Steuerkammern, Schaltzeit. Reine Funktionen, keine Zeichnung. |
+| `figur/schaltzeichen.mjs` | Schaltzeichen nach ISO 1219-1 aus einer Beschreibung der Wege (`VENTIL_5_2`), dazu die Laufzeit, die das Symbol mit dem Schieber gleiten lässt und offene Wege färbt |
+| `figur/explode.mjs` | Wege, Federn, Staffelung, Sortierung nach echter Tiefe je Bild, Nummern am nächsten eigenen Teil (`anker`); `ABLAUF`: Bildschleife, Knopf „Zerlegen und zusammenbauen", Escape |
+| `figur/legende.mjs` | Legendenliste, Nummern mit Führungslinie, Erklärzeile, Auswahl; `LAUFZEIT`: Zeigen/Merken, Erzählung beim Zusammenbau |
 | `figur/luft.mjs` | Luftwege als 3D-Pfade, Partikel darauf, Kammerfüllung, die vier Blautöne |
-| `figur/seite.mjs` | Seitengerüst: Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript |
+| `figur/seite.mjs` | Seitengerüst: Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript, Begleitbild (`beiFigur`), Modelldateien als Skripttext (`modulQuelle`) |
 
-Ein Bauteil liefert **nur** Geometrie und vier Datentabellen (`MOVE`, `STAGGER`, `PIECE_OF`, `LEGENDE`), bei beweglichen Bauteilen dazu die Luftwege und das Modell, das sie treibt.
+**Bekannte Ausnahmen:** Die beiden Rechenmodelle `pneumatik.mjs` und `ventil.mjs` kennen ihr Bauteil – ein Modell ohne Bauteil gibt es nicht. Sie liegen in `figur/`, weil mehrere Seiten mit ihnen rechnen (der Zylinder auch mit `ventil.mjs`) und dieselbe Physik nicht zweimal stehen darf. Alles andere in `figur/` bleibt bauteilfrei.
+
+Ein Bauteil liefert **nur** Geometrie und vier Datentabellen (`MOVE`, `STAGGER`, `PIECE_OF`, `LEGENDE`), bei beweglichen Bauteilen dazu die Luftwege und das Modell, das sie treibt. Seine Laufzeit gibt `EX.ABLAUF` genau zwei Funktionen: `bildZeichnen(dt, offen, bewegt)` und `vorDemZerlegen()`.
 
 **`build-<bauteil>.mjs` darf keine Zeile Federmathematik, Sortierung oder Seitengerüst enthalten.** Muss beim nächsten Bauteil etwas nach `figur/` wandern, war die Naht falsch — dann wird sie dort verschoben, nicht im Bauteil umgangen.
 
@@ -64,6 +68,8 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | Geometrie zerlegt | `… --apart` | `auseinandergefahren: sauber` |
 | Linienenden | `CHROME_PATH=/opt/pw-browsers/chromium node .claude/skills/anatomy/scripts/lines.mjs <Ordner>/index.html` | `line ends: 0 of N` |
 | Verhalten im Browser | `node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/ <Ordner>/tests/tools/pruefe-<name>.mjs` | `all checks passed` |
+| … Zylinder | `npm run pruef:browser` | `all checks passed (50)` |
+| … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |
 
 **Messen statt ansehen.** Geprüft wird nie „Klasse gesetzt", sondern was der Browser danach zeichnet. Ein Bild, das „fast richtig" aussieht, ist der Normalfall.
@@ -87,3 +93,8 @@ Jeder dieser Punkte ist dort einmal veröffentlicht worden.
 13. **Thema und Kontrast vor dem ersten Zeichnen** setzen (Startskript im `<body>`), sonst blitzt die Zeichnung einmal in der falschen Stufe.
 14. **`Number(null)` ist 0.** Ein leerer Speicher setzte den Regler auf 0 statt 45.
 15. **Immer nur einen Build oder Audit gleichzeitig** (zwei Kerne), und Prozesse über die PID beenden.
+
+Aus dem 5/2-Wegeventil:
+
+16. **Scroll-Verankerung.** Ändert sich die Erklärzeile unter der Legende, wandert der Kartenrand; Chrome verankert das Scrollen an den Eckmarken der Karte und scrollt mit, die Legende springt unter dem Zeiger, der nächste Klick trifft den Nachbarn. `overflow-anchor: none` auf `.iso-plate-corners` (steht in `figur/seite.mjs`). Zeigt sich nur auf Seiten, die länger als das Fenster sind – der Test flackerte.
+17. **Nummern am nächsten eigenen Teil.** Der Schwerpunkt einer Baugruppe aus getrennten Teilen liegt im Leeren. `EX.vorbereiten` hängt die Nummer an das Teil, das dem Schwerpunkt am nächsten liegt; mit `anker` werden Teile ausgeschlossen, die eine Variante verbirgt (`data-variante`). Der gemeinsame Browsertest misst jede Führungslinie.
