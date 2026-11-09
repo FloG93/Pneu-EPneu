@@ -4,13 +4,15 @@
 // (Festo VSVA size 1); everything else is an assumption and is listed in the
 // README of the figure.
 //
-// This script holds geometry and data tables and nothing else: springs,
-// depth sorting, legend, air and page shell all come from ../../figur/.
+// This script holds geometry, data tables and the component's own runtime
+// (what the signals do, which room is under pressure) and nothing else:
+// explode springs, depth sorting, legend, air particles and page shell all
+// come from ../../figur/.
 //
 // The kit's camera looks from +x, +y, +z, so the half of the valve that is
 // kept is the one at y ≤ 0, its cut face at y = 0 looks at the viewer, and
 // the ports leave the sub-base towards +y.
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
@@ -19,11 +21,16 @@ import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mj
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
 import * as SCH from "../../../figur/schnitt.mjs";
 import * as EX from "../../../figur/explode.mjs";
-import { ISO_5599_GR1, wegeOffen } from "../../../figur/ventil.mjs";
-import { TONE_CSS } from "../../../figur/toene.mjs";
+import * as LU from "../../../figur/luft.mjs";
+import * as LEG from "../../../figur/legende.mjs";
+import { ISO_5599_GR1, wegeOffen, neuesVentil, ventilAnzeige, ventilSchaltzeit } from "../../../figur/ventil.mjs";
+import { VENTIL_5_2, wegeventilSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
+import { seite, knopf, schieber as regler, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
 import { LEGENDE } from "./legende-ventil.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
+const ZIEL = join(HIER, "..", "..", "index.html");
+const WURZEL = join(HIER, "..", "..", "..");
 
 const W = 900;
 const H = 800;
@@ -304,8 +311,8 @@ const STAGGER = [
 const MOVE = {
   steuerleitung: [0, 0, 70],      // pilot lines straight up out of their cap threads
   leitung: [0, 60, 0],            // hoses and fittings out of the ports, towards the viewer
-  daempfer: [0, 60, 0],           // silencers the same way (other x, no collision)
-  schrauben: [0, 0, 62],          // top screws up and clear of the lifted housing
+  daempfer: [0, 80, 0],           // the same way, further: same centroid as the fittings, so their numbers would sit on each other
+  schrauben: [0, 0, 82],          // top screws up and clear of the lifted housing, high enough that their number clears the housing's
   rueckstell: [146, 0, 0],        // return side beyond the end of the pulled spool
   kappe14: [-45, 0, 0],           // cap 14 with its piston, off to the left
   ringe: [138, 0, 15],            // leaves with the spool, lifted so the rings stay distinct
@@ -566,7 +573,9 @@ function schieber() {
   GRUPPE = "schieber";
   const profil = schieberProfil();
   put([(SP[0] + SP[1]) / 2, 0, ZA], [
-    SV(G.solidOf(profil, FX, P), { tone: "hi" }),
+    // The true silhouette, not the convex hull: the hull would paint paper
+    // over the gaps round the necks, which is exactly where the air flows.
+    SV(G.solidOf(profil, FX, P, { fill: "surface" }), { tone: "hi" }),
     L(G.circleOf(FX, SP[1], 2.2, P), { tone: "faint" }),
   ].join(""), [rec(A.solid(FX, profil, { name: "schieber.kolben" }))], { name: "schieber.kolben", hub: true });
 
@@ -749,7 +758,9 @@ function rueckstellung() {
     .sort((p1, p2) => G.dot3(p1.mid, V) - G.dot3(p2.mid, V));
   put([(sitz[1] + K12.wand) / 2, 0, ZA], [
     `<g data-hub="">${SV(G.disc(sitz[0], sitz[1], 8.2, FX, P), { tone: "hi" })}</g>`,
-    ...draht.map((teil) => tubeSvg(teil, { tone: "hi" })),
+    // Each piece carries the x of its middle: the page compresses the coil by
+    // shifting every piece in proportion to its distance from the end wall.
+    ...draht.map((teil) => `<g data-federx="${teil.mid[0].toFixed(2)}">${tubeSvg(teil, { tone: "hi" })}</g>`),
   ].join(""), [
     rec(A.disc(FX, sitz[0], sitz[1], 8.2, { name: "rueckstell.federsitz", owner: VARIANTEN })),
     rec(A.ring(FX, sitz[1], K12.wand, R_WINDUNG - R_DRAHT, R_WINDUNG + R_DRAHT, { name: "rueckstell.feder", owner: VARIANTEN })),
@@ -975,6 +986,124 @@ function federPruefen() {
   return text;
 }
 
+// --- Air: the rooms that fill, and the routes the particles take ---------------------------------------
+// Every room is drawn on the cut plane y = 0, over the opening of the hollow
+// it fills. It is appended to the item that draws that hollow, so it takes
+// exactly that item's place in the painter's order: a fittings stub that
+// stands in front of a channel stays in front of its air as well.
+const ZN = ZA - 9;                   // groove bottom: still visible under a land
+const ZG = ZA - 5.6;                 // gap under a web: visible under a neck, not under a land
+const kz = (punkte) => ring3(punkte.map(([x, z]) => [x, 0, z]));
+const raumGruppe = (nr, inhalt) => `<g class="kammer" data-raum="${nr}" fill="none">${inhalt}</g>`;
+const flaeche = (d, extra = "") => `<path${extra} d="${d}"/>`;
+const NAEHE = { 4: [BUNDE[0][1], BUNDE[1][0]], 2: [BUNDE[1][1], BUNDE[2][0]] };   // necks at rest
+const ZK0 = KAPPE.z1 - (STEUER_V.gewinde[1] - STEUER_V.gewinde[0]);  // bottom of a pilot thread
+const KAMMER = { 14: [K14.wand, KOLBEN14[0]], 12: [KOLBEN12[1], K12.wand], z: [ZA - R_KAMMER, ZA + R_KAMMER] };
+const kammerRechteck = ([x0, x1]) => kz([[x0, KAMMER.z[0]], [x1, KAMMER.z[0]], [x1, KAMMER.z[1]], [x0, KAMMER.z[1]]]);
+
+/**
+ * Housing, below the axis: the lower part of the groove, the channel under it
+ * and the lower gap round the neck. These lie behind the spool's front half,
+ * so they are drawn before the spool and the spool covers what it covers.
+ */
+function raumGehaeuse(nr) {
+  const x = PORT[nr];
+  const [a, b] = [x - NUT_HALB, x + NUT_HALB];
+  const unten = kz([[x - R_KANAL, GEH.z0], [x - R_KANAL, ZA - R_NUT], [a, ZA - R_NUT], [a, ZA - RB], [b, ZA - RB],
+    [b, ZA - R_NUT], [x + R_KANAL, ZA - R_NUT], [x + R_KANAL, GEH.z0]]);
+  // The neck between two lands always opens onto groove 4 (A–B) or groove 2 (B–C):
+  // its air is that port's air.
+  const hals = NAEHE[nr]
+    ? `<g data-hub="">${flaeche(kz([[NAEHE[nr][0], ZA - RB], [NAEHE[nr][1], ZA - RB], [NAEHE[nr][1], ZA - R_HALS], [NAEHE[nr][0], ZA - R_HALS]]))}</g>`
+    : "";
+  return raumGruppe(nr, flaeche(unten) + hals);
+}
+
+/**
+ * Above the axis it is the other way round: the spool's BACK half lies behind
+ * the cut plane there, yet is painted after the housing. So the upper part of
+ * the groove and the gap above the neck are drawn right after the spool. Only
+ * the next land to the right can stand in front of that gap (the camera looks
+ * from +x); the gap ends where a sight line from it would enter that land.
+ */
+function raumUeberSchieber(nr) {
+  const x = PORT[nr];
+  const oben = kz([[x - NUT_HALB, ZA + RB], [x + NUT_HALB, ZA + RB], [x + NUT_HALB, ZA + R_NUT], [x - NUT_HALB, ZA + R_NUT]]);
+  if (!NAEHE[nr]) return raumGruppe(nr, flaeche(oben));
+  const [h0, h1] = NAEHE[nr];
+  // Sight line from (x, 0, ZA + h) towards the camera: how far along x until it is R_BUND from the axis.
+  const quer2 = V[1] ** 2 + V[2] ** 2;
+  const vorlauf = (h) => {
+    if (h >= R_BUND) return 0;
+    const t = (-h * V[2] + Math.sqrt(h * h * V[2] ** 2 - quer2 * (h * h - R_BUND ** 2))) / quer2;
+    return V[0] * t;
+  };
+  const kante = bogen(R_HALS, R_BUND, 8).map((h) => [h1 - vorlauf(h), ZA + h]);
+  const luecke = kz([[h0, ZA + R_HALS], ...kante, [h1, ZA + RB], [h0, ZA + RB]]);
+  return raumGruppe(nr, flaeche(oben) + `<g data-hub="">${flaeche(luecke)}</g>`);
+}
+/** Sub-base behind the cut: the upper half of the port drilling and the channel up to the gasket. */
+function raumPlatte(nr) {
+  const x = PORT[nr];
+  const knick = Math.atan2(Math.sqrt(R_GEWINDE ** 2 - R_KANAL ** 2), R_KANAL);
+  const bogenPunkte = (von, bis) => bogen(von, bis, 10).map((t) => [x + R_GEWINDE * Math.cos(t), ZP + R_GEWINDE * Math.sin(t)]);
+  return raumGruppe(nr, flaeche(kz([
+    ...bogenPunkte(0, knick), [x + R_KANAL, PLATTE.z1], [x - R_KANAL, PLATTE.z1], ...bogenPunkte(Math.PI - knick, Math.PI),
+  ])));
+}
+/** Gasket: the slot of each channel. */
+const raumDichtung = (nr) => raumGruppe(nr, flaeche(kz([[PORT[nr] - R_KANAL, DICHT.z0], [PORT[nr] + R_KANAL, DICHT.z0],
+  [PORT[nr] + R_KANAL, DICHT.z1], [PORT[nr] - R_KANAL, DICHT.z1]])));
+/** The trough in the step, seen from above, up to where the fitting's stub begins. */
+const raumRinne = (nr) => raumGruppe(nr, flaeche(ring3([[PORT[nr] - R_GEWINDE, 0, ZP], [PORT[nr] + R_GEWINDE, 0, ZP],
+  [PORT[nr] + R_GEWINDE, VERSCHRAUBUNG.gewinde[0], ZP], [PORT[nr] - R_GEWINDE, VERSCHRAUBUNG.gewinde[0], ZP]])));
+/** A pilot chamber: its drilling and the space between end wall and piston, which the page redraws. */
+function raumSteuer(nr) {
+  const x = STEUER[nr];
+  const bohrung = kz([[x - R_STEUER_BOHRUNG, KAMMER.z[1]], [x + R_STEUER_BOHRUNG, KAMMER.z[1]],
+    [x + R_STEUER_BOHRUNG, ZK0], [x - R_STEUER_BOHRUNG, ZK0]]);
+  return raumGruppe(nr, flaeche(bohrung) + flaeche(kammerRechteck(KAMMER[nr]), ` data-steuerkammer="${nr}"`));
+}
+
+function luftEinfuellen() {
+  const item = (name) => {
+    const it = R.items.find((i) => i.name === name);
+    if (!it) throw new Error(`kein Teil ${name} für die Luft`);
+    return it;
+  };
+  item("gehaeuse.unten").svg += FOLGE.map(raumGehaeuse).join("");
+  item("schieber.kolben").svg += FOLGE.map(raumUeberSchieber).join("");
+  item("dichtung.platte").svg += FOLGE.map(raumDichtung).join("");
+  item("grundplatte.hinten").svg += FOLGE.map(raumPlatte).join("");
+  // The step pieces in the order they were built: piece i carries the trough of FOLGE[i].
+  const stufen = R.items.filter((i) => i.name.startsWith("grundplatte.stufe"));
+  FOLGE.forEach((nr, i) => { stufen[i].svg += raumRinne(nr); });
+  item("kappe14.unten").svg += raumSteuer(14);
+  item("rueckstell.unten").svg += raumSteuer(12);
+}
+
+// Particle routes, outside in: from the cut hose end (or the silencer) to the bottom of the groove.
+function vonAussen(nr) {
+  const x = PORT[nr];
+  const innen = [[x, VERSCHRAUBUNG.gewinde[0], ZP], [x, 0, ZP], [x, 0, ZN]];
+  if (nr === 3 || nr === 5) {
+    // Out through the silencer and a little way into the open air.
+    const spitze = DAEMPFER.sinter[1] + DAEMPFER.kuppe;
+    return [[x, spitze + 8, ZP], [x, spitze, ZP], [x, DAEMPFER.sechskant[0], ZP], ...innen];
+  }
+  return [...WEGE[nr].slice().reverse(), [x, VERSCHRAUBUNG.gewinde[1], ZP], ...innen];
+}
+/** From the bottom of groove a, under the web, to the bottom of groove b. */
+function quer(a, b) {
+  const [xa, xb] = [PORT[a], PORT[b]];
+  const r = Math.sign(xb - xa);
+  const steg = [xa + r * NUT_HALB, xb - r * NUT_HALB];
+  return [[xa + r * 3, 0, ZN], [steg[0] - r * 1.5, 0, ZG], [steg[1] + r * 1.5, 0, ZG], [xb - r * 3, 0, ZN]];
+}
+const weg = (von, nach) => [...vonAussen(von), ...quer(von, nach), ...vonAussen(nach).slice().reverse()];
+const steuerWeg = (nr) => [...WEGE[nr].slice().reverse(), [STEUER[nr], 0, ZA + R_KAMMER], [STEUER[nr], 0, ZA]];
+const ROUTEN = { "1-4": weg(1, 4), "2-3": weg(2, 3), "1-2": weg(1, 2), "4-5": weg(4, 5), st14: steuerWeg(14), st12: steuerWeg(12) };
+
 // --- Compose ---------------------------------------------------------------------------------------------
 const UEBERDECKUNG = ueberdeckungPruefen();
 const FEDERTEXT = federPruefen();
@@ -990,6 +1119,7 @@ rueckstellung();
 schrauben();
 anschluesse();
 schlaeuche();
+luftEinfuellen();
 
 const LEGENDE_IDS = LEGENDE.map((e) => e.piece);
 for (const it of R.items) {
@@ -999,10 +1129,13 @@ for (const it of R.items) {
 A.settle(R, P);
 R.items.sort((a, b) => a.key - b.key);
 
-const { VIEW1 } = EX.vorbereiten(R, P, MOVE, W, H);
+const { KEYS, LIFT, VIEW0, VIEW1, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
 if (STAGGER.length !== LEGENDE_IDS.length || !LEGENDE_IDS.every((id) => STAGGER.includes(id))) {
   throw new Error("STAGGER und LEGENDE nennen nicht dieselben Baugruppen");
 }
+
+// The air routes, projected once: the page places particles along them.
+const BAHNEN = Object.fromEntries(Object.entries(ROUTEN).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
 
 const svg = k.figureSvg({
   width: W,
@@ -1011,38 +1144,598 @@ const svg = k.figureSvg({
     "Ein 5/2-Wegeventil in Schieberbauart nach ISO 5599-1, Größe 1, auf seiner Grundplatte, in der Ebene des Schiebers aufgeschnitten. "
     + "Man sieht die Bohrung mit fünf Ringnuten, den Steuerschieber mit drei Bunden und Dichtringen, die fünf Kanäle hinunter in die Grundplatte "
     + "und die Anschlüsse 1 bis 5 mit Schläuchen und Schalldämpfern. Links sitzt die Endkappe mit dem Steuerkolben 14, rechts die Rückstellseite "
-    + "mit Feder oder zweitem Steuerkolben 12. Der Schieber steht in der Ausgangsstellung 12: 1 ist mit 2 verbunden, 4 mit 5.",
+    + "mit Feder oder zweitem Steuerkolben 12. Die Druckluft ist eingefärbt: das kräftige Blau steht unter Druck, das blasse ist Abluft "
+    + "auf dem Weg zum Schalldämpfer. In der Ausgangsstellung 12 ist 1 mit 2 verbunden und 4 mit 5.",
   body: [
     R.items.map((it) => `<g data-g="${it.gruppe}" data-piece="${it.piece}"${it.feder ? ` data-feder="${it.feder.join(" ")}"` : ""}>${it.svg}</g>`).join(""),
+    `<g class="luft" data-luftlage=""></g>`,
   ],
+})
+  // The page starts monostable: the second pilot piston and its port are hidden.
+  .replaceAll('<g data-variante="kolben12">', '<g data-variante="kolben12" hidden="">');
+
+// --- The symbol beside the card ------------------------------------------------------------------------
+const FELD = 60;
+const symbol = (rechts) => wegeventilSymbol(VENTIL_5_2, { links: "pneumatisch", rechts, feld: FELD }).svg;
+const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
+  + `<div class="beifigur-symbol" data-variante="feder">${symbol("feder")}</div>`
+  + `<div class="beifigur-symbol" data-variante="kolben12" hidden="">${symbol("pneumatisch")}</div>`
+  + `<p class="beifigur-text">Jedes Kästchen ist eine Stellung: links 14, rechts 12. Die Anschlüsse 1 bis 5 stehen fest, `
+  + `die Kästchen gleiten darunter – so wie der Schieber in der Bohrung.</p>`;
+
+// --- The page --------------------------------------------------------------------------------------------
+const M_ANZEIGE = ventilAnzeige(neuesVentil(M), M, 6);
+const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
+const ANZEIGE = `p2 ${komma(M_ANZEIGE.p2)} bar · p4 ${komma(M_ANZEIGE.p4)} bar · Schaltzeit ${M_ANZEIGE.schaltzeitMs ?? "–"} ms`;
+
+const live = `
+const MASSE = ${JSON.stringify(M)};
+const P = ${JSON.stringify(P)};
+const MOVE = ${JSON.stringify(MOVE)};
+const ORDER = ${JSON.stringify(STAGGER)};
+const SPR = ${JSON.stringify(EX.SPRING)};
+const TAKT = ${JSON.stringify(EX.TAKT)};
+const KEYS = ${JSON.stringify(KEYS)};
+const LIFT = ${JSON.stringify(LIFT)};
+const VIEW0 = ${JSON.stringify(VIEW0)};
+const VIEW1 = ${JSON.stringify(VIEW1.map((v) => Math.round(v * 10) / 10))};
+const MITTE = ${JSON.stringify(Object.fromEntries(Object.entries(MITTE).map(([a, b]) => [a, b.map((v) => Math.round(v * 10) / 10)])))};
+const STEP = ${JSON.stringify(LEG.tabelle(LEGENDE))};
+const FARBEN = ${JSON.stringify(LU.FARBEN)};
+const BAHNEN = ${JSON.stringify(BAHNEN)};
+const HUB = ${HUB};
+const KAMMER = ${JSON.stringify(KAMMER)};
+const AUTO_TAKT = 1.6;    // s of model time between two automatic signals
+const IMPULS = 0.15;      // s of model time a pulse lasts (bistable)
+
+const stage = document.querySelector(".iso-stage");
+const svg = stage.querySelector("svg");
+const groups = Array.from(svg.querySelectorAll("[data-g]"));
+const readout = document.querySelector("[data-readout]");
+const info = document.querySelector(".pickinfo");
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+
+${modulQuelle(WURZEL, ["figur/ventil.mjs"])}
+${EX.LAUFZEIT}
+${LU.LAUFZEIT}
+${SYMBOL_LAUFZEIT}
+
+// --- the model drives everything -----------------------------------------
+const v = neuesVentil(MASSE, { bauart: "monostabil", druckBar: 6 });
+let druck = 6;
+let zeitlupe = 1;
+let auto = !still.matches;
+let angehalten = false;
+let autoZeit = 0, autoNaechstes = "14";
+const impulse = { "14": 0, "12": 0 };       // model seconds left of a pulse
+const gehalten = { "14": false, "12": false }; // held by pointer or key
+
+const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
+const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
+  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
+  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
+});
+const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
+const steuerkammer = {
+  "14": svg.querySelector('[data-steuerkammer="14"]'),
+  "12": svg.querySelector('[data-steuerkammer="12"]'),
+};
+const luftLage = svg.querySelector("[data-luftlage]");
+const stroeme = {};
+for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[name], Math.max(5, Math.round(BAHNEN[name].gesamt / 26)));
+
+function kammerD(x0, x1) {
+  const z0 = KAMMER.z[0], z1 = KAMMER.z[1];
+  return "M" + [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]
+    .map((q) => iso([q[0], 0, q[1]], P).map((n) => n.toFixed(1)).join(" ")).join("L") + "Z";
+}
+
+// The spool with its rings and pistons slides; the spring is compressed piece
+// by piece, each in proportion to its distance from the fixed end wall.
+let gezeichnet = null;
+function zeichneHub() {
+  const s = v.anteil * HUB;
+  if (gezeichnet !== null && Math.abs(s - gezeichnet) < 1e-4) return;
+  gezeichnet = s;
+  const t = s > 1e-4 ? translateAlong(P, [s, 0, 0]) : null;
+  for (const el of hubTeile) {
+    if (t) el.setAttribute("transform", t);
+    else el.removeAttribute("transform");
+  }
+  for (const f of federTeile) {
+    const dx = (s * (f.b - f.x)) / (f.b - f.a);
+    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
+    else f.el.removeAttribute("transform");
+  }
+  steuerkammer["14"].setAttribute("d", kammerD(KAMMER["14"][0], KAMMER["14"][1] + s));
+  steuerkammer["12"].setAttribute("d", kammerD(KAMMER["12"][0] + s, KAMMER["12"][1]));
+}
+
+// Strong blue above 0,5 bar, pale blue while a room is being vented, else empty.
+function zeichneLuft(dt) {
+  const F = luftFarben();
+  const quelle = AUSSEN + druck;
+  const o = wegeOffen(v.anteil, MASSE.ueberdeckung);
+  const q14 = o.a * MASSE.leitwertZu * (quelle - v.p4);
+  const q12 = o.b * MASSE.leitwertZu * (quelle - v.p2);
+  const q23 = o.a * MASSE.leitwertAb * (v.p2 - AUSSEN);
+  const q45 = o.b * MASSE.leitwertAb * (v.p4 - AUSSEN);
+  const entlueftet = (offen, p) => offen > 0 && p - AUSSEN > 0.02;
+  const ton = (p, raus) => (p - AUSSEN > 0.5 ? F.druck : raus ? F.abluft : "none");
+  const steuerRaus = (an, p) => !an && p - AUSSEN > 0.02;
+  const farbe = {
+    "1": ton(quelle, false),
+    "2": ton(v.p2, entlueftet(o.a, v.p2)),
+    "4": ton(v.p4, entlueftet(o.b, v.p4)),
+    "3": entlueftet(o.a, v.p2) ? F.abluft : "none",
+    "5": entlueftet(o.b, v.p4) ? F.abluft : "none",
+    "14": ton(v.p14, steuerRaus(v.signal14, v.p14)),
+    "12": ton(v.p12, steuerRaus(v.signal12, v.p12)),
+  };
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
+
+  // Speed follows conductance times pressure difference; a shut path shows nothing.
+  const tempo = (q) => Math.max(-600, Math.min(600, q * 2.6e-4));
+  stromSchritt(stroeme["1-4"], dt, tempo(q14), o.a, F.druck);
+  stromSchritt(stroeme["1-2"], dt, tempo(q12), o.b, F.druck);
+  stromSchritt(stroeme["2-3"], dt, tempo(q23), o.a, F.abluft);
+  stromSchritt(stroeme["4-5"], dt, tempo(q45), o.b, F.abluft);
+  for (const n of ["14", "12"]) {
+    const an = n === "14" ? v.signal14 : v.signal12;
+    const p = n === "14" ? v.p14 : v.p12;
+    const leit = an ? MASSE.leitwertSteuer : MASSE.leitwertEntlueft;
+    const q = leit * ((an ? quelle : AUSSEN) - p);
+    const staerke = n === "12" && v.bauart === "monostabil" ? 0
+      : an ? 1 : Math.max(0, Math.min(1, (p - AUSSEN) / 0.3));
+    stromSchritt(stroeme["st" + n], dt, tempo(q * 4), staerke, an ? F.druck : F.abluft);
+  }
+  for (const name in stroeme) {
+    const s = stroeme[name];
+    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    s.g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+// The last measured switching time; until there is one, the time this
+// pressure and this type give, computed once per change.
+let rechenZeit = { druck: null, bauart: null, wert: null };
+let letzteZeile = "";
+const komma = (x) => x.toFixed(1).replace(".", ",");
+function zeichneAnzeige() {
+  let a;
+  if (v.schaltzeit === null) {
+    if (rechenZeit.druck !== druck || rechenZeit.bauart !== v.bauart) {
+      rechenZeit = { druck, bauart: v.bauart, wert: ventilSchaltzeit(MASSE, druck, { bauart: v.bauart }) };
+    }
+    a = ventilAnzeige(Object.assign({}, v, { schaltzeit: rechenZeit.wert }), MASSE, druck);
+  } else a = ventilAnzeige(v, MASSE, druck);
+  const text = "p2 " + komma(a.p2) + " bar · p4 " + komma(a.p4) + " bar · Schaltzeit "
+    + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
+  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+
+// --- controls -------------------------------------------------------------
+const knopf14 = document.getElementById("btn-14");
+const knopf12 = document.getElementById("btn-12");
+const knopfBauart = document.getElementById("btn-bauart");
+const knopfAuto = document.getElementById("btn-auto");
+const knopfExplode = document.getElementById("btn-explode");
+const lupeRegler = document.getElementById("zeitlupe");
+const lupeWert = document.getElementById("zeitlupe-wert");
+const handRegler = document.getElementById("hand");
+const handWert = document.getElementById("hand-wert");
+const druckRegler = document.getElementById("druck");
+const druckWert = document.getElementById("druck-wert");
+
+const mono = () => v.bauart === "monostabil";
+function zeichneBedienung() {
+  if (knopf14.getAttribute("aria-pressed") !== String(v.signal14)) knopf14.setAttribute("aria-pressed", String(v.signal14));
+  if (knopf12.getAttribute("aria-pressed") !== String(v.signal12)) knopf12.setAttribute("aria-pressed", String(v.signal12));
+  // The slider follows the spool unless a hand holds it.
+  if (v.hand === null) {
+    const w = String(Math.round(v.anteil * 100));
+    if (handRegler.value !== w) { handRegler.value = w; handWert.textContent = w + " %"; }
+  }
+}
+
+function stoppeAuto() {
+  if (auto && mono() && !gehalten["14"]) ventilSignal(v, "14", false);
+  auto = false;
+  knopfAuto.setAttribute("aria-pressed", "false");
+}
+function impuls(n) {
+  ventilSignal(v, n, true);
+  impulse[n] = IMPULS;
+}
+/** Pulses and the automatic cycle run on model time, so slow motion slows them too. */
+function takt(dm) {
+  for (const n of ["14", "12"]) {
+    if (impulse[n] > 0) {
+      impulse[n] -= dm;
+      if (impulse[n] <= 0) { impulse[n] = 0; if (!gehalten[n]) ventilSignal(v, n, false); }
+    }
+  }
+  if (!auto) return;
+  autoZeit += dm;
+  if (autoZeit < AUTO_TAKT) return;
+  autoZeit = 0;
+  if (mono()) ventilSignal(v, "14", !v.signal14);
+  else { impuls(autoNaechstes); autoNaechstes = autoNaechstes === "14" ? "12" : "14"; }
+}
+
+/** Monostable: the signal lasts as long as the button is held. */
+function halte(n, an) {
+  if (gehalten[n] === an) return;
+  if (an) stoppeAuto();
+  gehalten[n] = an;
+  angehalten = false;
+  ventilSignal(v, n, an || impulse[n] > 0);
+  zeichneBedienung();
+  run();
+}
+function signalKnopf(el, n) {
+  el.addEventListener("pointerdown", (e) => {
+    if (el.disabled || !mono() || e.button > 0) return;
+    halte(n, true);
+  });
+  // Leaving the button, a cancelled touch or losing focus all end the signal.
+  for (const typ of ["pointerup", "pointerleave", "pointercancel", "blur"]) {
+    el.addEventListener(typ, () => { if (gehalten[n]) halte(n, false); });
+  }
+  el.addEventListener("keydown", (e) => {
+    if ((e.key === " " || e.key === "Enter") && mono()) { e.preventDefault(); halte(n, true); }
+  });
+  el.addEventListener("keyup", (e) => {
+    if ((e.key === " " || e.key === "Enter") && gehalten[n]) halte(n, false);
+  });
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+  // Bistable: one press is one pulse.
+  el.addEventListener("click", () => {
+    if (mono() || el.disabled) return;
+    stoppeAuto();
+    angehalten = false;
+    impuls(n);
+    zeichneBedienung();
+    run();
+  });
+}
+signalKnopf(knopf14, "14");
+signalKnopf(knopf12, "12");
+
+const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
+function zeigeBauart() {
+  const bi = !mono();
+  knopfBauart.setAttribute("aria-pressed", String(bi));
+  // Figure and symbol: one right-hand side per type. SVG elements have no
+  // hidden property, so the attribute is set; a CSS rule gives it effect.
+  for (const el of document.querySelectorAll("[data-variante]")) {
+    el.toggleAttribute("hidden", el.dataset.variante !== (bi ? "kolben12" : "feder"));
+  }
+  knopf12.disabled = !bi;
+  knopf12.title = bi ? "Signal an 12: zurück in die Stellung 12" : "Feder stellt zurück";
+  const sichtbar = symbole.find((el) => !el.hidden);
+  if (sichtbar) symbolStellen(sichtbar.querySelector("svg"), v.anteil, wegeOffen(v.anteil, MASSE.ueberdeckung));
+}
+function wechsleBauart(bauart) {
+  bauartWechseln(v, MASSE, bauart, druck);
+  for (const n of ["14", "12"]) { impulse[n] = 0; gehalten[n] = false; }
+  autoZeit = 0;
+  autoNaechstes = "14";
+  zeigeBauart();
+}
+knopfBauart.addEventListener("click", () => {
+  wechsleBauart(mono() ? "bistabil" : "monostabil");
+  angehalten = false;
+  zeichneBedienung();
+  run();
 });
 
+knopfAuto.addEventListener("click", () => {
+  if (auto) stoppeAuto();
+  else {
+    auto = true;
+    knopfAuto.setAttribute("aria-pressed", "true");
+    autoZeit = 0;
+    autoNaechstes = v.anteil > 0.5 ? "12" : "14";
+  }
+  angehalten = false;
+  run();
+});
+knopfAuto.setAttribute("aria-pressed", String(auto));
+
+lupeRegler.addEventListener("input", () => {
+  zeitlupe = lupeRegler.valueAsNumber;
+  lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
+});
+handRegler.addEventListener("input", () => {
+  stoppeAuto();
+  vonHand(v, handRegler.valueAsNumber / 100);
+  handWert.textContent = handRegler.value + " %";
+  angehalten = false;
+  run();
+});
+druckRegler.addEventListener("input", () => {
+  druck = druckRegler.valueAsNumber;
+  // The last measured time belonged to the old pressure.
+  v.schaltzeit = null;
+  angehalten = false;
+  druckWert.textContent = komma(druck) + " bar";
+  zeichneAnzeige();
+  run();
+});
+
+// --- frame loop -----------------------------------------------------------
+function blende(sicht) {
+  luftLage.style.opacity = String(sicht);
+  for (const el of raeume) {
+    if (sicht < 1) el.style.opacity = (0.82 * sicht).toFixed(3);
+    else el.style.removeProperty("opacity");
+  }
+}
+let frame = 0, last = 0, sichtbar = false;
+function tick(now) {
+  const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
+  last = now;
+  const bewegt = springStep(dt);
+  const offen = poseExplode();
+  blende(Math.max(0, 1 - offen * 3));
+  // The valve stops while it is being taken apart and carries on afterwards.
+  if (offen < 0.01 && !bewegt) {
+    const dm = angehalten ? 0 : dt / zeitlupe;
+    if (dm > 0) {
+      takt(dm);
+      ventilSchritt(v, MASSE, dm, druck);
+    }
+    zeichneHub();
+    zeichneLuft(dm);
+    zeichneAnzeige();
+    zeichneBedienung();
+  } else {
+    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+  }
+  frame = sichtbar ? requestAnimationFrame(tick) : 0;
+}
+const run = () => { if (!frame && sichtbar) { last = 0; frame = requestAnimationFrame(tick); } };
+new IntersectionObserver((e) => { sichtbar = e[e.length - 1].isIntersecting; if (sichtbar) run(); }, { rootMargin: "140px 0px" }).observe(stage);
+
+// --- take apart and rebuild ----------------------------------------------
+let zerlegt = false, erzaehler = [];
+function erzaehle(on) {
+  for (const t of erzaehler) clearTimeout(t);
+  erzaehler = [];
+  if (!on) {
+    const folge = ORDER.slice().reverse();
+    folge.forEach((id, i) => {
+      erzaehler.push(setTimeout(() => {
+        const e = STEP[id];
+        if (e) info.textContent = e.nr + " · " + e.name + " — " + e.satz;
+      }, i * TAKT.zusammen));
+    });
+    erzaehler.push(setTimeout(() => { info.textContent = INFO_RUHE; }, folge.length * TAKT.zusammen + 900));
+  }
+}
+const INFO_RUHE = info.textContent;
+function spiele(on) {
+  zerlegt = on;
+  knopfExplode.setAttribute("aria-pressed", String(on));
+  schedule(on, on ? TAKT.auseinander : TAKT.zusammen);
+  if (on) info.textContent = "Die Baugruppen fahren auseinander. Noch einmal drücken oder Escape bricht ab.";
+  else erzaehle(false);
+  run();
+}
+knopfExplode.addEventListener("click", () => {
+  if (!zerlegt) {
+    // Before taking it apart: no automatic, no signal, no hand, spool home in
+    // position 12 — or the spool would leave its bore from somewhere else.
+    stoppeAuto();
+    wechsleBauart(v.bauart);
+    zeichneHub();
+    zeichneBedienung();
+  }
+  spiele(!zerlegt);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zerlegt) spiele(false); });
+
+// --- legend ---------------------------------------------------------------
+let gewaehlt = null;
+const pickKnoepfe = Array.from(document.querySelectorAll(".pickbtn"));
+function zeige(id) {
+  for (const el of groups) {
+    el.classList.toggle("mark", Boolean(id) && el.dataset.piece === id);
+    el.classList.toggle("dim", Boolean(id) && el.dataset.piece !== id);
+  }
+}
+function waehle(id) {
+  gewaehlt = gewaehlt === id ? null : id;
+  for (const b of pickKnoepfe) b.setAttribute("aria-pressed", String(b.dataset.pick === gewaehlt));
+  zeige(gewaehlt);
+  info.textContent = gewaehlt && STEP[gewaehlt]
+    ? STEP[gewaehlt].nr + " · " + STEP[gewaehlt].name + " — " + STEP[gewaehlt].satz
+    : INFO_RUHE;
+}
+for (const b of pickKnoepfe) {
+  // Showing and remembering are two different things: hovering must not store anything.
+  b.addEventListener("pointerenter", () => { if (!gewaehlt) zeige(b.dataset.pick); });
+  b.addEventListener("pointerleave", () => { if (!gewaehlt) zeige(null); });
+  b.addEventListener("click", () => waehle(b.dataset.pick));
+}
+
+zeigeBauart();
+zeichneHub();
+zeichneLuft(0);
+zeichneAnzeige();
+poseExplode();
+
+// A handle for the browser test and for screenshots: it puts the figure into
+// a known state instead of waiting and hoping to catch the right moment.
+window.__figur = {
+  MASSE,
+  modell: () => v,
+  offen: () => offenAnteil(),
+  zerlegt: () => zerlegt,
+  stelle(anteil, bauart) {
+    stoppeAuto();
+    angehalten = true;
+    if (bauart && bauart !== v.bauart) wechsleBauart(bauart);
+    vonHand(v, anteil);
+    zeichneHub();
+    zeichneLuft(0);
+    zeichneAnzeige();
+    zeichneBedienung();
+  },
+  signal(name, an) {
+    stoppeAuto();
+    angehalten = false;
+    ventilSignal(v, String(name), an);
+    zeichneBedienung();
+    run();
+  },
+  weiter: () => { angehalten = false; run(); },
+  spiele,
+  waehle,
+};
+`;
+
+const INFO =
+  "Signal 14 schaltet um: beim monostabilen Ventil, solange man den Knopf hält, beim bistabilen mit einem kurzen Druck. "
+  + "Das kräftige Blau steht unter Druck, das blasse ist Abluft auf dem Weg zum Schalldämpfer. "
+  + "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
+
+const LEISTE =
+  knopf("btn-14", "Signal 14", { titel: "Gedrückt halten: Steuerluft an 14" })
+  + knopf("btn-12", "Signal 12", { titel: "Feder stellt zurück" }).replace('id="btn-12"', 'id="btn-12" disabled')
+  + knopf("btn-bauart", "Bistabil", { titel: "Umschalten zwischen Federrückstellung (monostabil) und Impulsventil (bistabil)" })
+  + knopf("btn-auto", "Automatik", { gedrueckt: true })
+  + knopf("btn-explode", "Zerlegen und zusammenbauen")
+  + `<span class="luecke"></span>`
+  + hausBedienung()
+  + `<span class="umbruch"></span>`
+  // Each slider stays one unit with its label and value when the bar wraps on a phone.
+  + [
+    regler("zeitlupe", "Zeitlupe", { min: 1, max: 50, step: 1, wert: 1, einheit: "×", beschreibung: "Zeitlupe: Modellzeit geteilt durch diesen Wert" }),
+    regler("hand", "Schieber von Hand", { min: 0, max: 100, step: 1, wert: 0, einheit: " %", beschreibung: "Schieber von Hand: 0 % ist Stellung 12, 100 % ist Stellung 14" }),
+    regler("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Versorgungsdruck in bar" })
+      .replace(">6 bar</output>", ">6,0 bar</output>"),
+  ].map((r) => `<span class="regler">${r}</span>`).join("");
+
+const ms = (zeit) => Math.round(zeit * 1000);
+const A_ST = (Math.PI * M.steuerkolben ** 2) / 4;
+const LOS = (M.federVor + M.haftreibung) / (0.1 * A_ST);
+const LESETEXT = `<div class="lesetext">
+<h2>Was man sieht</h2>
+<p>Das Ventil ist in der Ebene des Schiebers aufgeschnitten; die vordere Hälfte fehlt. In der Mitte liegt die Bohrung
+mit fünf Ringnuten. Jede Ringnut gehört zu einem Anschluss und führt über einen Kanal hinunter in die Grundplatte, wo
+die Anschlüsse 1 bis 5 sitzen. In der Bohrung gleitet der Steuerschieber. Seine drei dicken <strong>Bunde</strong>
+sperren, die dünnen <strong>Hälse</strong> dazwischen verbinden zwei benachbarte Ringnuten. Links und rechts sitzen die
+Endkappen mit den Steuerkammern 14 und 12.</p>
+<p>Wo Luft unter Druck steht, ist der Raum mit <strong>kräftigem Blau</strong> gefüllt. <strong>Blasses Blau</strong>
+ist Abluft, die gerade über einen Schalldämpfer entweicht. Die Punkte zeigen, welche Wege offen sind: Sie laufen,
+solange Luft strömt, und bleiben stehen, wenn sich der Druck ausgeglichen hat.</p>
+
+<h2>Zwei Stellungen</h2>
+<p>In der <strong>Stellung 12</strong>, der Ausgangsstellung, liegt der Schieber links. Der Hals zwischen dem mittleren
+und dem rechten Bund verbindet <strong>1 mit 2</strong>, der linke Hals verbindet <strong>4 mit 5</strong>. An 2 steht
+also Druck an, und 4 ist über den Schalldämpfer entlüftet.</p>
+<p>Kommt Steuerluft an 14, schiebt der Steuerkolben den Schieber um ${komma(HUB, 0)} mm nach rechts in die
+<strong>Stellung 14</strong>. Jetzt verbindet der linke Hals <strong>1 mit 4</strong> und der rechte <strong>2 mit 3</strong>.
+Die Zahlen verraten das selbst: Das Signal 14 verbindet 1 mit 4, das Signal 12 verbindet 1 mit 2.</p>
+
+<h2>Warum in der Mitte kurz alles zu ist</h2>
+<p>Die Bunde sind etwas länger, als sie sein müssten. Darum öffnet der neue Weg erst, wenn der alte schon geschlossen
+ist: In diesem Ventil schließt 1→2 bei ${komma(S_B, 2)} mm Schieberweg, und 1→4 öffnet erst bei ${komma(S_A, 2)} mm.
+Auf den ${komma(S_A - S_B, 2)} mm dazwischen, ${Math.round(M.ueberdeckung * 100)} % des Hubs, sind <strong>alle Wege
+zu</strong>. Das nennt man <strong>positive Überdeckung</strong>. Sie verhindert, dass beim Umschalten Druckluft von 1
+geradewegs in die Abluft strömt. Probier es aus: Stell den Schieber von Hand auf 50 %. Kein Punkt ist zu sehen, und die
+Drücke an 2 und 4 bleiben stehen, wo sie waren.</p>
+
+<h2>Monostabil oder bistabil?</h2>
+<p>Beim <strong>monostabilen</strong> Ventil drückt rechts eine Feder gegen den Schieber. Es hat nur eine stabile Lage,
+die Stellung 12. Solange Signal 14 anliegt, bleibt es in Stellung 14; fällt das Signal weg, schiebt die Feder den
+Schieber zurück. Deshalb muss man den Knopf „Signal 14“ gedrückt halten.</p>
+<p>Beim <strong>bistabilen</strong> Ventil sitzt statt der Feder ein zweiter Steuerkolben. Ein kurzer Druckstoß an 14
+oder an 12 genügt, und das Ventil bleibt in der neuen Stellung, auch wenn das Signal wieder weg ist. Es merkt sich also
+die letzte Stellung; man nennt es darum auch <strong>Impulsventil</strong>. Kommen beide Signale zugleich, bleibt der
+Schieber, wo er ist.</p>
+
+<h2>Die alten Buchstaben</h2>
+<p>Auf älteren Plänen und Ventilen stehen statt der Zahlen Buchstaben: <strong>P</strong> für den Druckluftanschluss
+(heute 1), <strong>A</strong> und <strong>B</strong> für die Arbeitsanschlüsse (heute 2 und 4), <strong>R</strong> und
+<strong>S</strong> für die Entlüftungen (heute 3 und 5) und <strong>Y</strong> und <strong>Z</strong> für die
+Steueranschlüsse (heute 12 und 14). Die Zahlen nach ISO 5599-3 haben einen Vorteil: Man liest an der Steuerleitung ab,
+was sie bewirkt.</p>
+
+<h2>Wovon die Schaltzeit abhängt</h2>
+<p>Die Anzeige nennt die <strong>Schaltzeit</strong>: die Zeit vom Signal, bis der Schieber 98 % seines Weges geschafft
+hat. Sie hängt fast nur an der Steuerkammer. Die Steuerluft kommt durch eine enge Leitung und muss die Kammer erst
+füllen. Erst wenn der Druck auf dem Steuerkolben genug Kraft aufbringt, um Feder und Haftreibung zu überwinden, setzt
+sich der Schieber in Bewegung. Der Schieber selbst wiegt nur ${Math.round(M.masseSchieber * 1000)} g und wäre in
+weniger als 2 ms drüben.</p>
+<p class="formel">
+A<sub>Steuerkolben</sub> = π/4 · ${M.steuerkolben}² = <strong>${komma(A_ST)} mm²</strong><br>
+bei 6 bar: F = 0,6 N/mm² · ${komma(A_ST)} mm² = <strong>${Math.round(0.6 * A_ST)} N</strong><br>
+Feder ${M.federVor} N + Haftreibung ${M.haftreibung} N = ${M.federVor + M.haftreibung} N → der Schieber löst sich ab
+<strong>${komma(LOS, 2)} bar</strong> in der Steuerkammer
+</p>
+<p>Bei 6 bar braucht dieses Ventil ${ms(ventilSchaltzeit(M, 6))} ms, bei 2 bar ${ms(ventilSchaltzeit(M, 2))} ms: Mit
+weniger Druck füllt sich die Kammer langsamer, und der Kolben drückt schwächer. Datenblätter nennen für Ventile dieser
+Größe 12 bis 52 ms. Mit der Zeitlupe (bis 1/50) sieht man, wie sich die Steuerkammer erst füllt und der Schieber dann
+losläuft.</p>
+<p class="hinweis">Jede Zahl auf dieser Seite wird aus demselben Modell gerechnet, das auch den Schieber bewegt. Kräfte
+sind theoretische Werte. Baulänge, Bohrung, Hub, Steuerkolben, Federkraft, Überdeckung und das Volumen hinter 2 und 4
+sind Annahmen; sie stehen in der Anleitung zur Figur.</p>
+<a class="zurueck" href="../">← Zurück zur Übersicht</a>
+</div>`;
+
+// What only this page needs on top of the shared sheet.
+const EIGENES_CSS = `${LU.CSS}${SCHNITT_CSS}${SYMBOL_CSS}
+[data-variante][hidden] { display: none }
+.iso { --sz-strich: var(--anatomy-strong); --sz-stark: ${LU.FARBEN.dark.druck}; --sz-blass: ${LU.FARBEN.dark.abluft} }
+.iso[data-theme="light"] { --sz-stark: ${LU.FARBEN.light.druck}; --sz-blass: ${LU.FARBEN.light.abluft} }
+.beifigur-titel { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--anatomy-strong) }
+.beifigur-symbol .sz-symbol { display: block; width: 100%; height: auto; margin: 10px 0 12px }
+.beifigur-text { margin: 0; font-size: 12.5px; line-height: 1.55 }
+.leiste .umbruch { flex-basis: 100%; height: 0 }
+.leiste .regler { display: inline-flex; align-items: center; gap: 9px; margin-right: 14px; white-space: nowrap }
+#btn-14, #btn-12 { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none }
+.playbtn:disabled { cursor: not-allowed; color: var(--anatomy-text); border-style: dashed; box-shadow: none }
+`;
+
+writeFileSync(ZIEL, seite({
+  titel: "5/2-Wegeventil – Pneumatik",
+  fig: "Bild 1",
+  kartenTitel: "5/2-Wegeventil, Längsschieber",
+  hinweis: "Signal 14 halten, Zeitlupe, zerlegen",
+  anzeige: ANZEIGE,
+  schluessel: [
+    { mark: "blue", label: "Kräftiges Blau: Druckluft unter Druck" },
+    { mark: "dotted", label: "Blasses Blau: Abluft auf dem Weg zum Schalldämpfer" },
+    { mark: "lit", label: "Schieber, Dichtringe und Steuerkolben – was sich bewegt" },
+    { mark: "dim", label: "Gehäuse, Kappen und Grundplatte sind in der Ebene des Schiebers aufgeschnitten" },
+  ],
+  caption:
+    "Längsschieberventil nach ISO 5599-1, Größe 1 (G1/4), auf seiner Grundplatte. Wo der Schieber steht, bestimmt, "
+    + "welche Ringnuten verbunden sind: in Stellung 12 strömt die Luft von 1 nach 2, und 4 entlüftet über 5; in Stellung 14 "
+    + "strömt sie von 1 nach 4, und 2 entlüftet über 3.",
+  svg,
+  leiste: LEISTE,
+  legende: LEG.knoepfe(LEGENDE),
+  infoText: INFO,
+  lesetext: LESETEXT,
+  laufzeit: live,
+  breite: 1240,
+  buehneLabel: "5/2-Wegeventil im Schnitt: Schieber, Luftwege und Baugruppen",
+  beiFigur: BEIFIGUR,
+  beiFigurLabel: "Schaltzeichen",
+}).replace("</style>", `${EIGENES_CSS}</style>`));
+
+console.log(`geschrieben: ${ZIEL}`);
 console.log(`Teile: ${R.items.length}, Körper: ${R.solids.length}, Rohre: ${R.tubes.length}`);
 console.log(`Überdeckung: 1→4 öffnet bei ${UEBERDECKUNG.oeffnetA.toFixed(2)} mm, 1→2 bei ${UEBERDECKUNG.oeffnetB.toFixed(2)} mm `
   + `→ ${(UEBERDECKUNG.gemessen * 100).toFixed(1)} % des Hubs (Modell ${M.ueberdeckung * 100} %)`);
 console.log(FEDERTEXT);
-
-// Preview of the fully apart state: each assembly shifted by its projected MOVE (no depth re-sorting).
-const ZERLEGT_CSS = Object.entries(MOVE).map(([id, m]) => {
-  const a = at([0, 0, 0]), b = at(m);
-  return `[data-piece="${id}"]{transform:translate(${(b[0] - a[0]).toFixed(2)}px,${(b[1] - a[1]).toFixed(2)}px)}`;
-}).join("") + "svg{overflow:visible}";
-
-// A plain preview to look at while the page does not exist yet (Task 6).
-const vorschau = process.argv.find((a) => a.startsWith("--vorschau="));
-if (vorschau) {
-  const ziel = vorschau.slice("--vorschau=".length);
-  mkdirSync(dirname(ziel), { recursive: true });
-  const thema = process.argv.includes("--dunkel") ? "dark" : "light";
-  writeFileSync(ziel, `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Vorschau 5/2-Wegeventil</title>
-<style>${k.ISO_CSS}${TONE_CSS}${SCHNITT_CSS}
-body{margin:0;background:var(--anatomy-card)} .buehne{width:${W}px;margin:0 auto}
-${process.argv.includes("--zerlegt") ? ZERLEGT_CSS : ""}
-${process.argv.includes("--feder") ? '[data-variante="kolben12"]{display:none}' : ""}
-${process.argv.includes("--kolben") ? '[data-variante="feder"]{display:none}' : ""}
-</style></head><body class="iso" data-theme="${thema}"><div class="buehne">${svg}</div></body></html>`);
-  console.log(`Vorschau: ${ziel}`);
-}
 
 if (process.argv.includes("--apart")) {
   // Everything at the end of its escape path: do the assemblies pass through one another?
@@ -1062,6 +1755,8 @@ if (process.argv.includes("--audit")) {
       // The two variants of the return side fill the same space on purpose:
       // spring and second pilot piston are both drawn, the page shows one.
       // No drawing order between them is right, and none is ever seen.
+      // (Spring, its plate and piston 12 also share the owner
+      // "rueckstell.variante", so the support check does not call them sunk.)
       ["rueckstell.feder", "rueckstell.kolben12"],
     ],
     crowd: [],

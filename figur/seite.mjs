@@ -74,6 +74,23 @@ ${LEGENDE_CSS}
   color: color-mix(in srgb, currentColor 80%, transparent) }
 `;
 
+/**
+ * A companion picture beside the card (a circuit symbol, a table): card and
+ * aside share one flex row and stack below 900 px of page width. Only pages
+ * that have one carry these rules, so the others stay byte for byte the same.
+ */
+const BEIFIGUR_CSS = `
+.mitbeifigur { display: flex; align-items: flex-start; gap: 18px; margin: 32px 0 36px }
+.mitbeifigur > .iso-figure { flex: 1 1 0; min-width: 0; margin: 0 }
+.beifigur { flex: 0 0 auto; width: clamp(220px, 24vw, 300px); position: sticky; top: 16px;
+  padding: 16px 16px 14px; background: var(--anatomy-card); box-shadow: 0 0 0 1px var(--anatomy-mid);
+  color: var(--anatomy-text) }
+@media (max-width: 900px) {
+  .mitbeifigur { flex-direction: column; align-items: stretch }
+  .beifigur { position: static; width: auto; max-width: 300px }
+}
+`;
+
 /** Runs in the document before the drawing is painted. */
 const bootSkript = () => `<script>
 (function () {
@@ -155,11 +172,13 @@ if (themaKnopf) {
 
 /**
  * Assemble the page. `laufzeit` is the component's own JavaScript source; the
- * shared behaviour above is prepended.
+ * shared behaviour above is prepended. `beiFigur` is optional markup that
+ * stands beside the card in an aside labelled `beiFigurLabel`.
  */
 export function seite({
   titel, fig, kartenTitel, hinweis, anzeige, schluessel = [], caption,
   svg, leiste, legende = "", infoText = "", lesetext = "", laufzeit, breite = 1180, buehneLabel,
+  beiFigur = "", beiFigurLabel = "Begleitbild",
 }) {
   const koerper = k.plateHtml({
     fig, title: kartenTitel, hint: hinweis, readout: anzeige, keys: schluessel, caption,
@@ -168,12 +187,15 @@ export function seite({
       + (legende ? `<div class="iso-keys" role="group" aria-label="Legende">${legende}</div>` : "")
       + (infoText ? `<p class="pickinfo" aria-live="polite">${infoText}</p>` : ""),
   });
+  const karte = beiFigur
+    ? `<div class="mitbeifigur">${koerper}<aside class="beifigur" aria-label="${esc(beiFigurLabel)}">${beiFigur}</aside></div>`
+    : koerper;
   return k
     .pageHtml({
       title: titel,
       theme: "dark",
       width: breite,
-      body: `<style>${SEITEN_CSS}</style><div class="leiste">${leiste}</div>${koerper}${lesetext}`,
+      body: `<style>${SEITEN_CSS}${beiFigur ? BEIFIGUR_CSS : ""}</style><div class="leiste">${leiste}</div>${karte}${lesetext}`,
       script: kitScript() + HAUS_LAUFZEIT + laufzeit,
     })
     .replace('<html lang="en">', '<html lang="de">')

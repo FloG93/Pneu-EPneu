@@ -185,7 +185,7 @@ function symbolStellen(svgEl, anteil, offen) {
   if (!gruppe) return;
   var feld = Number(svgEl.getAttribute("data-feldbreite")) || 0;
   var t = Number(anteil);
-  t = t > 1 ? 1 : t >= 0 ? t : 0;     // also catches NaN
+  t = t > 1 ? 1 : t >= 0 ? t : 0;     // also catches a value that is not a number
   var schub = (-(1 - t) * feld) || 0; // no negative zero
   gruppe.setAttribute("transform", "translate(" + Math.round(schub * 100) / 100 + " 0)");
   var wege = svgEl.querySelectorAll("[data-weg]");

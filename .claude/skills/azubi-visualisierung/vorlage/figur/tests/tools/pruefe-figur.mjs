@@ -121,7 +121,10 @@ async function laufe(modus) {
   if (extra) await extra({ seite, V, modus });
 
   // --- take apart and rebuild --------------------------------------------
-  const legendeOben = async () => (await (await seite.$(".iso-keys")).boundingBox()).y;
+  // Measured on the page, not in the viewport: a click scrolls its button into
+  // view, and on a page taller than the window that scroll is no jump.
+  const legendeOben = async () => (await (await seite.$(".iso-keys")).boundingBox()).y
+    + (await seite.evaluate(() => scrollY));
   const vorher = await legendeOben();
   await seite.click("#btn-explode");
   await seite.waitForTimeout(2600);
