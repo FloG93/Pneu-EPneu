@@ -232,3 +232,51 @@ function poseExplode() {
   return offen;
 }
 `;
+
+/**
+ * The run of a figure page: the frame loop and the button "Zerlegen und
+ * zusammenbauen" with Escape. Inlined after `LAUFZEIT` and the legend's
+ * `LAUFZEIT` (it narrates with `erzaehle`), before the component's own code.
+ *
+ * The component hands in exactly two functions, declared anywhere in the
+ * same script:
+ *
+ *  - `bildZeichnen(dt, offen, bewegt)` draws one frame of the component after
+ *    the explode has moved: `dt` in s, `offen` how far it is apart (0…1),
+ *    `bewegt` whether a spring is still on its way.
+ *  - `vorDemZerlegen()` runs when the button takes the figure apart, to put
+ *    what moves on its own back where the escape paths start.
+ *
+ * Defines `run()` (call it after every `schedule()`, or the loop does not
+ * restart and the machine never closes again), `spiele(on)`, `zerlegt`.
+ * The loop only runs while the stage is on screen.
+ */
+export const ABLAUF = String.raw`
+let frame = 0, last = 0, sichtbar = false;
+function tick(now) {
+  const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
+  last = now;
+  const bewegt = springStep(dt);
+  const offen = poseExplode();
+  bildZeichnen(dt, offen, bewegt);
+  frame = sichtbar ? requestAnimationFrame(tick) : 0;
+}
+const run = () => { if (!frame && sichtbar) { last = 0; frame = requestAnimationFrame(tick); } };
+new IntersectionObserver((e) => { sichtbar = e[e.length - 1].isIntersecting; if (sichtbar) run(); }, { rootMargin: "140px 0px" }).observe(stage);
+
+const knopfExplode = document.getElementById("btn-explode");
+let zerlegt = false;
+function spiele(on) {
+  zerlegt = on;
+  knopfExplode.setAttribute("aria-pressed", String(on));
+  schedule(on, on ? TAKT.auseinander : TAKT.zusammen);
+  if (on) info.textContent = "Die Baugruppen fahren auseinander. Noch einmal drücken oder Escape bricht ab.";
+  erzaehle(on);
+  run();
+}
+knopfExplode.addEventListener("click", () => {
+  if (!zerlegt) vorDemZerlegen();
+  spiele(!zerlegt);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zerlegt) spiele(false); });
+`;

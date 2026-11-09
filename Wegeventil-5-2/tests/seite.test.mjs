@@ -75,8 +75,10 @@ test("Das Symbol bekommt seine Farben aus den Luftfarben und folgt dem Modus", (
 });
 
 test("Das Symbol wird in jedem Bild nachgeführt, nicht nur beim Bauartwechsel", () => {
-  const tick = html.match(/function tick\(now\) \{[\s\S]*?\n\}\n/)[0];
-  assert.match(tick, /zeichneSymbol\(\)/);
+  // The shared loop (EX.ABLAUF) calls bildZeichnen once per frame.
+  assert.match(html.match(/function tick\(now\) \{[\s\S]*?\n\}\n/)[0], /bildZeichnen\(/);
+  const bild = html.match(/function bildZeichnen\(dt, offen, bewegt\) \{[\s\S]*?\n\}\n/)[0];
+  assert.match(bild, /zeichneSymbol\(\)/);
   assert.equal((html.match(/function symbolStellen/g) || []).length, 1, "symbolStellen ist doppelt eingebettet");
 });
 

@@ -1203,6 +1203,8 @@ const still = matchMedia("(prefers-reduced-motion: reduce)");
 
 ${modulQuelle(WURZEL, ["figur/ventil.mjs"])}
 ${EX.LAUFZEIT}
+${LEG.LAUFZEIT}
+${EX.ABLAUF}
 ${LU.LAUFZEIT}
 ${SYMBOL_LAUFZEIT}
 
@@ -1328,7 +1330,6 @@ const knopf14 = document.getElementById("btn-14");
 const knopf12 = document.getElementById("btn-12");
 const knopfBauart = document.getElementById("btn-bauart");
 const knopfAuto = document.getElementById("btn-auto");
-const knopfExplode = document.getElementById("btn-explode");
 const lupeRegler = document.getElementById("zeitlupe");
 const lupeWert = document.getElementById("zeitlupe-wert");
 const handRegler = document.getElementById("hand");
@@ -1485,12 +1486,8 @@ function blende(sicht) {
     else el.style.removeProperty("opacity");
   }
 }
-let frame = 0, last = 0, sichtbar = false;
-function tick(now) {
-  const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
-  last = now;
-  const bewegt = springStep(dt);
-  const offen = poseExplode();
+// One frame; the loop itself is EX.ABLAUF.
+function bildZeichnen(dt, offen, bewegt) {
   blende(Math.max(0, 1 - offen * 3));
   // The valve stops while it is being taken apart and carries on afterwards.
   if (offen < 0.01 && !bewegt) {
@@ -1507,71 +1504,15 @@ function tick(now) {
     for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
   }
   zeichneSymbol();
-  frame = sichtbar ? requestAnimationFrame(tick) : 0;
 }
-const run = () => { if (!frame && sichtbar) { last = 0; frame = requestAnimationFrame(tick); } };
-new IntersectionObserver((e) => { sichtbar = e[e.length - 1].isIntersecting; if (sichtbar) run(); }, { rootMargin: "140px 0px" }).observe(stage);
 
-// --- take apart and rebuild ----------------------------------------------
-let zerlegt = false, erzaehler = [];
-function erzaehle(on) {
-  for (const t of erzaehler) clearTimeout(t);
-  erzaehler = [];
-  if (!on) {
-    const folge = ORDER.slice().reverse();
-    folge.forEach((id, i) => {
-      erzaehler.push(setTimeout(() => {
-        const e = STEP[id];
-        if (e) info.textContent = e.nr + " · " + e.name + " — " + e.satz;
-      }, i * TAKT.zusammen));
-    });
-    erzaehler.push(setTimeout(() => { info.textContent = INFO_RUHE; }, folge.length * TAKT.zusammen + 900));
-  }
-}
-const INFO_RUHE = info.textContent;
-function spiele(on) {
-  zerlegt = on;
-  knopfExplode.setAttribute("aria-pressed", String(on));
-  schedule(on, on ? TAKT.auseinander : TAKT.zusammen);
-  if (on) info.textContent = "Die Baugruppen fahren auseinander. Noch einmal drücken oder Escape bricht ab.";
-  else erzaehle(false);
-  run();
-}
-knopfExplode.addEventListener("click", () => {
-  if (!zerlegt) {
-    // Before taking it apart: no automatic, no signal, no hand, spool home in
-    // position 12 — or the spool would leave its bore from somewhere else.
-    stoppeAuto();
-    wechsleBauart(v.bauart);
-    zeichneHub();
-    zeichneBedienung();
-  }
-  spiele(!zerlegt);
-});
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zerlegt) spiele(false); });
-
-// --- legend ---------------------------------------------------------------
-let gewaehlt = null;
-const pickKnoepfe = Array.from(document.querySelectorAll(".pickbtn"));
-function zeige(id) {
-  for (const el of groups) {
-    el.classList.toggle("mark", Boolean(id) && el.dataset.piece === id);
-    el.classList.toggle("dim", Boolean(id) && el.dataset.piece !== id);
-  }
-}
-function waehle(id) {
-  gewaehlt = gewaehlt === id ? null : id;
-  for (const b of pickKnoepfe) b.setAttribute("aria-pressed", String(b.dataset.pick === gewaehlt));
-  zeige(gewaehlt);
-  info.textContent = gewaehlt && STEP[gewaehlt]
-    ? STEP[gewaehlt].nr + " · " + STEP[gewaehlt].name + " — " + STEP[gewaehlt].satz
-    : INFO_RUHE;
-}
-for (const b of pickKnoepfe) {
-  // Showing and remembering are two different things: hovering must not store anything.
-  b.addEventListener("pointerenter", () => { if (!gewaehlt) zeige(b.dataset.pick); });
-  b.addEventListener("pointerleave", () => { if (!gewaehlt) zeige(null); });
-  b.addEventListener("click", () => waehle(b.dataset.pick));
+// Before taking it apart: no automatic, no signal, no hand, spool home in
+// position 12 — or the spool would leave its bore from somewhere else.
+function vorDemZerlegen() {
+  stoppeAuto();
+  wechsleBauart(v.bauart);
+  zeichneHub();
+  zeichneBedienung();
 }
 
 zeigeBauart();

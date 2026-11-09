@@ -40,6 +40,58 @@ export function nummern(eintraege) {
   return Object.fromEntries(eintraege.map((e, i) => [e.piece, i]));
 }
 
+/**
+ * The runtime of the legend: choosing an entry and the explanation line that
+ * names each assembly while the machine builds itself again. Inlined as
+ * source into the page's one classic script, after `EX.LAUFZEIT`.
+ *
+ * Expects before it: `groups` (the drawn groups, each with `data-piece`),
+ * `info` (the explanation line), `STEP` (from `tabelle`), `ORDER` (the
+ * take-apart order) and `TAKT`. Defines `INFO_RUHE`, `zeige(id)`,
+ * `waehle(id)` and `erzaehle(on)`, and wires every `.pickbtn`.
+ */
+export const LAUFZEIT = String.raw`
+// What the line says when nothing is chosen: the text the page was built with.
+const INFO_RUHE = info.textContent;
+const eintragText = (e) => e.nr + " · " + e.name + " — " + e.satz;
+
+// While the machine builds itself again, the line names each assembly as it
+// arrives: inside first, one every TAKT.zusammen. Taking apart names nothing.
+let erzaehler = [];
+function erzaehle(on) {
+  for (const t of erzaehler) clearTimeout(t);
+  erzaehler = [];
+  if (on) return;
+  const folge = ORDER.slice().reverse();
+  folge.forEach((id, i) => {
+    erzaehler.push(setTimeout(() => { if (STEP[id]) info.textContent = eintragText(STEP[id]); }, i * TAKT.zusammen));
+  });
+  erzaehler.push(setTimeout(() => { info.textContent = INFO_RUHE; }, folge.length * TAKT.zusammen + 900));
+}
+
+let gewaehlt = null;
+const pickKnoepfe = Array.from(document.querySelectorAll(".pickbtn"));
+function zeige(id) {
+  for (const el of groups) {
+    el.classList.toggle("mark", Boolean(id) && el.dataset.piece === id);
+    el.classList.toggle("dim", Boolean(id) && el.dataset.piece !== id);
+  }
+}
+function waehle(id) {
+  gewaehlt = gewaehlt === id ? null : id;
+  for (const b of pickKnoepfe) b.setAttribute("aria-pressed", String(b.dataset.pick === gewaehlt));
+  zeige(gewaehlt);
+  info.textContent = gewaehlt && STEP[gewaehlt] ? eintragText(STEP[gewaehlt]) : INFO_RUHE;
+}
+for (const b of pickKnoepfe) {
+  // Showing and remembering are two different things: hovering must not store
+  // anything, or the click after it sees the entry as already chosen.
+  b.addEventListener("pointerenter", () => { if (!gewaehlt) zeige(b.dataset.pick); });
+  b.addEventListener("pointerleave", () => { if (!gewaehlt) zeige(null); });
+  b.addEventListener("click", () => waehle(b.dataset.pick));
+}
+`;
+
 export const CSS = `
 .iso-keys { display: grid; gap: 7px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin: 14px 0 0 }
 .pickbtn { font: inherit; font-size: 12px; line-height: 1.3; text-align: left; min-height: 38px;

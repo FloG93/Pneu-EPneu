@@ -645,6 +645,8 @@ const still = matchMedia("(prefers-reduced-motion: reduce)");
 
 ${modulQuelle(WURZEL, ["figur/ventil.mjs", "figur/pneumatik.mjs"])}
 ${EX.LAUFZEIT}
+${LEG.LAUFZEIT}
+${EX.ABLAUF}
 ${LU.LAUFZEIT}
 
 // --- the model drives everything -----------------------------------------
@@ -703,14 +705,10 @@ function zeichneAnzeige() {
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
 }
 
-// --- frame loop -----------------------------------------------------------
-let frame = 0, last = 0, sichtbar = false, zyklus = 0;
-function tick(now) {
-  const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
-  last = now;
+// --- one frame (the loop itself is EX.ABLAUF) -----------------------------
+let zyklus = 0;
+function bildZeichnen(dt, offen, bewegt) {
   const ruhig = still.matches;
-  const bewegt = springStep(dt);
-  const offen = poseExplode();
   const willHub = Math.max(0, 1 - offen * 2);
   if (Math.abs(willHub - hubAnteil) > 1e-4) { hubAnteil = willHub; zeichneHub(); }
   luftLage.style.opacity = String(Math.max(0, 1 - offen * 3));
@@ -731,15 +729,14 @@ function tick(now) {
   } else {
     for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
   }
-  frame = sichtbar ? requestAnimationFrame(tick) : 0;
 }
-const run = () => { if (!frame && sichtbar) { last = 0; frame = requestAnimationFrame(tick); } };
-new IntersectionObserver((e) => { sichtbar = e[e.length - 1].isIntersecting; if (sichtbar) run(); }, { rootMargin: "140px 0px" }).observe(stage);
+// The stroke runs back to zero on its own while the machine comes apart
+// (hubAnteil above), so nothing has to be reset first.
+function vorDemZerlegen() {}
 
 // --- controls -------------------------------------------------------------
 const knopfVentil = document.getElementById("btn-ventil");
 const knopfAuto = document.getElementById("btn-auto");
-const knopfExplode = document.getElementById("btn-explode");
 const druckRegler = document.getElementById("druck");
 const druckWert = document.getElementById("druck-wert");
 
@@ -769,59 +766,6 @@ druckRegler.addEventListener("input", () => {
   zeichneAnzeige();
   run();
 });
-
-// --- take apart and rebuild ----------------------------------------------
-let zerlegt = false, erzaehler = [];
-function erzaehle(on) {
-  for (const t of erzaehler) clearTimeout(t);
-  erzaehler = [];
-  if (!on) {
-    const folge = ORDER.slice().reverse();
-    folge.forEach((id, i) => {
-      erzaehler.push(setTimeout(() => {
-        const e = STEP[id];
-        if (e) info.textContent = e.nr + " · " + e.name + " — " + e.satz;
-      }, i * TAKT.zusammen));
-    });
-    erzaehler.push(setTimeout(() => { info.textContent = INFO_RUHE; }, folge.length * TAKT.zusammen + 900));
-  }
-}
-const INFO_RUHE = info.textContent;
-function spiele(on) {
-  zerlegt = on;
-  knopfExplode.setAttribute("aria-pressed", String(on));
-  schedule(on, on ? TAKT.auseinander : TAKT.zusammen);
-  if (on) info.textContent = "Die Baugruppen fahren auseinander. Noch einmal drücken oder Escape bricht ab.";
-  else erzaehle(false);
-  run();
-}
-knopfExplode.addEventListener("click", () => spiele(!zerlegt));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && zerlegt) spiele(false); });
-
-// --- legend ---------------------------------------------------------------
-let gewaehlt = null;
-const pickKnoepfe = Array.from(document.querySelectorAll(".pickbtn"));
-function zeige(id) {
-  for (const el of groups) {
-    el.classList.toggle("mark", Boolean(id) && el.dataset.piece === id);
-    el.classList.toggle("dim", Boolean(id) && el.dataset.piece !== id);
-  }
-}
-function waehle(id) {
-  gewaehlt = gewaehlt === id ? null : id;
-  for (const b of pickKnoepfe) b.setAttribute("aria-pressed", String(b.dataset.pick === gewaehlt));
-  zeige(gewaehlt);
-  info.textContent = gewaehlt && STEP[gewaehlt]
-    ? STEP[gewaehlt].nr + " · " + STEP[gewaehlt].name + " — " + STEP[gewaehlt].satz
-    : INFO_RUHE;
-}
-for (const b of pickKnoepfe) {
-  // Showing and remembering are two different things: hovering must not store
-  // anything, or the click after it sees the entry as already chosen.
-  b.addEventListener("pointerenter", () => { if (!gewaehlt) zeige(b.dataset.pick); });
-  b.addEventListener("pointerleave", () => { if (!gewaehlt) zeige(null); });
-  b.addEventListener("click", () => waehle(b.dataset.pick));
-}
 
 zeichneHub();
 zeichneAnzeige();
