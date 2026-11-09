@@ -18,10 +18,19 @@
  * `unten` and `oben` list the ports along the bottom and top edge; `zufuhr`
  * is the supply port: paths leaving it are drawn strong, all others pale.
  */
-export const VENTIL_5_2 = { felder: [[[1, 4], [2, 3]], [[1, 2], [4, 5]]], unten: [5, 1, 3], oben: [4, 2], zufuhr: 1 };
+export const VENTIL_5_2 = { felder: [[[1, 4], [2, 3]], [[1, 2], [4, 5]]], unten: [5, 1, 3], oben: [4, 2], zufuhr: 1, steuer: [14, 12] };
+
+/**
+ * 3/2 valves. Field 0 is the actuated position, field 1 the rest position
+ * (spring side). `steuer` lists the pilot numbers left and right of the row:
+ * `null` = no pilot number there (the spring side).
+ * NC: closed in rest (2 vented), signal 12 connects 1→2.
+ * NO: open in rest (1→2), signal 10 vents 2.
+ */
+export const VENTIL_3_2_NC = { felder: [[[1, 2]], [[2, 3]]], unten: [1, 3], oben: [2], zufuhr: 1, steuer: [12, null] };
+export const VENTIL_3_2_NO = { felder: [[[2, 3]], [[1, 2]]], unten: [1, 3], oben: [2], zufuhr: 1, steuer: [10, null] };
 
 const STRICH = 1.6;
-const PILOT_NUMMERN = [14, 12];
 
 const zahl = (x) => String(Math.round(x * 100) / 100);
 
@@ -87,9 +96,11 @@ function betaetigung(seite, art, xKante, yMitte, f, nummer) {
   const tri = `M${zahl(xKante)} ${zahl(yMitte)}L${zahl(xKante + r * tl)} ${zahl(yMitte - tb)}L${zahl(xKante + r * tl)} ${zahl(yMitte + tb)}Z`;
   const linie = `M${zahl(xKante + r * tl)} ${zahl(yMitte)}L${zahl(xKante + r * lang)} ${zahl(yMitte)}`;
   const tx = xKante + r * lang * 0.62;
+  const beschriftung = nummer == null ? ""
+    : `<text class="sz-text" x="${zahl(tx)}" y="${zahl(yMitte - f * 0.1)}" text-anchor="middle" font-size="${zahl(f * 0.2)}" fill="currentColor">${nummer}</text>`;
   return `<g ${attr}><path d="${tri}" fill="currentColor" stroke="currentColor" stroke-width="${STRICH}" stroke-linejoin="miter"/>`
     + `<path d="${linie}" fill="none" stroke="currentColor" stroke-width="${STRICH}" stroke-dasharray="${zahl(f * 0.08)} ${zahl(f * 0.06)}"/>`
-    + `<text class="sz-text" x="${zahl(tx)}" y="${zahl(yMitte - f * 0.1)}" text-anchor="middle" font-size="${zahl(f * 0.2)}" fill="currentColor">${nummer}</text></g>`;
+    + `${beschriftung}</g>`;
 }
 
 /**
@@ -103,7 +114,7 @@ export function wegeventilSymbol(art, { links = "pneumatisch", rechts = "feder",
   const anschl = f / 3;                 // length of a port line
   const rand = 4;
   const lang = f * 0.8;                 // length of an actuation
-  const nummer = PILOT_NUMMERN.slice(0, n);
+  const nummer = art.steuer ?? [];      // pilot numbers, left and right; null = none
   const tH = f * 0.2;                   // text height
   const yOben = rand + tH + 2 + anschl;
   const yUnten = yOben + f;
@@ -128,7 +139,7 @@ export function wegeventilSymbol(art, { links = "pneumatisch", rechts = "feder",
   });
   const mitteY = yOben + f / 2;
   const seitlich = betaetigung("links", links, x0, mitteY, f, nummer[0])
-    + betaetigung("rechts", rechts, x0 + n * f, mitteY, f, nummer[n - 1]);
+    + betaetigung("rechts", rechts, x0 + n * f, mitteY, f, nummer[1]);
 
   // Fixed ports: lines and numbers, not part of the sliding group.
   const feste = (reihe, unten) => reihe.map((nr, i) => {
@@ -141,7 +152,7 @@ export function wegeventilSymbol(art, { links = "pneumatisch", rechts = "feder",
   }).join("");
 
   const text = (a) => (a === "feder" ? "Feder" : "pneumatisch");
-  const beschr = `Schaltzeichen ${alle.length}/${n}-Wegeventil, links ${text(links)}${links === "pneumatisch" ? ` (${nummer[0]})` : ""}, rechts ${text(rechts)}${rechts === "pneumatisch" ? ` (${nummer[n - 1]})` : ""}`;
+  const beschr = `Schaltzeichen ${alle.length}/${n}-Wegeventil, links ${text(links)}${links === "pneumatisch" && nummer[0] != null ? ` (${nummer[0]})` : ""}, rechts ${text(rechts)}${rechts === "pneumatisch" && nummer[1] != null ? ` (${nummer[1]})` : ""}`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" data-feldbreite="${f}" color="currentColor">`
     + `<g data-felder>${feldTeile.join("")}${seitlich}</g><!--felder-->`
     + feste(art.unten, true) + feste(art.oben, false)

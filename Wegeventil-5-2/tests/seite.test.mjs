@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LEGENDE } from "./tools/legende-ventil.mjs";
 import { ISO_5599_GR1, ventilSchaltzeit } from "../../figur/ventil.mjs";
+import { VENTIL_5_2 } from "../../figur/schaltzeichen.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
 const WURZEL = join(HIER, "..", "..");
@@ -100,7 +101,7 @@ test("Die Schaltzeiten in der README sind die des Modells", () => {
   assert.ok(zeilen.length >= 8, `nur ${zeilen.length} Zeilen gefunden`);
   for (const [, bauart, vorgang, bar, ms] of zeilen) {
     const richtung = /12|Feder/.test(vorgang) ? "12" : "14";
-    const wie = bauart === "bistabil" ? { bauart, richtung, impuls: 0.15 } : { bauart, richtung };
+    const wie = bauart === "bistabil" ? { art: VENTIL_5_2, bauart, richtung, impuls: 0.15 } : { art: VENTIL_5_2, bauart, richtung };
     const t = ventilSchaltzeit(ISO_5599_GR1, Number(bar), wie);
     assert.equal(ms, (t * 1000).toFixed(1).replace(".", ","), `${bauart} ${vorgang} ${bar} bar`);
   }
@@ -108,8 +109,8 @@ test("Die Schaltzeiten in der README sind die des Modells", () => {
 
 test("Der Text nennt die Schaltzeit beider Bauarten, wie die Anzeige sie rundet", () => {
   const ms = (t) => Math.round(t * 1000);
-  const mono = ms(ventilSchaltzeit(ISO_5599_GR1, 6));
-  const bi = ms(ventilSchaltzeit(ISO_5599_GR1, 6, { bauart: "bistabil", impuls: 0.15 }));
+  const mono = ms(ventilSchaltzeit(ISO_5599_GR1, 6, { art: VENTIL_5_2 }));
+  const bi = ms(ventilSchaltzeit(ISO_5599_GR1, 6, { art: VENTIL_5_2, bauart: "bistabil", impuls: 0.15 }));
   assert.match(html, new RegExp(`braucht bei 6 bar ${mono} ms bis in die Stellung 14`));
   assert.match(html, new RegExp(`Impuls von 150 ms in\\s+${bi} ms`));
   assert.match(html, /12 bis 52 ms\. Diese Werte gelten für Ventile mit Federrückstellung/);

@@ -1042,7 +1042,7 @@ const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
   + `die Kästchen gleiten darunter – so wie der Schieber in der Bohrung.</p>`;
 
 // --- The page --------------------------------------------------------------------------------------------
-const M_ANZEIGE = ventilAnzeige(neuesVentil(M), M, 6);
+const M_ANZEIGE = ventilAnzeige(neuesVentil(M, { art: VENTIL_5_2 }), M, 6);
 /** s of model time a pulse lasts (bistable); the prose times its switch with the same pulse. */
 const IMPULS = 0.15;
 /** Button title and card hint per type: held on the monostable valve, one press on the bistable. */
@@ -1051,10 +1051,11 @@ const BEDIENTEXT = {
   bi: { titel14: "Kurz drücken: ein Impuls Steuerluft an 14", hinweis: "Signal 14 oder 12 kurz drücken, Zeitlupe, zerlegen" },
 };
 const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
-const ANZEIGE = `p2 ${komma(M_ANZEIGE.p2)} bar · p4 ${komma(M_ANZEIGE.p4)} bar · Schaltzeit ${M_ANZEIGE.schaltzeitMs ?? "–"} ms`;
+const ANZEIGE = `p2 ${komma(M_ANZEIGE.drucke[2])} bar · p4 ${komma(M_ANZEIGE.drucke[4])} bar · Schaltzeit ${M_ANZEIGE.schaltzeitMs ?? "–"} ms`;
 
 const live = `
 const MASSE = ${JSON.stringify(M)};
+const ART = ${JSON.stringify(VENTIL_5_2)};
 const P = ${JSON.stringify(P)};
 const MOVE = ${JSON.stringify(MOVE)};
 const ORDER = ${JSON.stringify(STAGGER)};
@@ -1090,7 +1091,7 @@ ${SYMBOL_LAUFZEIT}
 ${BEDIENUNG_LAUFZEIT}
 
 // --- the model drives everything -----------------------------------------
-const v = neuesVentil(MASSE, { bauart: "monostabil", druckBar: 6 });
+const v = neuesVentil(MASSE, { art: ART, bauart: "monostabil", druckBar: 6 });
 let druck = 6;
 let zeitlupe = 1;
 let angehalten = false;
@@ -1148,19 +1149,19 @@ function zeichneLuft(dt) {
   const F = luftFarben();
   const quelle = AUSSEN + druck;
   const o = wegeOffen(v.anteil, MASSE.ueberdeckung);
-  const q14 = o.a * MASSE.leitwertZu * (quelle - v.p4);
-  const q12 = o.b * MASSE.leitwertZu * (quelle - v.p2);
-  const q23 = o.a * MASSE.leitwertAb * (v.p2 - AUSSEN);
-  const q45 = o.b * MASSE.leitwertAb * (v.p4 - AUSSEN);
+  const q14 = o.a * MASSE.leitwertZu * (quelle - v.p[4]);
+  const q12 = o.b * MASSE.leitwertZu * (quelle - v.p[2]);
+  const q23 = o.a * MASSE.leitwertAb * (v.p[2] - AUSSEN);
+  const q45 = o.b * MASSE.leitwertAb * (v.p[4] - AUSSEN);
   const entlueftet = (offen, p) => offen > 0 && p - AUSSEN > 0.02;
   const ton = (p, raus) => (p - AUSSEN > 0.5 ? F.druck : raus ? F.abluft : "none");
   const steuerRaus = (an, p) => !an && p - AUSSEN > 0.02;
   const farbe = {
     "1": ton(quelle, false),
-    "2": ton(v.p2, entlueftet(o.a, v.p2)),
-    "4": ton(v.p4, entlueftet(o.b, v.p4)),
-    "3": entlueftet(o.a, v.p2) ? F.abluft : "none",
-    "5": entlueftet(o.b, v.p4) ? F.abluft : "none",
+    "2": ton(v.p[2], entlueftet(o.a, v.p[2])),
+    "4": ton(v.p[4], entlueftet(o.b, v.p[4])),
+    "3": entlueftet(o.a, v.p[2]) ? F.abluft : "none",
+    "5": entlueftet(o.b, v.p[4]) ? F.abluft : "none",
     "14": ton(v.p14, steuerRaus(v.signal14, v.p14)),
     "12": ton(v.p12, steuerRaus(v.signal12, v.p12)),
   };
@@ -1201,12 +1202,12 @@ function zeichneAnzeige() {
   if (v.schaltzeit === null) {
     if (rechenZeit.druck !== druck || rechenZeit.bauart !== v.bauart) {
       // Bistable with the page's own pulse, as a press of the button gives it.
-      const wie = v.bauart === "bistabil" ? { bauart: v.bauart, impuls: IMPULS } : { bauart: v.bauart };
+      const wie = v.bauart === "bistabil" ? { art: ART, bauart: v.bauart, impuls: IMPULS } : { art: ART, bauart: v.bauart };
       rechenZeit = { druck, bauart: v.bauart, wert: ventilSchaltzeit(MASSE, druck, wie) };
     }
     a = ventilAnzeige(Object.assign({}, v, { schaltzeit: rechenZeit.wert }), MASSE, druck);
   } else a = ventilAnzeige(v, MASSE, druck);
-  const text = "p2 " + komma(a.p2) + " bar · p4 " + komma(a.p4) + " bar · Schaltzeit "
+  const text = "p2 " + komma(a.drucke[2]) + " bar · p4 " + komma(a.drucke[4]) + " bar · Schaltzeit "
     + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
 }
@@ -1422,11 +1423,11 @@ const LOS = (M.federVor + M.haftreibung) / (0.1 * A_ST);
 const LOS_BI = M.haftreibung / (0.1 * A_ST);
 // The switching times the prose names, per type, from the model at build time.
 const T = {
-  mono14: ventilSchaltzeit(M, 6),
-  mono12: ventilSchaltzeit(M, 6, { richtung: "12" }),
-  mono14bei2: ventilSchaltzeit(M, 2),
-  bi14: ventilSchaltzeit(M, 6, { bauart: "bistabil", impuls: IMPULS }),
-  bi12: ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12", impuls: IMPULS }),
+  mono14: ventilSchaltzeit(M, 6, { art: VENTIL_5_2 }),
+  mono12: ventilSchaltzeit(M, 6, { art: VENTIL_5_2, richtung: "12" }),
+  mono14bei2: ventilSchaltzeit(M, 2, { art: VENTIL_5_2 }),
+  bi14: ventilSchaltzeit(M, 6, { art: VENTIL_5_2, bauart: "bistabil", impuls: IMPULS }),
+  bi12: ventilSchaltzeit(M, 6, { art: VENTIL_5_2, bauart: "bistabil", richtung: "12", impuls: IMPULS }),
 };
 if (ms(T.bi14) !== ms(T.bi12)) throw new Error("bistabil: 14 und 12 schalten verschieden schnell – Text anpassen");
 const LESETEXT = `<div class="lesetext">

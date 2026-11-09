@@ -1034,7 +1034,7 @@ const info = document.querySelector(".pickinfo");
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 
 // The part of the air model that every valve shares: how far the two sets of
-// connections of a 5/2 spool are open, and how the pressure in a closed-off
+// connections of a 2-position spool are open, and how the pressure in a closed-off
 // volume changes. The cylinder and the valve page both compute with this, so
 // the two figures can never disagree about the same physics.
 //
@@ -1082,7 +1082,36 @@ function ventilBegrenze(x, lo, hi) {
   return x < lo ? lo : x > hi ? hi : x;
 }
 
-// --- The 5/2 valve: spool, pilot chambers, working ports ------------------
+// --- The valve: spool, pilot chambers, working ports ----------------------
+
+/**
+ * The air paths of every working port, read from the path description `art`
+ * (the same one the symbol is drawn from, see schaltzeichen.mjs; this module
+ * does not import it, the page hands `art` in).
+ * Working ports are `art.oben`, the supply is `art.zufuhr`, the exhaust is
+ * the rest of `art.unten`. Field 0 is the actuated position (opening `a` of
+ * wegeOffen), field 1 the rest position (opening `b`).
+ * Per port: `zu` = the fields that join supply and port, `ab` = the fields
+ * that join port and exhaust, and `ruheOffen` = supply reaches the port in
+ * the rest position.
+ */
+function ventilWege(art) {
+  const abluft = art.unten.filter((n) => n !== art.zufuhr);
+  const wege = {};
+  for (const w of art.oben) {
+    const felder = (test) => art.felder.map((paare, i) => (paare.some(test) ? i : -1)).filter((i) => i >= 0);
+    const zu = felder(([von, nach]) => von === art.zufuhr && nach === w);
+    const ab = felder(([von, nach]) => von === w && abluft.includes(nach));
+    wege[w] = { zu, ab, ruheOffen: zu.includes(1) };
+  }
+  return wege;
+}
+
+/** Opening of field `i` out of wegeOffen's { a, b }: field 0 = a, field 1 = b. */
+function ventilFeldOffen(o, i) {
+  return i === 0 ? o.a : i === 1 ? o.b : 0;
+}
+
 
 /**
  * Dimensions of a 5/2 valve in the size of ISO 5599-1 size 1 (spool Ø 13,
@@ -1120,17 +1149,25 @@ const ventilSprungMax = 0.1;
 const ventilAnkunft = 0.98;
 
 /**
- * Fresh valve in the rest position 12: 1→2 open, 4 vented.
- * `anteil` 0 = position 12, 1 = position 14.
+ * Fresh valve in the rest position (field 1) with the supply `druckBar` gauge.
+ * `art` (path description) is required: it says which port the supply
+ * reaches in rest (that one starts at supply pressure, all others at ambient).
+ * `anteil` 0 = rest position (5/2: position 12), 1 = actuated (5/2: position 14).
+ * Signal "14" pushes towards field 0 (the actuated position), signal "12"
+ * towards field 1; the page labels them by valve (3/2: 12 or 10).
  * `masse` is not read: the fresh state needs no dimension. It stays in the
  * signature so every model function takes (state or masse) first, as in
  * pneumatik.mjs (`neuerZustand(masse, …)`), and a later valve whose rest
  * state does depend on its dimensions needs no new call shape.
  */
-function neuesVentil(masse, { bauart = "monostabil", druckBar = 6 } = {}) {
+function neuesVentil(masse, { art, bauart = "monostabil", druckBar = 6 } = {}) {
+  if (!art) throw new Error("neuesVentil: art (Wegebeschreibung) fehlt");
+  const wege = ventilWege(art);
+  const p = {};
+  for (const w of Object.keys(wege)) p[w] = wege[w].ruheOffen ? AUSSEN + druckBar : AUSSEN;
   return {
-    bauart, anteil: 0, geschw: 0,
-    p12: AUSSEN, p14: AUSSEN, p2: AUSSEN + druckBar, p4: AUSSEN,
+    art, wege, bauart, anteil: 0, geschw: 0,
+    p12: AUSSEN, p14: AUSSEN, p,
     signal12: false, signal14: false, hand: null,
     schaltStart: null,   // s since the signal change while a switch is being timed
     schaltzeit: null,    // s, last measured
@@ -1139,7 +1176,7 @@ function neuesVentil(masse, { bauart = "monostabil", druckBar = 6 } = {}) {
 
 /** Back to the rest position 12, signals off. Values are replaced in place. */
 function bauartWechseln(v, masse, bauart, druckBar) {
-  return Object.assign(v, neuesVentil(masse, { bauart, druckBar }));
+  return Object.assign(v, neuesVentil(masse, { art: v.art, bauart, druckBar }));
 }
 
 /** Hold the spool by hand at `anteil`. A signal ends this again. */
@@ -1229,10 +1266,14 @@ function ventilTeilschritt(v, masse, h, druckBar) {
 
   // 6. Working ports.
   const o = wegeOffen(v.anteil, masse.ueberdeckung);
-  const q4 = o.a * masse.leitwertZu * (quelle - v.p4) + o.b * masse.leitwertAb * (AUSSEN - v.p4);
-  const q2 = o.b * masse.leitwertZu * (quelle - v.p2) + o.a * masse.leitwertAb * (AUSSEN - v.p2);
-  v.p2 = kammerSchritt(v.p2, q2, 0, masse.volumen2, h, quelle);
-  v.p4 = kammerSchritt(v.p4, q4, 0, masse.volumen4, h, quelle);
+  //    Per port: supply through the open fields of `zu`, exhaust through those
+  //    of `ab`. The volumes are per port: volumen2, volumen4 (names as ports).
+  for (const w of Object.keys(v.wege)) {
+    const zu = v.wege[w].zu.reduce((s, i) => s + ventilFeldOffen(o, i), 0);
+    const ab = v.wege[w].ab.reduce((s, i) => s + ventilFeldOffen(o, i), 0);
+    const q = zu * masse.leitwertZu * (quelle - v.p[w]) + ab * masse.leitwertAb * (AUSSEN - v.p[w]);
+    v.p[w] = kammerSchritt(v.p[w], q, 0, masse["volumen" + w], h, quelle);
+  }
 
   // 7. Time the switch: from the signal change to arrival.
   if (v.schaltStart !== null) {
@@ -1257,8 +1298,8 @@ function ventilTeilschritt(v, masse, h, druckBar) {
  * page produces. Without `impuls` the bistable "12" gives 12 the moment 14 is
  * taken away, while chamber 14 is still full.
  */
-function ventilSchaltzeit(masse, druckBar, { bauart = "monostabil", richtung = "14", impuls = null } = {}) {
-  const v = neuesVentil(masse, { bauart, druckBar });
+function ventilSchaltzeit(masse, druckBar, { art, bauart = "monostabil", richtung = "14", impuls = null } = {}) {
+  const v = neuesVentil(masse, { art, bauart, druckBar });
   let puls = null, rest = 0;
   const gib = (n) => { ventilSignal(v, n, true); if (impuls !== null) { puls = n; rest = impuls; } };
   const schritt = () => {
@@ -1279,13 +1320,14 @@ function ventilSchaltzeit(masse, druckBar, { bauart = "monostabil", richtung = "
   return v.schaltzeit === null ? Infinity : v.schaltzeit;
 }
 
-/** Rounded values for the card's readout; pressures are gauge, in bar. */
+/** Rounded values for the card's readout; `drucke` = gauge pressure per working port, in bar. */
 function ventilAnzeige(v, masse, druckBar) {
   const bar = (p) => Math.round((p - AUSSEN) * 10) / 10;
-  const zeit = v.schaltzeit ?? ventilSchaltzeit(masse, druckBar);
+  const zeit = v.schaltzeit ?? ventilSchaltzeit(masse, druckBar, { art: v.art });
+  const drucke = {};
+  for (const w of Object.keys(v.p)) drucke[w] = bar(v.p[w]);
   return {
-    p2: bar(v.p2),
-    p4: bar(v.p4),
+    drucke,
     schaltzeitMs: Number.isFinite(zeit) ? Math.round(zeit * 1000) : null,   // never Infinity on the card
   };
 }
