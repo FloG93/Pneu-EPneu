@@ -99,3 +99,32 @@ test("Grundplatte, Dichtung und Gehäuse legen ihre Teile in die Gruppe ab, die 
   assert.deepEqual(items.find((i) => i.piece === "grundplatte").move, [0, 0, -35]);
   assert.ok(items.every((i) => i.shapes.length > 0 && !i.svg.includes("NaN")));
 });
+
+test("Schieber, Kolben, Feder und Schrauben: Namen, Naben-Gruppe, Variante, Gruppe der Kappe", () => {
+  const items2 = [];
+  const R3 = { solid: (s) => s, put: (i) => { items2.push(i); return i; }, nameFor: (n) => n };
+  const PIECE = { schieber: "schieber", ringe: "ringe", kappe: "kappe", rueckstell: "rueckstell", schrauben: "schrauben" };
+  const H = gehaeuseSchnitt({
+    P, R: R3, PIECE_OF: PIECE, MOVE: {}, FX, FY: () => null, FZ, NUTEN, STEGE: [], FOLGE: [], PORT: {}, RB: 6.5, R_NUT: 10.5, ZA,
+    GEH: { x0: 0, x1: 60, y0: -21, z0: 18, z1: 66 }, PLATTE: {}, DICHT: {}, R_KANAL: 4, ZP: 8.5, R_GEWINDE: 6.5, Y_BOHR: -4.5,
+    R_KAMMER: 10, R_KOLBEN: 9.8, KAPPE: { y0: -20, z0: 23, z1: 65 }, STEUER_V: {}, R_STEUER_GEWINDE: 2.5, R_STEUER_BOHRUNG: 1.5,
+    SP: [-7, 60], R_HALS: 3.6, R_BUND: 6.3, R_RINGNUT: 5.3, RING_B: 2.2,
+  });
+  H.schieber({ bunde: [[-7, 11], [40, 60]], ringe: [4, 50], namen: { kolben: "nc.kolben", hinten: "nc.ring.hinten", vorn: "nc.ring.vorn" }, variante: "nc", owner: "x" });
+  const kolben = items2.find((i) => i.name === "nc.kolben");
+  assert.ok(kolben.svg.startsWith('<g data-variante="nc"><g data-hub="">'), "Variante außen, Nabe innen");
+  assert.equal(kolben.shapes[0].owner, "x");
+  assert.equal(items2.filter((i) => i.name === "nc.ring.hinten").length, 2, "ein Ring je Rille");
+  assert.ok(items2.every((i) => i.piece === "schieber" || i.piece === "ringe"));
+  items2.length = 0;
+  H.steuerkolben("kappe", [-13, -7], "kappe.kolben");
+  assert.equal(items2[0].piece, "kappe");
+  assert.ok(items2[0].svg.startsWith('<g data-hub="">'));
+  items2.length = 0;
+  H.federsitz({ x0: 90, wand: 107 }, { sitz: 2, draht: 1.1, windungen: 4.5, rWindung: 7 });
+  assert.deepEqual(items2[0].feder, [92, 107]);
+  assert.ok(items2[0].svg.includes("data-federx"), "die Windungen tragen ihr x");
+  items2.length = 0;
+  H.schrauben({ oben: [7, 53], kappen: [[-22, -1, "kappe"], [112, 1, "rueckstell"]] });
+  assert.deepEqual(items2.map((i) => i.piece), ["schrauben", "schrauben", "kappe", "kappe", "rueckstell", "rueckstell"]);
+});

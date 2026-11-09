@@ -200,87 +200,19 @@ const R = A.recorder(P);
 // figur/gehaeuse.mjs; this valve says where its bore, grooves and channels lie.
 const GH = gehaeuseSchnitt({
   P, R, PIECE_OF, MOVE, FX, FY, FZ, NUTEN, STEGE, FOLGE, PORT, RB, R_NUT, ZA, GEH, PLATTE, DICHT, R_KANAL, ZP, R_GEWINDE, Y_BOHR,
+  R_KAMMER, R_KOLBEN, KAPPE, STEUER_V, R_STEUER_GEWINDE, R_STEUER_BOHRUNG, SP, R_HALS, R_BUND, R_RINGNUT, RING_B,
+  R_SCHLAUCH, R_SCHLAUCH_INNEN, R_STEUERSCHLAUCH, R_STEUERSCHLAUCH_INNEN,
 });
 const { put, inGruppe, NT, flach, schnitt, rec, grundplatte, dichtung, gehaeuse,
+  schieber, kappe, steuerkolben, federsitz, schrauben, schlaeuche,
   innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung, kanalInnen, aufNut, aufGewinde,
   box, boxenOhne, unterLoch, schnittEnde } = GH;
-
-// --- Spool and its rings ---------------------------------------------------------------
-function schieberProfil({ bunde, ringe }) {
-  const f = 0.6;                         // chamfer on every land edge
-  const p = [];
-  bunde.forEach(([a, b], i) => {
-    if (i > 0) p.push([a, R_HALS]);
-    p.push([a, R_BUND - f], [a + f, R_BUND]);
-    for (const x of ringe.filter((x) => x > a && x < b)) {
-      p.push([x - RING_B / 2, R_BUND], [x - RING_B / 2, R_RINGNUT], [x + RING_B / 2, R_RINGNUT], [x + RING_B / 2, R_BUND]);
-    }
-    p.push([b - f, R_BUND], [b, R_BUND - f]);
-    if (i < bunde.length - 1) p.push([b, R_HALS]);
-  });
-  return p;
-}
 
 // The two spools fill the same bore on purpose: the page shows one of them. A
 // shared owner tells the support check they are not sunk into each other by
 // mistake. Each spool alone is audited without this excuse: `--audit --nur=nc`
 // and `--audit --nur=no` leave the other one out.
 const VARIANTEN = "schieber.variante";
-
-/**
- * One of the two spools with its seal rings. Everything that rides with the
- * spool sits in an inner data-hub group; the variant group around it is what
- * the page shows or hides. The two spools fill the same bore on purpose.
- */
-function schieber(variante) {
-  const { ringe } = SPULEN[variante];
-  inGruppe("schieber");
-  const profil = schieberProfil(SPULEN[variante]);
-  put([(SP[0] + SP[1]) / 2, 0, ZA], [
-    // The true silhouette, not the convex hull: the hull would paint paper
-    // over the gaps round the necks, which is exactly where the air flows.
-    SV(G.solidOf(profil, FX, P, { fill: "surface" }), { tone: "hi" }),
-    L(G.circleOf(FX, SP[1], 2.2, P), { tone: "faint" }),
-  ].join(""), [rec(A.solid(FX, profil, { name: `${variante}.kolben`, owner: VARIANTEN }))],
-  { name: `${variante}.kolben`, hub: true, variante });
-
-  // Each ring wraps the spool, so it is drawn in two halves: the far half
-  // before the spool, the near half after it. Rubber: one dark tone.
-  inGruppe("ringe");
-  const m = SCH.naechsterWinkel(FX, P);
-  // The near half reaches a little past each limb, so the outline belongs to it.
-  const [v0, v1] = [m - Math.PI / 2 - 0.1, m + Math.PI / 2 + 0.1];
-  const band = (x0, x1, r, a0, a1) => {
-    const w = bogen(a0, a1, 24);
-    return [...w.map((t) => G.pointOf(FX, x0, r, t)), ...w.slice().reverse().map((t) => G.pointOf(FX, x1, r, t))];
-  };
-  const sektoren = (x0, x1, a0, a1, name, rIn = R_RINGNUT) => Array.from({ length: 24 }, (_, i) => {
-    const [u, v] = [a0 + ((a1 - a0) * i) / 24, a0 + ((a1 - a0) * (i + 1)) / 24];
-    const quad = [[rIn, u], [R_BUND, u], [R_BUND, v], [rIn, v]].map(([r, t]) => [r * Math.cos(t), r * Math.sin(t)]);
-    return rec(A.prism(FX, quad, x0, x1, { name, owner: VARIANTEN }));
-  });
-  const gummi = (punkte) => `<path class="iso-fill" d="${ring3(punkte)}"/><path class="iso-shade" data-shade="0" d="${ring3(punkte)}"/>`;
-  for (const x of ringe) {
-    const [x0, x1] = [x - RING_B / 2, x + RING_B / 2];
-    const kreis = (r) => bogen(0, TAU, 48).map((t) => G.pointOf(FX, x1, r, t));
-    const hinten = band(x0, x1, R_BUND, v1, v0 + TAU);
-    const innenHinten = band(x0, x1, R_RINGNUT, m - Math.PI / 2, m + Math.PI / 2);
-    put([x, 0, ZA], [
-      gummi(hinten), gummi(innenHinten),
-      `<path class="iso-fill" fill-rule="evenodd" d="${ring3(kreis(R_BUND))}${ring3(kreis(R_RINGNUT))}"/>`,
-      `<path class="iso-shade" data-shade="0" fill-rule="evenodd" d="${ring3(kreis(R_BUND))}${ring3(kreis(R_RINGNUT))}"/>`,
-      L(ring3(hinten) + ring3(kreis(R_BUND)) + ring3(kreis(R_RINGNUT)), { tone: "hi" }),
-    ].join(""), sektoren(x0, x1, v1, v0 + TAU, `${variante}.ring.hinten`),
-    { name: `${variante}.ring.hinten`, hub: true, variante });
-    const vorn = band(x0, x1, R_BUND, v0, v1);
-    put([x, 0, ZA], gummi(vorn) + L(ring3(vorn), { tone: "hi" }),
-      // Recorded as the skin that is drawn: the rest of the near half sits in
-      // the groove, and its end face is hidden behind the neighbouring land.
-      // Recorded whole, that end face would read as "spool in front of ring".
-      sektoren(x0, x1, v0, v1, `${variante}.ring.vorn`, R_BUND - 0.05),
-      { name: `${variante}.ring.vorn`, hub: true, variante });
-  }
-}
 
 // --- End caps ---------------------------------------------------------------------------
 // The control cap on the left is cut like the body: the pilot chamber, the
@@ -291,81 +223,6 @@ function schieber(variante) {
 const zk = ZA + R_KAMMER;
 const zu = ZA - R_KAMMER;
 const NR_STEUER = { nc: "12", no: "10" };
-
-function steuerkappe() {
-  inGruppe("kappe");
-  const { x0, x1, wand } = KS;
-  const { y0, z0, z1 } = KAPPE;
-  const steuerX = STEUER_X;
-  const [ka, kb] = [wand, x1];        // chamber
-  const [wa, wb] = [x0, wand];        // end wall
-  const zg = z1 - (STEUER_V.gewinde[1] - STEUER_V.gewinde[0]);  // bottom of the thread
-  const [ga, gb] = [steuerX - R_STEUER_GEWINDE, steuerX + R_STEUER_GEWINDE];
-  const [ba, bb] = [steuerX - R_STEUER_BOHRUNG, steuerX + R_STEUER_BOHRUNG];
-  // Recorded material leaves out the thread (a stub sits in it) and the drilling below it.
-  const loecher = [[[ga, y0, zk], [gb, 0, z1]]];
-  const bohrung = [[ba, -R_STEUER_BOHRUNG, zk], [bb, 0, zg]];
-  const n = (teil) => `kappe.${teil}`;
-
-  // Behind everything inside: the chamber, the drillings, the cut face below.
-  const unten = [];
-  unten.push(nahtlos([
-    bohrungInnen(FX, ka, kb, R_KAMMER, Math.PI / 2, (3 * Math.PI) / 2),
-    // The chamber's closed end below the axis; the half above belongs to the end wall item.
-    flanke(FX, wand, 0, R_KAMMER, Math.PI, (3 * Math.PI) / 2, [1, 0, 0]),
-  ].join("")));
-  // The pilot drilling, its far half.
-  unten.push(nahtlos(innen(
-    (t, e) => { const p = G.pointOf(FZ(steuerX, 0), 0, R_STEUER_BOHRUNG, t); return [p[0], p[1], e ? zg : ZA + Math.sqrt(R_KAMMER ** 2 - p[1] ** 2)]; },
-    (t) => G.mul3(G.radialOf(FZ(steuerX, 0), t), -1),
-    bogen(Math.PI, TAU, 12),
-  )));
-  const qU = [[x0, 0, z0], [x1, 0, z0], [x1, 0, zu], [wand, 0, zu], [wand, 0, ZA], [x0, 0, ZA]];
-  unten.push(schnitt(qU), L(ring3(qU), { tone: "mid" }));
-  put([(ka + kb) / 2, -10, zu - 4], unten.join(""), [
-    // Below the chamber, and the wall behind it. The wall behind runs the
-    // full length, so no face of this item is buried in the end wall.
-    box([x0, y0, z0], [x1, 0, zu], { name: n("unten") }),
-    box([x0, y0, zu], [x1, -R_KAMMER, zk], { name: n("unten") }),
-    box([wa, -R_KAMMER, zu], [wb, 0, ZA], { name: n("unten") }),
-  ], { name: n("unten") });
-
-  // The back wall of the thread lies behind the fitting's stub, while the cut
-  // face on either side of it lies in front of the stub's back half: so the
-  // material behind the thread is its own item, between the two.
-  // It takes the column under the thread down to the chamber, with the two
-  // narrow strips of cut face beside the drilling.
-  const streifen = [[[ga, 0, zk], [ba, 0, zk], [ba, 0, zg], [ga, 0, zg]], [[bb, 0, zk], [gb, 0, zk], [gb, 0, zg], [bb, 0, zg]]];
-  put([steuerX, -R_STEUER_GEWINDE - 1, z1 - 3], [
-    nahtlos(bohrungInnen(FZ(steuerX, 0), zg, z1, R_STEUER_GEWINDE, Math.PI, TAU, 16)),
-    ...streifen.map(schnitt),
-    L(streifen.map(ring3).join(""), { tone: "mid" }),
-  ].join(""), [
-    box([ga, y0, zg], [gb, -R_STEUER_GEWINDE, z1], { name: n("gewindegrund") }),
-    boxenOhne([ga, y0, zk], [gb, 0, zg], [bohrung], { name: n("gewindegrund") }),
-  ], { name: n("gewindegrund") });
-
-  const deckel = [[x0, y0, z1], [x1, y0, z1], [x1, 0, z1], [gb, 0, z1],
-    ...bogen(0, -Math.PI, 16).map((t) => [steuerX + R_STEUER_GEWINDE * Math.cos(t), R_STEUER_GEWINDE * Math.sin(t), z1]),
-    [ga, 0, z1], [x0, 0, z1]];
-  // The pilot number is cast into the cap's top: 12 on the normally closed
-  // valve, 10 on the normally open one. Each belongs to its variant.
-  const nummer = Object.entries(NR_STEUER).map(([variante, text]) => `<g data-variante="${variante}">`
-    + k.faceTextSvg(k.topMatrix([x0 + 8, y0 + 6], z1, P), text, { size: 6.5, tone: "mid", anchor: "middle" }) + "</g>").join("");
-
-  // The end wall above the axis lies behind the piston and the stub.
-  const qW = [[x0, 0, ZA], [wand, 0, ZA], [wand, 0, zk], [ga, 0, zk], [ga, 0, z1], [x0, 0, z1]];
-  put([(wa + wb) / 2, -10, zk], flanke(FX, wand, 0, R_KAMMER, Math.PI / 2, Math.PI, [1, 0, 0]) + schnitt(qW) + L(ring3(qW), { tone: "mid" }),
-    [...boxenOhne([wa, -R_KAMMER, ZA], [wb, 0, zk], loecher, { name: n("wand") }),
-      ...boxenOhne([wa, y0, zk], [wb, 0, z1], loecher, { name: n("wand") })],
-    { name: n("wand") });
-  // Above the chamber: in front of the piston's top and of the stub's back.
-  const qO = [[gb, 0, zk], [x1, 0, zk], [x1, 0, z1], [gb, 0, z1]];
-  put([(wb + x1) / 2, -10, z1 - 4], [
-    flach(deckel, [0, 0, 1]), schnitt(qO), nummer,
-    L(ring3(qO) + ring3(deckel), { tone: "mid" }),
-  ].join(""), boxenOhne([wb, y0, zk], [x1, 0, z1], loecher, { name: n("oben") }), { name: n("oben") });
-}
 
 /** The return cap on the right: the same chamber, closed, with no pilot port. */
 function rueckstellkappe() {
@@ -400,55 +257,6 @@ function rueckstellkappe() {
   ].join(""), boxenOhne([wand, y0, z0], [x1, 0, z1], [], { name: n("wand") }), { name: n("wand") });
 }
 
-/** The pilot piston with its lip seal, built at rest and shifted by the page. */
-function steuerkolben() {
-  inGruppe("kappe");
-  const [a, b] = KOLBEN;
-  const m = (a + b) / 2;
-  put([m, 0, ZA], [
-    SV(G.disc(a, b, R_KOLBEN, FX, P), { tone: "hi" }),
-    SV(G.ringBand(m - 1.2, m + 1.2, R_KOLBEN - 0.8, R_KOLBEN + 0.01, FX, P), { tone: "hi" }).replace(/data-shade="\d"/g, 'data-shade="0"'),
-    L(G.circleOf(FX, b, 3.2, P), { tone: "faint" }),
-  ].join(""), [rec(A.disc(FX, a, b, R_KOLBEN, { name: "kappe.kolben" }))], { name: "kappe.kolben", hub: true });
-}
-
-function rueckstellung() {
-  // A spring on a seat at the end of the spool, against the cap's end wall.
-  inGruppe("rueckstell");
-  const sitz = [KR.x0, KR.x0 + FEDER.sitz];
-  const R_DRAHT = FEDER.draht / 2, R_WINDUNG = FEDER.rWindung;
-  const wendel = NT.druckfeder(FX, sitz[1] + R_DRAHT, KR.wand - R_DRAHT, FEDER);
-  put([(sitz[1] + KR.wand) / 2, 0, ZA], [
-    `<g data-hub="">${SV(G.disc(sitz[0], sitz[1], 8.2, FX, P), { tone: "hi" })}</g>`,
-    // Each piece carries the x of its middle: the page compresses the coil by
-    // shifting every piece in proportion to its distance from the end wall.
-    ...wendel,
-  ].join(""), [
-    rec(A.disc(FX, sitz[0], sitz[1], 8.2, { name: "rueckstell.federsitz" })),
-    rec(A.ring(FX, sitz[1], KR.wand, R_WINDUNG - R_DRAHT, R_WINDUNG + R_DRAHT, { name: "rueckstell.feder" })),
-  ], { name: "rueckstell.feder", feder: [sitz[1], KR.wand] });
-}
-
-// --- Screws --------------------------------------------------------------------------------
-function schrauben() {
-  inGruppe("schrauben");
-  for (const x of [7, 83]) {
-    const F = FZ(x, -12);
-    put([x, -12, GEH.z1 + 2], NT.schraubenkopf(F, GEH.z1, GEH.z1 + 4.5, 4.2),
-      [rec(A.disc(F, GEH.z1, GEH.z1 + 4.5, 4.2, { name: "schrauben.oben" }))], { name: "schrauben.oben" });
-  }
-  // The cap screws fasten the end caps: whoever takes a cap off takes its
-  // screws with it, so they belong to the cap's assembly, not to this one.
-  for (const [x, richtung, kappe] of [[KS.x0, -1, "kappe"], [KR.x1, 1, "rueckstell"]]) {
-    for (const z of [KAPPE.z0 + 6, KAPPE.z1 - 6]) {
-      const F = G.frameOf([0, -12, z], [richtung, 0, 0], [0, 1, 0], [0, 0, 1]);
-      const s0 = richtung * x;
-      put([x + richtung * 2, -12, z], NT.schraubenkopf(F, s0, s0 + 4, 3.6),
-        [rec(A.disc(F, s0, s0 + 4, 3.6, { name: `${kappe}.schraube` }))], { name: `${kappe}.schraube`, gruppe: kappe });
-    }
-  }
-}
-
 // --- Threads, fittings, silencers -------------------------------------------------------------
 function anschluesse() {
   for (const nr of [1, 2]) {
@@ -475,27 +283,6 @@ function anschluesse() {
     rec(A.disc(F, D.koerper[0], D.koerper[1], D.rK, { name: "steuerleitung.koerper" })),
     rec(A.disc(F, D.ring[0], D.ring[1], D.rR, { name: "steuerleitung.ring" })),
   ], { name: "steuerleitung.verschraubung" });
-}
-
-// --- Hoses -----------------------------------------------------------------------------------------
-function schlaeuche() {
-  for (const [nr, punkte] of Object.entries(WEGE)) {
-    const steuer = nr === "st";
-    const gruppe = steuer ? "steuerleitung" : "leitung";
-    const r = steuer ? R_STEUERSCHLAUCH : R_SCHLAUCH;
-    const ri = steuer ? R_STEUERSCHLAUCH_INNEN : R_SCHLAUCH_INNEN;
-    inGruppe(gruppe);
-    const name = steuer ? "steuerleitung.schlauch" : `leitung.schlauch${nr}`;
-    // The far end is cut off in the air on purpose: it is no tip that must land on a part.
-    R.route(name, punkte, r, { piece: PIECE_OF[gruppe], move: MOVE[PIECE_OF[gruppe]], ends: [true, false], free: [true, false] });
-    const stuecke = tubePieces(punkte, r, P, { maxLength: 14 });
-    stuecke.forEach((teil, i) => {
-      const letztes = i === stuecke.length - 1;
-      put(teil.mid, tubeSvg(teil, { tone: "mid" }) + (letztes ? schnittEnde(punkte, r, ri) : ""),
-        [A.tube(teil.points, teil.radii)],
-        { name: `${name}:${i}`, route: name, chunk: i });
-    });
-  }
 }
 
 // --- The overlap, measured on the drawn edges ------------------------------------------------------
@@ -638,14 +425,27 @@ dichtung();
 gehaeuse();
 // `--nur=nc` / `--nur=no`: build one spool only, to audit it against the rest without any excuse.
 const NUR = process.argv.find((a) => a.startsWith("--nur="))?.slice("--nur=".length);
-for (const variante of Object.keys(SPULEN)) if (!NUR || NUR === variante) schieber(variante);
-steuerkappe();
-steuerkolben();
+for (const [variante, { bunde, ringe }] of Object.entries(SPULEN)) {
+  if (NUR && NUR !== variante) continue;
+  schieber({
+    bunde, ringe, variante, owner: VARIANTEN,
+    namen: { kolben: `${variante}.kolben`, hinten: `${variante}.ring.hinten`, vorn: `${variante}.ring.vorn` },
+  });
+}
+// The pilot number is cast into the cap's top: 12 on the normally closed valve, 10 on the normally open one.
+// Each belongs to its variant.
+kappe("kappe", KS, STEUER_X, true, {
+  nummer: (zeichne) => Object.entries(NR_STEUER).map(([variante, text]) => `<g data-variante="${variante}">${zeichne(text)}</g>`).join(""),
+});
+steuerkolben("kappe", KOLBEN, "kappe.kolben");
 rueckstellkappe();
-rueckstellung();
-schrauben();
+federsitz(KR, FEDER);
+schrauben({ oben: [7, 83], kappen: [[KS.x0, -1, "kappe"], [KR.x1, 1, "rueckstell"]] });
 anschluesse();
-schlaeuche();
+schlaeuche(WEGE, {
+  istSteuer: (nr) => nr === "st",
+  name: (gruppe, nr) => (nr === "st" ? "steuerleitung.schlauch" : `leitung.schlauch${nr}`),
+});
 luftEinfuellen();
 
 const LEGENDE_IDS = LEGENDE.map((e) => e.piece);
