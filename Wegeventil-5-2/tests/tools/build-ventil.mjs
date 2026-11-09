@@ -182,193 +182,14 @@ const MOVE = {
 
 // --- Recording ------------------------------------------------------------------
 const R = A.recorder(P);
-const rec = R.solid;
-let GRUPPE = "grundplatte";
-function put(pos, svg, shapes = [], extra = {}) {
-  const { bias = 0, gruppe = GRUPPE, name = gruppe, hub = false, variante = null, ...rest } = extra;
-  let inhalt = svg;
-  // Parts that ride with the spool sit in an inner group the page shifts;
-  // the outer group stays where it is.
-  if (hub) inhalt = `<g data-hub="">${inhalt}</g>`;
-  if (variante) inhalt = `<g data-variante="${variante}">${inhalt}</g>`;
-  R.put({ name: R.nameFor(name), piece: PIECE_OF[gruppe], label: PIECE_OF[gruppe], move: MOVE[PIECE_OF[gruppe]], at: pos, pos, bias, gruppe, svg: inhalt, shapes: shapes.flat(), ...rest });
-}
-// The shared standard parts (figur/normteile.mjs) draw into this figure's recorder.
-const NT = normteile({ P, rec, put, gruppe: (g) => { GRUPPE = g; } });
-const { flach, schnitt } = NT;
-// The body section helpers (figur/gehaeuse.mjs) draw into this figure's recorder.
-const { innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung, kanalInnen, aufNut, aufGewinde, box, boxenOhne, unterLoch, schnittEnde } =
-  gehaeuseSchnitt({ P, rec, FX, FZ, NUTEN, RB, R_NUT, ZA, GEH, R_KANAL, ZP, R_GEWINDE });
-// --- Sub-base ----------------------------------------------------------------------
-// The cut steps: behind the port axis it runs at y = 0 like the body, in front
-// it drops to the port axis, so each port is seen as an L — down from the
-// groove, then forward to the thread — and the fittings stay whole.
-const STUFE = { y0: 0, y1: PLATTE.y1, z1: ZP };
-const STUECKE = [PLATTE.x0, ...FOLGE.flatMap((nr) => [PORT[nr] - R_GEWINDE, PORT[nr] + R_GEWINDE]), PLATTE.x1];
-
-function grundplatte() {
-  GRUPPE = "grundplatte";
-  const hinten = { x0: PLATTE.x0, x1: PLATTE.x1, y0: PLATTE.y0, y1: 0, z0: 0, z1: PLATTE.z1 };
-  const teile = [
-    `<path class="iso-halo" d="${k.haloOf({ x: PLATTE.x0, y: PLATTE.y0, w: PLATTE.x1 - PLATTE.x0, d: PLATTE.y1 - PLATTE.y0, r: 2 }, 0, PLATTE.z1, P)}"/>`,
-    flach([[hinten.x0, hinten.y0, hinten.z1], [hinten.x1, hinten.y0, hinten.z1], [hinten.x1, 0, hinten.z1], [hinten.x0, 0, hinten.z1]], [0, 0, 1]),
-    flach([[hinten.x1, hinten.y0, 0], [hinten.x1, 0, 0], [hinten.x1, 0, hinten.z1], [hinten.x1, hinten.y0, hinten.z1]], [1, 0, 0]),
-  ];
-  // Behind the cut: the end of each port drilling and the channel coming down into it.
-  const innenTeile = [];
-  for (const nr of FOLGE) {
-    const x = PORT[nr];
-    const F = FY(x, ZP);
-    innenTeile.push(flach(Array.from({ length: 37 }, (_, i) => G.pointOf(F, Y_BOHR, R_GEWINDE, (i / 36) * TAU)), [0, 1, 0]));
-    innenTeile.push(bohrungInnen(F, Y_BOHR, 0, R_GEWINDE, 0, TAU, 48));
-    innenTeile.push(kanalInnen(x, aufGewinde(x), () => PLATTE.z1));
-  }
-  teile.push(nahtlos(innenTeile.join("")));
-  // The cut face behind the step: between the ports, each piece bounded by the
-  // channel above and the half-round of the port drilling below.
-  const tiefe = Math.sqrt(R_GEWINDE ** 2 - R_KANAL ** 2);
-  const kanten = [];
-  const halb = (x, von, bis) => bogen(von, bis, 12).map((t) => [x + R_GEWINDE * Math.cos(t), 0, ZP + R_GEWINDE * Math.sin(t)]);
-  const grenzen = [PLATTE.x0, ...FOLGE.map((nr) => PORT[nr]), PLATTE.x1];
-  for (let i = 0; i < grenzen.length - 1; i += 1) {
-    const links = i > 0 ? grenzen[i] : null;
-    const rechts = i < grenzen.length - 2 ? grenzen[i + 1] : null;
-    const punkte = [];
-    if (links === null) punkte.push([PLATTE.x0, 0, ZP]);
-    else punkte.push(...halb(links, Math.atan2(tiefe, R_KANAL), 0), [links + R_GEWINDE, 0, ZP]);
-    if (rechts === null) punkte.push([PLATTE.x1, 0, ZP], [PLATTE.x1, 0, PLATTE.z1]);
-    else punkte.push(...halb(rechts, Math.PI, Math.PI - Math.atan2(tiefe, R_KANAL)), [rechts - R_KANAL, 0, PLATTE.z1]);
-    if (links === null) punkte.push([PLATTE.x0, 0, PLATTE.z1]);
-    else punkte.push([links + R_KANAL, 0, PLATTE.z1]);
-    if (links !== null) punkte.push([links + R_KANAL, 0, ZP + tiefe]);
-    // `halb` from the port's right already starts at the channel wall.
-    teile.push(schnitt(punkte));
-    kanten.push(ring3(punkte));
-  }
-  teile.push(L(kanten.join(""), { tone: "mid" }));
-  teile.push(L(linie([[hinten.x0, hinten.y0, hinten.z1], [hinten.x1, hinten.y0, hinten.z1], [hinten.x1, hinten.y0, 0], [hinten.x1, 0, 0]])
-    + linie([[hinten.x1, hinten.y0, hinten.z1], [hinten.x1, 0, hinten.z1]]), { tone: "mid" }));
-  put([(PLATTE.x0 + PLATTE.x1) / 2, -12, ZP], teile.join(""), [
-    box([hinten.x0, hinten.y0, 0], [hinten.x1, 0, hinten.z1], { name: "grundplatte.hinten", ground: true }),
-  ], { name: "grundplatte.hinten" });
-
-  // The step in front, one piece between two ports. Each piece carries the
-  // trough of the port to its right: you look into it over this piece, and
-  // the next piece covers its near wall.
-  for (let i = 0; i < STUECKE.length; i += 2) {
-    const [xa, xb] = [STUECKE[i], STUECKE[i + 1]];
-    const st = [];
-    st.push(schnitt([[xa, 0, ZP], [xb, 0, ZP], [xb, STUFE.y1, ZP], [xa, STUFE.y1, ZP]]));
-    if (xb === PLATTE.x1) st.push(flach([[xb, 0, 0], [xb, STUFE.y1, 0], [xb, STUFE.y1, ZP], [xb, 0, ZP]], [1, 0, 0]));
-    const nr = FOLGE[i / 2];
-    const formen = [box([xa, 0, 0], [xb, STUFE.y1 - 0.1, ZP], { name: "grundplatte.stufe", ground: true })];
-    if (nr !== undefined) {
-      const x = PORT[nr];
-      st.push(nahtlos(bohrungInnen(FY(x, ZP), 0, STUFE.y1, R_GEWINDE, Math.PI, TAU, 48)));
-      formen.push(unterLoch(x, ZP, R_GEWINDE, 0, STUFE.y1 - 0.1, 0, { name: "grundplatte.stufe", ground: true }));
-    }
-    st.push(L(ring3([[xa, 0, ZP], [xb, 0, ZP], [xb, STUFE.y1, ZP], [xa, STUFE.y1, ZP]]), { tone: "mid" }));
-    if (xb === PLATTE.x1) st.push(L(linie([[xb, 0, 0], [xb, STUFE.y1, 0], [xb, STUFE.y1, ZP]]), { tone: "mid" }));
-    put([(xa + xb) / 2, STUFE.y1 / 2, ZP / 2], st.join(""), formen, { name: "grundplatte.stufe" });
-  }
-
-  // The front face with the five threads, cut in half by the step.
-  const vorne = [[PLATTE.x0, PLATTE.y1, 0], [PLATTE.x1, PLATTE.y1, 0], [PLATTE.x1, PLATTE.y1, ZP]];
-  for (const nr of FOLGE.slice().reverse()) {
-    const x = PORT[nr];
-    vorne.push(...bogen(0, -Math.PI, 18).map((t) => [x + R_GEWINDE * Math.cos(t), PLATTE.y1, ZP + R_GEWINDE * Math.sin(t)]));
-  }
-  vorne.push([PLATTE.x0, PLATTE.y1, ZP]);
-  const vornFormen = [];
-  for (let i = 0; i < STUECKE.length; i += 2) {
-    vornFormen.push(box([STUECKE[i], PLATTE.y1 - 0.1, 0], [STUECKE[i + 1], PLATTE.y1, ZP], { name: "grundplatte.front", ground: true }));
-    const nr = FOLGE[i / 2];
-    if (nr !== undefined) vornFormen.push(unterLoch(PORT[nr], ZP, R_GEWINDE, PLATTE.y1 - 0.1, PLATTE.y1, 0, { name: "grundplatte.front", ground: true }));
-  }
-  put([(PLATTE.x0 + PLATTE.x1) / 2, PLATTE.y1, ZP / 2], [
-    flach(vorne, [0, 1, 0]),
-    L(ring3(vorne), { tone: "mid" }),
-  ].join(""), vornFormen, { name: "grundplatte.front" });
-}
-
-// --- Gasket --------------------------------------------------------------------------
-function dichtung() {
-  GRUPPE = "dichtung";
-  const { x0, x1, y0, z0, z1 } = DICHT;
-  const teile = [
-    flach([[x0, y0, z1], [x1, y0, z1], [x1, 0, z1], [x0, 0, z1]], [0, 0, 1]),
-    flach([[x1, y0, z0], [x1, 0, z0], [x1, 0, z1], [x1, y0, z1]], [1, 0, 0]),
-  ];
-  const innenTeile = FOLGE.map((nr) => kanalInnen(PORT[nr], () => z0, () => z1));
-  teile.push(nahtlos(innenTeile.join("")));
-  const grenzen = [x0, ...FOLGE.flatMap((nr) => [PORT[nr] - R_KANAL, PORT[nr] + R_KANAL]), x1];
-  const kanten = [];
-  for (let i = 0; i < grenzen.length; i += 2) {
-    const q = [[grenzen[i], 0, z0], [grenzen[i + 1], 0, z0], [grenzen[i + 1], 0, z1], [grenzen[i], 0, z1]];
-    teile.push(schnitt(q));
-    kanten.push(ring3(q));
-  }
-  // The front edges are the outlines of the cut pieces; a box edge there
-  // would run straight across the channels.
-  teile.push(L(kanten.join("") + linie([[x0, 0, z1], [x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x1, 0, z0]])
-    + linie([[x1, y0, z1], [x1, 0, z1]]), { tone: "mid" }));
-  put([(x0 + x1) / 2, y0 / 2, (z0 + z1) / 2], teile.join(""),
-    [box([x0, y0, z0], [x1, 0, z1], { name: "dichtung.platte" })], { name: "dichtung.platte" });
-}
-
-// --- Housing ---------------------------------------------------------------------------
-// Two items, because the spool lies between them in depth: the part above the
-// bore covers the top of the spool's back half, the spool covers the rest.
-function gehaeuse() {
-  GRUPPE = "gehaeuse";
-  const { x0, x1, y0, z0, z1 } = GEH;
-  const stege = STEGE;
-
-  // Below the axis: the bore, the channels and the lower cut face.
-  const unten = [];
-  const innenTeile = [gehaeuseBohrung()];
-  for (const nr of FOLGE) innenTeile.push(nahtlos(kanalInnen(PORT[nr], () => z0, aufNut)));
-  unten.push(...innenTeile);
-  unten.push(flach([[x1, y0, z0], [x1, 0, z0], [x1, 0, ZA - RB],
-    ...bogen((3 * Math.PI) / 2, Math.PI, 12).map((t) => G.pointOf(FX, x1, RB, t)), [x1, y0, ZA]], [1, 0, 0]));
-  const schlitze = [x0, ...FOLGE.flatMap((nr) => [PORT[nr] - R_KANAL, PORT[nr] + R_KANAL]), x1];
-  const kantenU = [];
-  for (let i = 0; i < schlitze.length; i += 2) {
-    const [a, b] = [schlitze[i], schlitze[i + 1]];
-    const q = [[a, 0, z0], [b, 0, z0], ...bohrungsKante(b, a, -1)];
-    unten.push(schnitt(q));
-    kantenU.push(ring3(q));
-  }
-  unten.push(L(kantenU.join("") + linie([[x1, y0, ZA], [x1, y0, z0], [x1, 0, z0]]), { tone: "mid" }));
-  const formenU = [
-    box([x0, y0, z0], [x1, 0, ZA - R_NUT], { name: "gehaeuse.unten" }),
-    box([x0, y0, ZA - R_NUT], [x1, -R_NUT, ZA + R_NUT], { name: "gehaeuse.unten" }),
-    ...stege.flatMap(([a, b]) => [
-      box([a, -R_NUT, ZA - R_NUT], [b, 0, ZA - RB], { name: "gehaeuse.unten" }),
-      box([a, -R_NUT, ZA - RB], [b, -RB, ZA + RB], { name: "gehaeuse.unten" }),
-    ]),
-  ];
-  put([(x0 + x1) / 2, -10, ZA - 12], unten.join(""), formenU, { name: "gehaeuse.unten" });
-
-  // Above the axis: the upper cut face, the top and the port numbers on it,
-  // the way they are cast into a real body.
-  const oben = [];
-  const qOben = [[x0, 0, z1], [x1, 0, z1], ...bohrungsKante(x1, x0, 1)];
-  oben.push(flach([[x0, y0, z1], [x1, y0, z1], [x1, 0, z1], [x0, 0, z1]], [0, 0, 1]));
-  oben.push(flach([[x1, y0, ZA], [x1, -RB, ZA],
-    ...bogen(Math.PI, Math.PI / 2, 12).map((t) => G.pointOf(FX, x1, RB, t)), [x1, 0, z1], [x1, y0, z1]], [1, 0, 0]));
-  oben.push(schnitt(qOben));
-  for (const nr of FOLGE) {
-    oben.push(k.faceTextSvg(k.topMatrix([PORT[nr], -9.5], z1, P), String(nr), { size: 8, tone: "mid", anchor: "middle" }));
-  }
-  oben.push(L(ring3(qOben) + linie([[x0, 0, z1], [x0, y0, z1], [x1, y0, z1], [x1, 0, z1]])
-    + linie([[x1, y0, z1], [x1, y0, ZA]]), { tone: "mid" }));
-  const formenO = [
-    box([x0, y0, ZA + R_NUT], [x1, 0, z1], { name: "gehaeuse.oben" }),
-    ...stege.map(([a, b]) => box([a, -R_NUT, ZA + RB], [b, 0, ZA + R_NUT], { name: "gehaeuse.oben" })),
-  ];
-  put([(x0 + x1) / 2, -10, ZA + 14], oben.join(""), formenO, { name: "gehaeuse.oben" });
-}
+// The cut-open body (sub-base, gasket, housing) and the recorder's put() are
+// figur/gehaeuse.mjs; this valve says where its bore, grooves and channels lie.
+const GH = gehaeuseSchnitt({
+  P, R, PIECE_OF, MOVE, FX, FY, FZ, NUTEN, STEGE, FOLGE, PORT, RB, R_NUT, ZA, GEH, PLATTE, DICHT, R_KANAL, ZP, R_GEWINDE, Y_BOHR,
+});
+const { put, inGruppe, NT, flach, schnitt, rec, grundplatte, dichtung, gehaeuse,
+  innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung, kanalInnen, aufNut, aufGewinde,
+  box, boxenOhne, unterLoch, schnittEnde } = GH;
 
 // --- Spool and its rings ---------------------------------------------------------------
 function schieberProfil() {
@@ -387,7 +208,7 @@ function schieberProfil() {
 }
 
 function schieber() {
-  GRUPPE = "schieber";
+  inGruppe("schieber");
   const profil = schieberProfil();
   put([(SP[0] + SP[1]) / 2, 0, ZA], [
     // The true silhouette, not the convex hull: the hull would paint paper
@@ -398,7 +219,7 @@ function schieber() {
 
   // Each ring wraps the spool, so it is drawn in two halves: the far half
   // before the spool, the near half after it. Rubber: one dark tone.
-  GRUPPE = "ringe";
+  inGruppe("ringe");
   const m = SCH.naechsterWinkel(FX, P);
   // The near half reaches a little past each limb, so the outline belongs to it.
   const [v0, v1] = [m - Math.PI / 2 - 0.1, m + Math.PI / 2 + 0.1];
@@ -441,7 +262,7 @@ function schieber() {
  * in front of them another.
  */
 function kappe(gruppe, { x0, x1, wand }, steuerX, links) {
-  GRUPPE = gruppe;
+  inGruppe(gruppe);
   const { y0, z0, z1 } = KAPPE;
   const [ka, kb] = links ? [wand, x1] : [x0, wand];        // chamber
   const [wa, wb] = links ? [x0, wand] : [wand, x1];        // end wall
@@ -540,7 +361,7 @@ function kappe(gruppe, { x0, x1, wand }, steuerX, links) {
 
 /** A pilot piston with its lip seal, built at rest and shifted by the page. */
 function steuerkolben(gruppe, [a, b], name, variante = null, owner = undefined) {
-  GRUPPE = gruppe;
+  inGruppe(gruppe);
   const m = (a + b) / 2;
   put([m, 0, ZA], [
     SV(G.disc(a, b, R_KOLBEN, FX, P), { tone: "hi" }),
@@ -556,7 +377,7 @@ const VARIANTEN = "rueckstell.variante";
 
 function rueckstellung() {
   // Monostable: a spring on a seat at the end of the spool.
-  GRUPPE = "rueckstell";
+  inGruppe("rueckstell");
   const sitz = [K12.x0, K12.x0 + FEDER.sitz];
   const R_DRAHT = FEDER.draht / 2, R_WINDUNG = FEDER.rWindung;
   const wendel = NT.druckfeder(FX, sitz[1] + R_DRAHT, K12.wand - R_DRAHT, FEDER);
@@ -575,7 +396,7 @@ function rueckstellung() {
 
 // --- Screws --------------------------------------------------------------------------------
 function schrauben() {
-  GRUPPE = "schrauben";
+  inGruppe("schrauben");
   for (const x of [7, 123]) {
     const F = FZ(x, -12);
     put([x, -12, GEH.z1 + 2], NT.schraubenkopf(F, GEH.z1, GEH.z1 + 4.5, 4.2),
@@ -610,7 +431,7 @@ function anschluesse() {
     const x = STEUER[nr];
     const F = FZ(x, 0);
     const D = STEUER_V;
-    GRUPPE = gruppe;
+    inGruppe(gruppe);
     put([x, 0, (D.gewinde[0] + D.gewinde[1]) / 2], NT.gewinde(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2),
       [rec(A.disc(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2, { name: `steuerleitung.gewinde${nr}` }))],
       { name: `steuerleitung.gewinde${nr}`, variante });
@@ -635,7 +456,7 @@ function schlaeuche() {
     const r = steuer ? R_STEUERSCHLAUCH : R_SCHLAUCH;
     const ri = steuer ? R_STEUERSCHLAUCH_INNEN : R_SCHLAUCH_INNEN;
     const variante = nr === "12" ? "kolben12" : null;
-    GRUPPE = gruppe;
+    inGruppe(gruppe);
     const name = `${gruppe}.schlauch${nr}`;
     // The far end is cut off in the air on purpose: it is no tip that must land on a part.
     R.route(name, punkte, r, { piece: PIECE_OF[gruppe], move: MOVE[PIECE_OF[gruppe]], ends: [true, false], free: [true, false] });

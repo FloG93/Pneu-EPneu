@@ -12,9 +12,13 @@ const NUTEN = [[18, 32], [38, 52]];
 const FX = G.frameOf([0, 0, ZA], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
 const FZ = (x, y) => G.frameOf([x, y, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
 const aufgenommen = [];
+const items = [];
+const R = { solid: (s) => { aufgenommen.push(s); return s; }, put: (item) => { items.push(item); return item; }, nameFor: (n) => n };
 const GH = gehaeuseSchnitt({
-  P, rec: (s) => { aufgenommen.push(s); return s; }, FX, FZ, NUTEN, RB: 6.5, R_NUT: 10.5, ZA,
-  GEH: { x0: 0, x1: 60 }, R_KANAL: 4, ZP: 8.5, R_GEWINDE: 6.5,
+  P, R, PIECE_OF: {}, MOVE: {}, FX, FY: (x, z) => G.frameOf([x, 0, z], [0, 1, 0], [1, 0, 0], [0, 0, 1]), FZ, NUTEN,
+  STEGE: [[0, 18], [32, 38], [52, 60]], FOLGE: [1, 2], PORT: { 1: 25, 2: 45 }, RB: 6.5, R_NUT: 10.5, ZA,
+  GEH: { x0: 0, x1: 60, y0: -21, z0: 18, z1: 66 }, PLATTE: { x0: -6, x1: 66, y0: -24, y1: 24, z0: 0, z1: 17 },
+  DICHT: { x0: -1, x1: 61, y0: -22, z0: 17, z1: 18 }, R_KANAL: 4, ZP: 8.5, R_GEWINDE: 6.5, Y_BOHR: -4.5,
 });
 
 test("bogen liefert n + 1 Winkel von Anfang bis Ende", () => {
@@ -76,4 +80,22 @@ test("Bohrung, Kanal und Schlauchende liefern Zeichnung", () => {
   const weg = GH.schnittEnde([[0, 20, 0], [0, 10, 0], [0, 0, 0]], 4, 3);
   assert.ok(ende === "" || weg === "", "nur ein Ende zeigt zum Betrachter");
   assert.ok((ende || weg).includes("iso-fill"));
+});
+
+test("Grundplatte, Dichtung und Gehäuse legen ihre Teile in die Gruppe ab, die gesetzt ist", () => {
+  items.length = 0;
+  const PIECE = { grundplatte: "grundplatte", dichtung: "dichtung", gehaeuse: "gehaeuse" };
+  const R2 = { ...R };
+  const G2 = gehaeuseSchnitt({
+    P, R: R2, PIECE_OF: PIECE, MOVE: { grundplatte: [0, 0, -35], dichtung: [0, 0, 22], gehaeuse: [0, 0, 50] }, FX, FY: (x, z) => G.frameOf([x, 0, z], [0, 1, 0], [1, 0, 0], [0, 0, 1]), FZ, NUTEN,
+    STEGE: [[0, 18], [32, 38], [52, 60]], FOLGE: [1, 2], PORT: { 1: 25, 2: 45 }, RB: 6.5, R_NUT: 10.5, ZA,
+    GEH: { x0: 0, x1: 60, y0: -21, z0: 18, z1: 66 }, PLATTE: { x0: -6, x1: 66, y0: -24, y1: 24, z0: 0, z1: 17 },
+    DICHT: { x0: -1, x1: 61, y0: -22, z0: 17, z1: 18 }, R_KANAL: 4, ZP: 8.5, R_GEWINDE: 6.5, Y_BOHR: -4.5,
+  });
+  G2.grundplatte(); G2.dichtung(); G2.gehaeuse();
+  const gruppen = new Set(items.map((i) => i.piece));
+  assert.deepEqual([...gruppen].sort(), ["dichtung", "gehaeuse", "grundplatte"]);
+  assert.ok(items.filter((i) => i.piece === "grundplatte").length >= 3, "Platte hinten, Stufen, Front");
+  assert.deepEqual(items.find((i) => i.piece === "grundplatte").move, [0, 0, -35]);
+  assert.ok(items.every((i) => i.shapes.length > 0 && !i.svg.includes("NaN")));
 });
