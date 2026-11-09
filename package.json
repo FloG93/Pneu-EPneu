@@ -20,6 +20,7 @@
     "bau:uebersicht": "node figur/tests/tools/build-uebersicht.mjs",
     "pruef:browser": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Zylinder-Doppeltwirkend/ Zylinder-Doppeltwirkend/tests/tools/pruefe-zylinder.mjs",
     "pruef:browser:ventil": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Wegeventil-5-2/ Wegeventil-5-2/tests/tools/pruefe-ventil.mjs",
+    "pruef:browser:ventil32": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Wegeventil-3-2/ Wegeventil-3-2/tests/tools/pruefe-ventil-3-2.mjs",
     "pruef:linien": "node .claude/skills/anatomy/scripts/lines.mjs Zylinder-Doppeltwirkend/index.html"
   },
   "engines": {
