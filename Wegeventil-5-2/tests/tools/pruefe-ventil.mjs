@@ -78,13 +78,26 @@ export default async function pruefeVentil({ seite, V, modus }) {
   // --- halfway every working path is shut and nothing flows ---------------
   await seite.evaluate(() => { window.__figur.stelle(0.5); window.__figur.weiter(); });
   await seite.waitForTimeout(500);
-  const stroeme = await seite.evaluate(() => Object.fromEntries(["1-4", "2-3", "1-2", "4-5"].map((n) => {
+  // Not vacuous: every stream must exist and carry particles, and both the
+  // group and every particle in it must be transparent.
+  const stroeme = await seite.evaluate(() => ["1-4", "2-3", "1-2", "4-5"].map((n) => {
     const g = document.querySelector(`[data-strom="${n}"]`);
-    const kugel = Math.max(0, ...[...g.querySelectorAll("circle")].map((c) => Number(getComputedStyle(c).opacity)));
-    return [n, Number(getComputedStyle(g).opacity) * kugel];
-  })));
-  const offenBei50 = Object.entries(stroeme).filter(([, d]) => d >= 0.05).map(([n, d]) => `${n} ${d.toFixed(2)}`);
+    if (!g) return { n, kugeln: 0, gruppe: 1, kugel: 1 };
+    const kugeln = [...g.querySelectorAll("circle")];
+    return { n, kugeln: kugeln.length, gruppe: Number(getComputedStyle(g).opacity),
+      kugel: Math.max(0, ...kugeln.map((c) => Number(getComputedStyle(c).opacity))) };
+  }));
+  const offenBei50 = stroeme.filter((x) => x.kugeln === 0 || x.gruppe >= 0.05 || x.kugel >= 0.05)
+    .map((x) => `${x.n} (${x.kugeln} Teilchen, Gruppe ${x.gruppe.toFixed(2)}, Teilchen ${x.kugel.toFixed(2)})`);
   V(`Schieber auf 50 %: kein Weg strömt${offenBei50.length ? " — " + offenBei50.join(", ") : ""}`, offenBei50.length === 0);
+  // The same measurement sees flow where there is some: 1→4 in position 14.
+  await seite.evaluate(() => { window.__figur.stelle(1); window.__figur.weiter(); });
+  await seite.waitForTimeout(250);
+  const in14 = await seite.evaluate(() => {
+    const g = document.querySelector('[data-strom="1-4"]');
+    return Number(getComputedStyle(g).opacity) * Math.max(0, ...[...g.querySelectorAll("circle")].map((c) => Number(getComputedStyle(c).opacity)));
+  });
+  V(`in Stellung 14 strömt 1→4 sichtbar (${in14.toFixed(2)})`, in14 > 0.3);
 
   // --- symbol beside the card follows the spool ---------------------------
   const symbol = () => seite.evaluate(() => {
@@ -183,7 +196,58 @@ export default async function pruefeVentil({ seite, V, modus }) {
   V("Zerlegen stoppt die Automatik",
     (await seite.getAttribute("#btn-auto", "aria-pressed")) === "false");
   V("beim Zerlegen ist kein Signal aktiv", !beimZerlegen.s14 && !beimZerlegen.s12);
-  // Back together for the checks that follow.
+
+  // --- every number points at its own assembly, in both variants ----------
+  // A number hung on the centroid of parts that lie apart points into empty
+  // space (pitfall 2). Measured on screen: each visible leader line, from its
+  // near end back to the point it hangs on, must meet (within a few px) a part
+  // of its own assembly that is actually drawn (hidden variants have no box).
+  const fuehrungen = async () => {
+    await seite.waitForFunction(() => window.__figur.offen() > 0.99, null, { timeout: 15000 }).catch(() => {});
+    await seite.waitForTimeout(2500);         // the last springs settle
+    return seite.evaluate(() => {
+      const piece = {};
+      for (const b of document.querySelectorAll(".pickbtn")) piece[b.querySelector(".picknr").textContent.trim()] = b.dataset.pick;
+      const daneben = [];
+      let gezaehlt = 0;
+      for (const g of document.querySelectorAll(".iso-nums > g")) {
+        if (Number(g.getAttribute("opacity")) <= 0.5) continue;
+        const nr = g.querySelector("text").textContent.trim();
+        const line = g.querySelector("line");
+        const ctm = line.getScreenCTM();
+        const auf = (x, y) => { const pt = line.ownerSVGElement.createSVGPoint(); pt.x = x; pt.y = y; return pt.matrixTransform(ctm); };
+        const [x1, y1, x2, y2] = ["x1", "y1", "x2", "y2"].map((a) => Number(line.getAttribute(a)));
+        // The leader stops 16 px short of its anchor (and runs 30 px): continue
+        // it back to where it points and look along that stretch.
+        const zurueck = 16 / 30;
+        const proben = Array.from({ length: 9 }, (_, i) => auf(x1 - (x2 - x1) * zurueck * (i / 8), y1 - (y2 - y1) * zurueck * (i / 8)));
+        const toleranz = 4;
+        const teile = [...document.querySelectorAll(`[data-g][data-piece="${piece[nr]}"]`)]
+          .map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+        const drin = (q, r) => q.x >= r.left - toleranz && q.x <= r.right + toleranz && q.y >= r.top - toleranz && q.y <= r.bottom + toleranz;
+        const trifft = proben.some((q) => teile.some((r) => drin(q, r)));
+        const q = proben[0];
+        gezaehlt += 1;
+        if (!trifft) {
+          const abstand = Math.min(...teile.map((r) => Math.hypot(Math.max(r.left - q.x, 0, q.x - r.right), Math.max(r.top - q.y, 0, q.y - r.bottom))));
+          daneben.push(`${nr} ${Math.round(abstand)} px`);
+        }
+      }
+      return { gezaehlt, daneben };
+    });
+  };
+  const mono = await fuehrungen();
+  V(`monostabil zerlegt: jede Nummer zeigt auf ein Teil ihrer Baugruppe (${mono.gezaehlt})${mono.daneben.length ? " — daneben: " + mono.daneben.join(", ") : ""}`,
+    mono.gezaehlt === 11 && mono.daneben.length === 0);
   await seite.keyboard.press("Escape");
   await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+  await seite.click("#btn-bauart");
+  await seite.click("#btn-explode");
+  const bi = await fuehrungen();
+  V(`bistabil zerlegt: jede Nummer zeigt auf ein Teil ihrer Baugruppe (${bi.gezaehlt})${bi.daneben.length ? " — daneben: " + bi.daneben.join(", ") : ""}`,
+    bi.gezaehlt === 11 && bi.daneben.length === 0);
+  // Back together and monostable for the checks that follow.
+  await seite.keyboard.press("Escape");
+  await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+  await seite.click("#btn-bauart");
 }
