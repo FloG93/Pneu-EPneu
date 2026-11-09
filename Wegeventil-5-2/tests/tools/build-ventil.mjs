@@ -60,6 +60,11 @@ const STEUER = { 14: -14.5, 12: 144.5 };  // pilot ports, over the pilot chamber
 const R_STEUER_GEWINDE = 2.5;        // M5
 const R_STEUER_BOHRUNG = 1.5;
 
+// Return spring (monostable variant): on a 2 mm plate at the spool's end,
+// against the cap's end wall. It must still fit at full stroke: see federPruefen().
+const FEDER = { sitz: 2, draht: 1.1, windungen: 4.5, rWindung: 7 };
+const FEDER_RESERVE = 1;             // mm the spring must stay above its block length at full stroke
+
 // --- The spool ------------------------------------------------------------
 // The lands are placed from the overlap: a web between two grooves opens when
 // a land edge leaves it. Set a (1→4, 2→3) must begin to open at
@@ -168,6 +173,18 @@ const flach = (punkte, normale) => SCH.flaeche(punkte.map(at), normale, P);
  * lets the page give it its own colour.
  */
 const SCHNITT_TON = 3;
+
+/**
+ * The cut faces' own tone, one calm warm grey per mode: darker than every
+ * outer face in light, lighter than them in dark, ≥ 3:1 against the paper in
+ * both. The data-shade above is only the fallback without this rule. Task 6
+ * takes this string into the page's style sheet.
+ */
+export const SCHNITT_CSS = `
+.iso { --schnitt: #8a877f }
+.iso[data-theme="light"] { --schnitt: #8f8c85 }
+.iso-svg .iso-shade[data-schnitt] { fill: var(--schnitt) }
+`;
 const schnitt = (punkte) => `<path class="iso-shade" data-shade="${SCHNITT_TON}" data-schnitt="" d="${ring3(punkte)}"/>`;
 
 /**
@@ -585,19 +602,23 @@ function kappe(gruppe, { x0, x1, wand }, steuerX, links) {
   const loecher = [[[ga, y0, zk], [gb, 0, z1]]];
   const bohrung = [[ba, -R_STEUER_BOHRUNG, zk], [bb, 0, zg]];
   const n = (teil) => `${gruppe}.${teil}`;
+  // On the right the pilot port only exists in the bistable variant: the
+  // spring variant shows a closed cap. On the left both variants have it.
+  const mitPort = (svg) => (links ? svg : `<g data-variante="kolben12">${svg}</g>`);
+  const ohnePort = (svg) => (links ? "" : `<g data-variante="feder">${svg}</g>`);
 
   // Behind everything inside: the chamber, the drillings, the cut face below.
   const unten = [];
   const innenTeile = [bohrungInnen(FX, ka, kb, R_KAMMER, Math.PI / 2, (3 * Math.PI) / 2)];
   // The chamber's closed end below the axis; the half above belongs to the end wall item.
   if (links) innenTeile.push(flanke(FX, wand, 0, R_KAMMER, Math.PI, (3 * Math.PI) / 2, [1, 0, 0]));
-  // The pilot drilling and the thread above it, their far halves.
-  innenTeile.push(innen(
+  unten.push(nahtlos(innenTeile.join("")));
+  // The pilot drilling, its far half.
+  unten.push(mitPort(nahtlos(innen(
     (t, e) => { const p = G.pointOf(FZ(steuerX, 0), 0, R_STEUER_BOHRUNG, t); return [p[0], p[1], e ? zg : ZA + Math.sqrt(R_KAMMER ** 2 - p[1] ** 2)]; },
     (t) => G.mul3(G.radialOf(FZ(steuerX, 0), t), -1),
     bogen(Math.PI, TAU, 12),
-  ));
-  unten.push(nahtlos(innenTeile.join("")));
+  ))));
   const qU = links
     ? [[x0, 0, z0], [x1, 0, z0], [x1, 0, zu], [wand, 0, zu], [wand, 0, ZA], [x0, 0, ZA]]
     : [[x0, 0, z0], [wand, 0, z0], [wand, 0, zu], [x0, 0, zu]];
@@ -616,11 +637,12 @@ function kappe(gruppe, { x0, x1, wand }, steuerX, links) {
   // It takes the column under the thread down to the chamber, with the two
   // narrow strips of cut face beside the drilling.
   const streifen = [[[ga, 0, zk], [ba, 0, zk], [ba, 0, zg], [ga, 0, zg]], [[bb, 0, zk], [gb, 0, zk], [gb, 0, zg], [bb, 0, zg]]];
-  put([steuerX, -R_STEUER_GEWINDE - 1, z1 - 3], [
+  const zu12 = [[ga, 0, zk], [gb, 0, zk], [gb, 0, z1], [ga, 0, z1]];
+  put([steuerX, -R_STEUER_GEWINDE - 1, z1 - 3], mitPort([
     nahtlos(bohrungInnen(FZ(steuerX, 0), zg, z1, R_STEUER_GEWINDE, Math.PI, TAU, 16)),
     ...streifen.map(schnitt),
     L(streifen.map(ring3).join(""), { tone: "mid" }),
-  ].join(""), [
+  ].join("")) + ohnePort(schnitt(zu12) + L(ring3(zu12), { tone: "mid" })), [
     box([ga, y0, zg], [gb, -R_STEUER_GEWINDE, z1], { name: n("gewindegrund") }),
     boxenOhne([ga, y0, zk], [gb, 0, zg], [bohrung], { name: n("gewindegrund") }),
   ], { name: n("gewindegrund") });
@@ -647,9 +669,11 @@ function kappe(gruppe, { x0, x1, wand }, steuerX, links) {
     // Above the chamber, left of the hole, with the top: in front of the
     // piston, behind the stub's front half.
     const qO = [[x0, 0, zk], [ga, 0, zk], [ga, 0, z1], [x0, 0, z1]];
+    const geschlossen = [[x0, y0, z1], [x1, y0, z1], [x1, 0, z1], [x0, 0, z1]];
     put([(x0 + wand) / 2, -10, z1 - 4], [
-      flach(deckel, [0, 0, 1]), schnitt(qO), nummer,
-      L(ring3(qO) + ring3(deckel), { tone: "mid" }),
+      mitPort(flach(deckel, [0, 0, 1]) + nummer + L(ring3(deckel), { tone: "mid" })),
+      ohnePort(flach(geschlossen, [0, 0, 1]) + L(ring3(geschlossen), { tone: "mid" })),
+      schnitt(qO), L(ring3(qO), { tone: "mid" }),
     ].join(""), boxenOhne([x0, y0, zk], [wand, 0, z1], loecher, { name: n("oben") }), { name: n("oben") });
     // The end wall and its outer face: in front of all that is inside.
     const qW = [[wand, 0, z0], [x1, 0, z0], [x1, 0, z1], [gb, 0, z1], [gb, 0, zk], [wand, 0, zk]];
@@ -680,10 +704,10 @@ const VARIANTEN = "rueckstell.variante";
 function rueckstellung() {
   // Monostable: a spring on a seat at the end of the spool.
   GRUPPE = "rueckstell";
-  const sitz = [K12.x0, K12.x0 + 2];
+  const sitz = [K12.x0, K12.x0 + FEDER.sitz];
   // The wire as a tube along a helix, ground flat at both ends (the last
   // half turn closes up), drawn back to front.
-  const R_DRAHT = 0.75, R_WINDUNG = 7, WINDUNGEN = 5.5;
+  const R_DRAHT = FEDER.draht / 2, R_WINDUNG = FEDER.rWindung, WINDUNGEN = FEDER.windungen;
   const [fa, fb] = [sitz[1] + R_DRAHT, K12.wand - R_DRAHT];
   const wendel = Array.from({ length: 221 }, (_, i) => {
     const t = i / 220;
@@ -907,8 +931,26 @@ function ueberdeckungPruefen() {
   return { oeffnetA, oeffnetB, gemessen };
 }
 
+/**
+ * The spring has to compress by the full stroke without going solid: in
+ * position 14 its length must stay above the block length (n + 1)·d.
+ */
+function federPruefen() {
+  const ruhe = K12.wand - (K12.x0 + FEDER.sitz);
+  const gespannt = ruhe - HUB;
+  const block = (FEDER.windungen + 1) * FEDER.draht;
+  const text = `Feder: ${ruhe.toFixed(2)} mm in Ruhe, ${gespannt.toFixed(2)} mm in Stellung 14, Blocklänge `
+    + `(${FEDER.windungen} + 1) · ${FEDER.draht} = ${block.toFixed(2)} mm, Reserve ${(gespannt - block).toFixed(2)} mm`;
+  if (gespannt < block + FEDER_RESERVE) {
+    console.error(`Feder geht auf Block: ${text} (verlangt ≥ ${FEDER_RESERVE} mm)`);
+    process.exit(1);
+  }
+  return text;
+}
+
 // --- Compose ---------------------------------------------------------------------------------------------
 const UEBERDECKUNG = ueberdeckungPruefen();
+const FEDERTEXT = federPruefen();
 
 grundplatte();
 dichtung();
@@ -946,6 +988,7 @@ const svg = k.figureSvg({
 console.log(`Teile: ${R.items.length}, Körper: ${R.solids.length}, Rohre: ${R.tubes.length}`);
 console.log(`Überdeckung: 1→4 öffnet bei ${UEBERDECKUNG.oeffnetA.toFixed(2)} mm, 1→2 bei ${UEBERDECKUNG.oeffnetB.toFixed(2)} mm `
   + `→ ${(UEBERDECKUNG.gemessen * 100).toFixed(1)} % des Hubs (Modell ${M.ueberdeckung * 100} %)`);
+console.log(FEDERTEXT);
 
 // A plain preview to look at while the page does not exist yet (Task 6).
 const vorschau = process.argv.find((a) => a.startsWith("--vorschau="));
@@ -954,7 +997,7 @@ if (vorschau) {
   mkdirSync(dirname(ziel), { recursive: true });
   const thema = process.argv.includes("--dunkel") ? "dark" : "light";
   writeFileSync(ziel, `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Vorschau 5/2-Wegeventil</title>
-<style>${k.ISO_CSS}${TONE_CSS}
+<style>${k.ISO_CSS}${TONE_CSS}${SCHNITT_CSS}
 body{margin:0;background:var(--anatomy-card)} .buehne{width:${W}px;margin:0 auto}
 ${process.argv.includes("--feder") ? '[data-variante="kolben12"]{display:none}' : ""}
 ${process.argv.includes("--kolben") ? '[data-variante="feder"]{display:none}' : ""}
