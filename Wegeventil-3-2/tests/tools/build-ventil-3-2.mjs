@@ -1226,9 +1226,10 @@ der Druck an 2 bleibt stehen, wo er war.</p>
 
 <h2>Die alten Buchstaben</h2>
 <p>Auf älteren Plänen und Ventilen stehen statt der Zahlen Buchstaben: <strong>P</strong> für den Druckluftanschluss
-(heute 1), <strong>A</strong> für den Arbeitsanschluss (heute 2), <strong>R</strong> für die Entlüftung (heute 3) und
-<strong>Y</strong> und <strong>Z</strong> für die Steueranschlüsse (heute 12 und 10). Die Zahlen nach ISO 5599-3 haben einen
-Vorteil: Man liest an der Steuerleitung ab, was sie bewirkt.</p>
+(heute 1), <strong>A</strong> für den Arbeitsanschluss (heute 2), <strong>R</strong> für die Entlüftung (heute 3).
+Auch die Steueranschlüsse trugen früher Buchstaben (Z, Y und X); welcher zu welcher Zahl gehört, steht hier bewusst nicht,
+denn das hängt von der Ausgabe der Norm ab. Die Zahlen nach ISO 5599-3 haben einen Vorteil: Man liest an der Steuerleitung
+ab, was sie bewirkt.</p>
 
 <h2>Wovon die Schaltzeit abhängt</h2>
 <p>Die Anzeige nennt die <strong>Schaltzeit</strong>: die Zeit vom Signal, bis der Schieber 98 % seines Weges geschafft
