@@ -111,9 +111,14 @@ export const RUBRIKEN = [
       {
         id: "ventil-5-2",
         name: "5/2-Wegeventil",
-        satz: "Das Standardventil für den doppeltwirkenden Zylinder: eine Zuluft, zwei Arbeitsanschlüsse, zwei getrennte Abluftwege.",
-        zustand: "geplant",
+        satz:
+          "Das Standardventil für den doppeltwirkenden Zylinder, im Schnitt an der Ebene des Schiebers. "
+          + "Kräftiges Blau steht unter Druck, blasses ist Abluft, und das Schaltzeichen schaltet mit. "
+          + "Mit Zeitlupe, Handbetrieb und Zerlegen, monostabil und bistabil.",
+        zustand: "fertig",
+        ordner: "Wegeventil-5-2",
         sinnbild: "5/2-Wegeventil, Impulsventil",
+        marken: ["ISO 5599-1", "Größe 1", "G1/4", "mono- und bistabil"],
       },
       {
         id: "ventil-5-3",

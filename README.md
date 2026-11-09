@@ -9,10 +9,11 @@ Erklärte Bauteile für Auszubildende: jedes als interaktive isometrische Zeichn
 | Rubrik | Bauteil | Was es zeigt | Online |
 | --- | --- | --- | --- |
 | **Aktoren** | **Doppeltwirkender Zylinder** | Schnitt durch einen Normzylinder nach ISO 15552 mit dem 5/2-Wegeventil, das ihn umschaltet. Die Druckluft strömt sichtbar: kräftiges Blau steht unter Druck, blasses ist Abluft. Knopf zum Zerlegen, Kraft nach F = p · A live gerechnet. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Zylinder-Doppeltwirkend/) |
+| **Wegeventile** | **5/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers. Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Mono- und bistabil, Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-5-2/) |
 
 [![Doppeltwirkender Zylinder im Schnitt, mit strömender Druckluft](docs/bilder/schnitt-nah.png)](https://flog93.github.io/Pneu-EPneu/Zylinder-Doppeltwirkend/)
 
-Weitere Bauteile sind auf der Übersichtsseite als Kacheln angelegt und kommen nach und nach dazu: einfachwirkender Zylinder, Zylinder mit beidseitiger Kolbenstange, Teleskop- und Tandemzylinder, kolbenstangenloser Zylinder; 3/2-, 4/2-, 5/2- und 5/3-Wegeventile; Rückschlag-, Drosselrückschlag-, Schnellentlüftungs-, Wechsel- und Zweidruckventil; dazu die E-Pneumatik mit Magnetspule, Relais und Stromlaufplan.
+Weitere Bauteile sind auf der Übersichtsseite als Kacheln angelegt und kommen nach und nach dazu: einfachwirkender Zylinder, Zylinder mit beidseitiger Kolbenstange, Teleskop- und Tandemzylinder, kolbenstangenloser Zylinder; 3/2-, 4/2- und 5/3-Wegeventile; Rückschlag-, Drosselrückschlag-, Schnellentlüftungs-, Wechsel- und Zweidruckventil; dazu die E-Pneumatik mit Magnetspule, Relais und Stromlaufplan.
 
 ## Für wen das gemacht ist
 
@@ -28,11 +29,17 @@ Zylinder-Doppeltwirkend/    Bauteilseite
   index.html                erzeugt, nicht von Hand geschrieben
   favicon.svg, vorschau.svg (Kachelbild), README.md
   tests/tools/build-zylinder.mjs   Geometrie + vier Datentabellen
+Wegeventil-5-2/             Bauteilseite
+  index.html                erzeugt, nicht von Hand geschrieben
+  favicon.svg, vorschau.svg (Kachelbild), README.md
+  tests/tools/build-ventil.mjs     Geometrie + vier Datentabellen
 figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
                             wird deshalb nicht veröffentlicht)
   pneumatik.mjs             Rechenmodell: Flächen, Kräfte, Drücke, Bewegung
   explode.mjs               Explosion: Wege, Federn, Tiefensortierung
   legende.mjs               Legende, Nummern, Erklärzeile
+  ventil.mjs                Rechenmodell des Wegeventils: Schieber, Steuerkammern, Schaltzeit
+  schaltzeichen.mjs         Schaltzeichen nach ISO 1219-1, das mitschaltet
   luft.mjs                  Luftwege, Partikel, Kammerfüllung, Blautöne
   seite.mjs                 Karte, Bedienleiste, Thema, Kontrast
 shared/                     Design und Bedienelemente (aus dem Repo 3D-Druck)
@@ -91,4 +98,9 @@ npm run bau:zylinder          # erzeugt Zylinder-Doppeltwirkend/index.html neu
 
 ```bash
 npm run pruef:zylinder        # prüft die Geometrie in Ruhe und zerlegt
+```
+
+```bash
+npm run bau:ventil            # erzeugt Wegeventil-5-2/index.html neu
+npm run pruef:ventil          # prüft dort Geometrie in Ruhe und zerlegt
 ```

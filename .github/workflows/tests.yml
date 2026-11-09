@@ -17,3 +17,5 @@ jobs:
         run: npm test
       - name: Geometrie der Figuren prüfen
         run: npm run pruef:zylinder
+      - name: Geometrie des Ventils prüfen
+        run: npm run pruef:ventil

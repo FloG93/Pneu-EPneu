@@ -878,7 +878,7 @@ Das reicht, solange der Rückweg kraftlos sein darf. Der <strong>doppeltwirkende
 Deckeln einen Anschluss: welche Kammer gefüllt wird, bestimmt das Ventil, und er drückt in beide Richtungen
 mit voller Kraft.</p>
 <p>Damit sich überhaupt etwas bewegt, muss die <em>andere</em> Kammer gleichzeitig entlüften. Genau das ist die
-Aufgabe des 5/2-Wegeventils: ein Anschluss für die Zuluft (1), zwei zum Zylinder (2 und 4) und zwei für die
+Aufgabe des <a href="../Wegeventil-5-2/">5/2-Wegeventils</a> (eigene Seite: wie es innen schaltet): ein Anschluss für die Zuluft (1), zwei zum Zylinder (2 und 4) und zwei für die
 Abluft (3 und 5). In der einen Stellung verbindet es 1→4 und 2→3, in der anderen 1→2 und 4→5.</p>
 
 <h2>Wie viel Kraft?</h2>
