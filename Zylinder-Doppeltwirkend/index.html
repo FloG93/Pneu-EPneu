@@ -1088,8 +1088,9 @@ function ventilBegrenze(x, lo, hi) {
  * Dimensions of a 5/2 valve in the size of ISO 5599-1 size 1 (spool Ø 13,
  * pilot piston Ø 20). Assumptions unless noted otherwise.
  * `leitwertSteuer` is an assumption, set so the switching time at 6 bar lands
- * in the data-sheet range (12–52 ms): the pilot air passes a small solenoid
- * pilot valve, so it fills slowly compared with the working ports.
+ * in the data-sheet range (12–52 ms): the pilot air comes through a thin line
+ * from a signal valve (e.g. a 3/2 directional valve), so it fills slowly
+ * compared with the working ports. The valve itself is actuated by air only.
  */
 const ISO_5599_GR1 = {
   hub: 7,               // mm, spool stroke
@@ -1121,6 +1122,10 @@ const ventilAnkunft = 0.98;
 /**
  * Fresh valve in the rest position 12: 1→2 open, 4 vented.
  * `anteil` 0 = position 12, 1 = position 14.
+ * `masse` is not read: the fresh state needs no dimension. It stays in the
+ * signature so every model function takes (state or masse) first, as in
+ * pneumatik.mjs (`neuerZustand(masse, …)`), and a later valve whose rest
+ * state does depend on its dimensions needs no new call shape.
  */
 function neuesVentil(masse, { bauart = "monostabil", druckBar = 6 } = {}) {
   return {
@@ -1245,18 +1250,32 @@ function ventilTeilschritt(v, masse, h, druckBar) {
  * simulated on a copy. `richtung` "14" starts from rest; "12" first drives to
  * position 14, then takes the signal away (monostable) or gives 12 (bistable).
  * Infinity if it has not arrived after 1 s.
+ *
+ * `impuls` (s) makes every signal a pulse of that length, as the page gives
+ * them to the bistable valve. Then "12" waits 1 s in position 14 after the
+ * pulse 14, so chamber 14 has vented before the pulse 12 comes — the case the
+ * page produces. Without `impuls` the bistable "12" gives 12 the moment 14 is
+ * taken away, while chamber 14 is still full.
  */
-function ventilSchaltzeit(masse, druckBar, { bauart = "monostabil", richtung = "14" } = {}) {
+function ventilSchaltzeit(masse, druckBar, { bauart = "monostabil", richtung = "14", impuls = null } = {}) {
   const v = neuesVentil(masse, { bauart, druckBar });
-  const schritte = (s) => { for (let t = 0; t < s; t += 0.001) ventilSchritt(v, masse, 0.001, druckBar); };
-  ventilSignal(v, "14", true);
+  let puls = null, rest = 0;
+  const gib = (n) => { ventilSignal(v, n, true); if (impuls !== null) { puls = n; rest = impuls; } };
+  const schritt = () => {
+    ventilSchritt(v, masse, 0.001, druckBar);
+    if (puls !== null && (rest -= 0.001) <= 1e-9) { ventilSignal(v, puls, false); puls = null; }
+  };
+  const schritte = (s) => { for (let t = 0; t < s; t += 0.001) schritt(); };
+  gib("14");
   if (richtung === "12") {
     schritte(1);
-    if (bauart === "bistabil") { ventilSignal(v, "14", false); ventilSignal(v, "12", true); }
-    else ventilSignal(v, "14", false);
+    if (bauart === "bistabil") {
+      if (impuls === null) ventilSignal(v, "14", false);
+      gib("12");
+    } else ventilSignal(v, "14", false);
     v.schaltzeit = null;
   }
-  for (let t = 0; t < 1 && v.schaltzeit === null; t += 0.001) ventilSchritt(v, masse, 0.001, druckBar);
+  for (let t = 0; t < 1 && v.schaltzeit === null; t += 0.001) schritt();
   return v.schaltzeit === null ? Infinity : v.schaltzeit;
 }
 

@@ -98,11 +98,44 @@ test("Monostabil: Rückstellung durch die Feder bei 6 bar im Bereich der Datenbl
   const t = ventilSchaltzeit(M, 6, { richtung: "12" });
   assert.ok(t >= 0.012 && t <= 0.052, `${(t * 1000).toFixed(1)} ms`);
 });
-test("Bistabil: Schaltzeit 12 bei 6 bar im Bereich der Datenblätter (12–52 ms)", () => {
-  // Chamber 12 fills like chamber 14 does (≈ 22 ms) while 14 vents; the pilot force
-  // difference reverses once p12 > p14, a little later than the filling alone.
-  const t = ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12" });
-  assert.ok(t >= 0.012 && t <= 0.052, `${(t * 1000).toFixed(1)} ms`);
+// The page gives the bistable valve pulses of 150 ms (IMPULS in build-ventil.mjs).
+// Without a spring the pilot force only has to beat the breakaway friction:
+// 0,1 · Δp · 314,16 mm² > 8 N  →  Δp > 0,255 bar. Chamber 14 fills with
+// τ = 5000 mm³ / 8e4 mm³/(s·bar) = 62,5 ms, so it gets there after
+// −τ · ln(1 − 0,255/6) ≈ 2,7 ms. The force then grows by about
+// 0,1 · (6 bar / τ) · 314 ≈ 3000 N/s; on 30 g the spool covers 7 mm in
+// ≈ (6 · 0,007 · 0,03 / 3000)^(1/3) ≈ 7,5 ms. Together ≈ 10 ms, the model says 9,65.
+// No spring to overcome: faster than the 12–52 ms data sheets give for
+// spring-return or solenoid valves, and the page says so.
+const IMPULS = 0.15;
+test("Bistabil: Impuls 14 aus der Ruhe schaltet bei 6 bar in 9,65 ms", () => {
+  const t = ventilSchaltzeit(M, 6, { bauart: "bistabil", impuls: IMPULS });
+  assert.ok(Math.abs(t - 0.00965) < 0.0003, `${(t * 1000).toFixed(2)} ms`);
+});
+test("Bistabil: Impuls 12 nach einer Ruhe in Stellung 14 schaltet genauso schnell zurück", () => {
+  // After the 14 pulse chamber 14 has vented; chamber 12 fills exactly as 14
+  // did, against the same friction, so the time is the same 9,65 ms.
+  const t12 = ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12", impuls: IMPULS });
+  const t14 = ventilSchaltzeit(M, 6, { bauart: "bistabil", impuls: IMPULS });
+  assert.ok(Math.abs(t12 - 0.00965) < 0.0003, `${(t12 * 1000).toFixed(2)} ms`);
+  assert.ok(Math.abs(t12 - t14) < 1e-4);
+});
+test("Bistabil: der Impuls ist länger als das Schalten, auch bei 2 bar", () => {
+  // Otherwise the pulse would end mid-travel and the page would time nothing.
+  const t = ventilSchaltzeit(M, 2, { bauart: "bistabil", impuls: IMPULS });
+  assert.ok(Number.isFinite(t) && t < IMPULS, `${(t * 1000).toFixed(2)} ms`);
+});
+test("Bistabil ohne Feder schaltet schneller als monostabil (6 bar)", () => {
+  // The spring's 30 N have to be overcome first: monostable needs 1,21 bar
+  // in the chamber, bistable 0,25 bar.
+  assert.ok(ventilSchaltzeit(M, 6, { bauart: "bistabil", impuls: IMPULS }) < ventilSchaltzeit(M, 6));
+});
+test("Bistabil: 12 im selben Moment, in dem 14 wegfällt, ist langsamer (Kammer 14 noch voll)", () => {
+  // Not a case the page produces (its pulses end long before the next one);
+  // it shows why the chamber that has to vent matters: 20,6 ms instead of 9,65.
+  const sofort = ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12" });
+  const ausRuhe = ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12", impuls: IMPULS });
+  assert.ok(Math.abs(sofort - 0.0206) < 0.0005 && sofort > ausRuhe, `${(sofort * 1000).toFixed(2)} ms`);
 });
 test("Ein wiederholtes Signal startet die Zeitmessung nicht neu", () => {
   // Auto-repeat of a held key calls the same signal again: the clock keeps running.

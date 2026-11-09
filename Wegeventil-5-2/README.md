@@ -17,7 +17,7 @@ sieht man, was in ihm passiert.
 - **Monostabil / bistabil** wechselt die Bauart. Das Ventil geht dabei in die
   Ausgangsstellung 12, die Signale sind aus.
 - **Automatik** schaltet von selbst hin und her.
-- **Zeitlupe** (1× bis 50×) dehnt die Modellzeit. So sieht man, wie sich die
+- **Zeitlupe** (1× bis 1/50) dehnt die Modellzeit. So sieht man, wie sich die
   Steuerkammer erst füllt und der Schieber danach losläuft.
 - **Schieber von Hand** (0 bis 100 %) fährt den Schieber selbst. Auf 50 % sind alle
   Wege zu; die Drücke an 2 und 4 bleiben stehen. Ein Signal beendet den Handbetrieb.
@@ -47,20 +47,36 @@ das auch den Schieber bewegt (`figur/ventil.mjs`). Bei 6 bar:
 ```
 A_Steuerkolben = π/4 · 20²                 = 314,2 mm²
 F_Steuer       = 0,6 N/mm² · 314,2 mm²     = 188 N
-Feder 30 N + Haftreibung 8 N = 38 N        → löst sich ab 1,21 bar in der Steuerkammer
+Feder 30 N + Haftreibung 8 N = 38 N        → löst sich ab 1,21 bar in der Steuerkammer (monostabil)
+nur Haftreibung 8 N                        → löst sich ab 0,25 bar in der Steuerkammer (bistabil)
 ```
 
-Gemessene Schaltzeiten des Modells (Schieber bei 98 % seines Weges):
+Gemessene Schaltzeiten des Modells (Schieber bei 98 % seines Weges). Das bistabile
+Ventil bekommt, wie auf der Seite, einen Impuls von 150 ms; vor dem Impuls 12 hat es in
+Stellung 14 geruht, die Kammer 14 ist also entlüftet:
 
-| Vorgang | Druck | Zeit |
-| --- | --- | --- |
-| Umschalten auf 14 | 6 bar | 22,0 ms |
-| Rückstellung durch die Feder | 6 bar | 21,8 ms |
-| Rückstellung durch die Feder | 2 bar | 12,6 ms |
-| Rückstellung durch die Feder | 8 bar | 24,2 ms |
+| Bauart | Vorgang | Druck | Zeit |
+| --- | --- | --- | --- |
+| monostabil | Umschalten auf 14 | 2 bar | 74,2 ms |
+| monostabil | Umschalten auf 14 | 6 bar | 22,0 ms |
+| monostabil | Umschalten auf 14 | 8 bar | 17,2 ms |
+| monostabil | Rückstellung durch die Feder | 2 bar | 12,6 ms |
+| monostabil | Rückstellung durch die Feder | 6 bar | 21,8 ms |
+| monostabil | Rückstellung durch die Feder | 8 bar | 24,2 ms |
+| bistabil | Impuls 14 | 2 bar | 17,8 ms |
+| bistabil | Impuls 14 | 6 bar | 9,6 ms |
+| bistabil | Impuls 14 | 8 bar | 8,4 ms |
+| bistabil | Impuls 12 | 6 bar | 9,6 ms |
 
-Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms. Die Kräfte sind
-**theoretische** Werte; Dichtungsreibung zieht in der Praxis noch etwas ab.
+Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms. Diese Werte gelten für
+Ventile mit Federrückstellung und für magnetbetätigte Ventile. Das bistabile Ventil hat
+keine Feder: Sein Steuerkolben muss nur die Haftreibung überwinden, darum schaltet es im
+Modell schneller, bei 6 bar in knapp 10 ms. Die Anzeige auf der Seite rundet auf ganze
+Millisekunden. `figur/tests/ventil.test.mjs` und `Wegeventil-5-2/tests/seite.test.mjs`
+halten diese Tabelle gegen das Modell.
+
+Die Kräfte sind **theoretische** Werte; die Reibung der Dichtungen zieht in der Praxis
+noch einmal 3 bis 10 % ab.
 
 ## Neu erzeugen
 
@@ -113,8 +129,10 @@ Einzelmaß im Katalog steht:
 **Zwei Leitwerte sind auf die Datenblatt-Schaltzeiten abgestimmt**, nicht gemessen oder
 dem Katalog entnommen: `leitwertSteuer` (8·10⁴ mm³/s je bar) für das Füllen der
 Steuerkammer und `leitwertEntlueft` (6·10⁵ mm³/s je bar) für das Entlüften der
-Steuerkammer über die Abluft des Vorsteuerventils. Sie sind so gewählt, dass
-Umschalten und Rückstellung bei 6 bar im Bereich 12 bis 52 ms liegen. Die Zahlen auf
+Steuerkammer über die Abluft des Signalventils. Sie sind so gewählt, dass
+Umschalten und Rückstellung des monostabilen Ventils bei 6 bar im Bereich 12 bis 52 ms
+liegen. Für das bistabile Ventil ist nichts abgestimmt: Es rechnet mit denselben
+Leitwerten und ist ohne Feder schneller. Die Zahlen auf
 der Seite folgen also einer Annahme, die sich an Datenblättern orientiert, nicht an
 einer Messung am Ventil.
 
@@ -127,8 +145,9 @@ zu grob.
 
 - Das Ventil ist in der Ebene des Schiebers **aufgeschnitten**; die vordere Hälfte
   fehlt. Die Anschlüsse 1 bis 5 sitzen an der Grundplatte.
-- Die **Vorsteuerung** (das kleine Magnetventil, das die Steuerluft schaltet) ist
-  nicht gezeichnet; die Signale 14 und 12 sind Knöpfe.
+- Das Ventil ist **pneumatisch betätigt**. Die Steuerluft kommt vom **Signalventil**
+  (z. B. einem 3/2-Wegeventil), das nicht gezeichnet ist; die Signale 14 und 12 sind
+  Knöpfe.
 - Die **Dichtringe** am Schieber sind als Ringe angedeutet, nicht als Dichtungsprofile.
 - Das **Schaltzeichen** ist eine Vereinfachung nach ISO 1219-1 und zeigt, welches Feld
   gerade wirkt.

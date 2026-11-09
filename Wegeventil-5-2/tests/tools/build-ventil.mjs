@@ -1171,6 +1171,13 @@ const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
 
 // --- The page --------------------------------------------------------------------------------------------
 const M_ANZEIGE = ventilAnzeige(neuesVentil(M), M, 6);
+/** s of model time a pulse lasts (bistable); the prose times its switch with the same pulse. */
+const IMPULS = 0.15;
+/** Button title and card hint per type: held on the monostable valve, one press on the bistable. */
+const BEDIENTEXT = {
+  mono: { titel14: "Gedrückt halten: Steuerluft an 14", hinweis: "Signal 14 halten, Zeitlupe, zerlegen" },
+  bi: { titel14: "Kurz drücken: ein Impuls Steuerluft an 14", hinweis: "Signal 14 oder 12 kurz drücken, Zeitlupe, zerlegen" },
+};
 const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
 const ANZEIGE = `p2 ${komma(M_ANZEIGE.p2)} bar · p4 ${komma(M_ANZEIGE.p4)} bar · Schaltzeit ${M_ANZEIGE.schaltzeitMs ?? "–"} ms`;
 
@@ -1192,7 +1199,8 @@ const BAHNEN = ${JSON.stringify(BAHNEN)};
 const HUB = ${HUB};
 const KAMMER = ${JSON.stringify(KAMMER)};
 const AUTO_TAKT = 1.6;    // s of model time between two automatic signals
-const IMPULS = 0.15;      // s of model time a pulse lasts (bistable)
+const IMPULS = ${IMPULS};      // s of model time a pulse lasts (bistable)
+const BEDIENTEXT = ${JSON.stringify(BEDIENTEXT)};
 
 const stage = document.querySelector(".iso-stage");
 const svg = stage.querySelector("svg");
@@ -1259,6 +1267,13 @@ function zeichneHub() {
   steuerkammer["12"].setAttribute("d", kammerD(KAMMER["12"][0] + s, KAMMER["12"][1]));
 }
 
+// The pilot lines are thin, so the same flow runs through them faster. The
+// factor is the working path's conductance over the pilot filling path's
+// (3,2e5 / 8e4 = 4): a filling pilot line shows its particles at the speed a
+// working line would at the same pressure difference. Drawing only; the model
+// does not read it.
+const STEUER_TEMPO = MASSE.leitwertZu / MASSE.leitwertSteuer;
+
 // Strong blue above 0,5 bar, pale blue while a room is being vented, else empty.
 function zeichneLuft(dt) {
   const F = luftFarben();
@@ -1298,7 +1313,7 @@ function zeichneLuft(dt) {
     const q = leit * ((an ? quelle : AUSSEN) - p);
     const staerke = n === "12" && v.bauart === "monostabil" ? 0
       : an ? 1 : Math.max(0, Math.min(1, (p - AUSSEN) / 0.3));
-    stromSchritt(stroeme["st" + n], dt, tempo(q * 4), staerke, an ? F.druck : F.abluft);
+    stromSchritt(stroeme["st" + n], dt, tempo(q * STEUER_TEMPO), staerke, an ? F.druck : F.abluft);
   }
   for (const name in stroeme) {
     const s = stroeme[name];
@@ -1316,7 +1331,9 @@ function zeichneAnzeige() {
   let a;
   if (v.schaltzeit === null) {
     if (rechenZeit.druck !== druck || rechenZeit.bauart !== v.bauart) {
-      rechenZeit = { druck, bauart: v.bauart, wert: ventilSchaltzeit(MASSE, druck, { bauart: v.bauart }) };
+      // Bistable with the page's own pulse, as a press of the button gives it.
+      const wie = v.bauart === "bistabil" ? { bauart: v.bauart, impuls: IMPULS } : { bauart: v.bauart };
+      rechenZeit = { druck, bauart: v.bauart, wert: ventilSchaltzeit(MASSE, druck, wie) };
     }
     a = ventilAnzeige(Object.assign({}, v, { schaltzeit: rechenZeit.wert }), MASSE, druck);
   } else a = ventilAnzeige(v, MASSE, druck);
@@ -1428,6 +1445,10 @@ function zeigeBauart() {
   }
   knopf12.disabled = !bi;
   knopf12.title = bi ? "Signal an 12: zurück in die Stellung 12" : "Feder stellt zurück";
+  // Signal 14 is held on the monostable valve and pressed once on the bistable one.
+  knopf14.title = bi ? BEDIENTEXT.bi.titel14 : BEDIENTEXT.mono.titel14;
+  const hinweis = document.querySelector('[data-corner="hint"]');
+  if (hinweis) hinweis.textContent = bi ? BEDIENTEXT.bi.hinweis : BEDIENTEXT.mono.hinweis;
   zeichneSymbol();
 }
 function wechsleBauart(bauart) {
@@ -1558,7 +1579,7 @@ const INFO =
   + "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
 
 const LEISTE =
-  knopf("btn-14", "Signal 14", { titel: "Gedrückt halten: Steuerluft an 14" })
+  knopf("btn-14", "Signal 14", { titel: BEDIENTEXT.mono.titel14 })
   + knopf("btn-12", "Signal 12", { titel: "Feder stellt zurück" }).replace('id="btn-12"', 'id="btn-12" disabled')
   + knopf("btn-bauart", "Bistabil", { titel: "Umschalten zwischen Federrückstellung (monostabil) und Impulsventil (bistabil)" })
   + knopf("btn-auto", "Automatik", { gedrueckt: true })
@@ -1577,6 +1598,16 @@ const LEISTE =
 const ms = (zeit) => Math.round(zeit * 1000);
 const A_ST = (Math.PI * M.steuerkolben ** 2) / 4;
 const LOS = (M.federVor + M.haftreibung) / (0.1 * A_ST);
+const LOS_BI = M.haftreibung / (0.1 * A_ST);
+// The switching times the prose names, per type, from the model at build time.
+const T = {
+  mono14: ventilSchaltzeit(M, 6),
+  mono12: ventilSchaltzeit(M, 6, { richtung: "12" }),
+  mono14bei2: ventilSchaltzeit(M, 2),
+  bi14: ventilSchaltzeit(M, 6, { bauart: "bistabil", impuls: IMPULS }),
+  bi12: ventilSchaltzeit(M, 6, { bauart: "bistabil", richtung: "12", impuls: IMPULS }),
+};
+if (ms(T.bi14) !== ms(T.bi12)) throw new Error("bistabil: 14 und 12 schalten verschieden schnell – Text anpassen");
 const LESETEXT = `<div class="lesetext">
 <h2>Was man sieht</h2>
 <p>Das Ventil ist in der Ebene des Schiebers aufgeschnitten; die vordere Hälfte fehlt. In der Mitte liegt die Bohrung
@@ -1625,19 +1656,25 @@ was sie bewirkt.</p>
 hat. Sie hängt fast nur an der Steuerkammer. Die Steuerluft kommt durch eine enge Leitung und muss die Kammer erst
 füllen. Erst wenn der Druck auf dem Steuerkolben genug Kraft aufbringt, um Feder und Haftreibung zu überwinden, setzt
 sich der Schieber in Bewegung. Der Schieber selbst wiegt nur ${Math.round(M.masseSchieber * 1000)} g und wäre ohne das
-Füllen der Kammer fast sofort drüben.</p>
+Füllen der Kammer fast sofort drüben. Darum schalten die beiden Bauarten verschieden schnell.</p>
 <p class="formel">
 A<sub>Steuerkolben</sub> = π/4 · ${M.steuerkolben}² = <strong>${komma(A_ST)} mm²</strong><br>
 bei 6 bar: F = 0,6 N/mm² · ${komma(A_ST)} mm² = <strong>${Math.round(0.6 * A_ST)} N</strong><br>
 Feder ${M.federVor} N + Haftreibung ${M.haftreibung} N = ${M.federVor + M.haftreibung} N → der Schieber löst sich ab
-<strong>${komma(LOS, 2)} bar</strong> in der Steuerkammer
+<strong>${komma(LOS, 2)} bar</strong> in der Steuerkammer (monostabil)<br>
+ohne Feder nur Haftreibung ${M.haftreibung} N → der Schieber löst sich schon ab <strong>${komma(LOS_BI, 2)} bar</strong> (bistabil)
 </p>
-<p>Bei 6 bar braucht dieses Ventil ${ms(ventilSchaltzeit(M, 6))} ms, bei 2 bar ${ms(ventilSchaltzeit(M, 2))} ms: Mit
-weniger Druck füllt sich die Kammer langsamer, und der Kolben drückt schwächer. Datenblätter nennen für Ventile dieser
-Größe 12 bis 52 ms. Mit der Zeitlupe (bis 1/50) sieht man, wie sich die Steuerkammer erst füllt und der Schieber dann
-losläuft.</p>
+<p>Das <strong>monostabile</strong> Ventil braucht bei 6 bar ${ms(T.mono14)} ms bis in die Stellung 14 und
+${ms(T.mono12)} ms, bis die Feder es zurückgestellt hat. Bei 2 bar sind es ${ms(T.mono14bei2)} ms bis in die Stellung 14:
+Mit weniger Druck füllt sich die Kammer langsamer, und der Kolben drückt schwächer gegen die Feder.</p>
+<p>Das <strong>bistabile</strong> Ventil schaltet bei 6 bar mit einem Impuls von ${ms(IMPULS)} ms in
+${ms(T.bi14)} ms, in beide Richtungen gleich schnell. Ihm fehlt die Feder: Der Steuerkolben muss nur die Haftreibung
+überwinden, und dafür genügt schon ein wenig Druck in der Kammer.</p>
+<p>Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms. Diese Werte gelten für Ventile mit Federrückstellung und
+für magnetbetätigte Ventile; ohne Feder schaltet das Impulsventil schneller. Mit der Zeitlupe (1× bis 1/50) sieht man,
+wie sich die Steuerkammer erst füllt und der Schieber dann losläuft.</p>
 <p class="hinweis">Jede Zahl auf dieser Seite wird aus demselben Modell gerechnet, das auch den Schieber bewegt. Kräfte
-sind theoretische Werte. Baulänge, Bohrung, Hub, Steuerkolben, Federkraft, Überdeckung und das Volumen hinter 2 und 4
+sind theoretische Werte; die Reibung der Dichtungen zieht in der Praxis noch einmal 3 bis 10 Prozent ab. Baulänge, Bohrung, Hub, Steuerkolben, Federkraft, Überdeckung und das Volumen hinter 2 und 4
 sind Annahmen; sie stehen in der Anleitung zur Figur.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
@@ -1660,7 +1697,7 @@ writeFileSync(ZIEL, seite({
   titel: "5/2-Wegeventil – Pneumatik",
   fig: "Bild 1",
   kartenTitel: "5/2-Wegeventil, Längsschieber",
-  hinweis: "Signal 14 halten, Zeitlupe, zerlegen",
+  hinweis: BEDIENTEXT.mono.hinweis,
   anzeige: ANZEIGE,
   schluessel: [
     { mark: "blue", label: "Kräftiges Blau: Druckluft unter Druck" },
