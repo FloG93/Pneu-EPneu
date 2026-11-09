@@ -97,9 +97,14 @@ export const RUBRIKEN = [
       {
         id: "ventil-3-2",
         name: "3/2-Wegeventil",
-        satz: "Drei Anschlüsse, zwei Stellungen. Das Ventil für den einfachwirkenden Zylinder und für jeden Taster.",
-        zustand: "geplant",
+        satz:
+          "Drei Anschlüsse, zwei Stellungen: das Ventil für den einfachwirkenden Zylinder und für jeden Taster, im Schnitt an der Ebene des Schiebers. "
+          + "Kräftiges Blau steht unter Druck, blasses ist Abluft, und das Schaltzeichen schaltet mit. "
+          + "In Ruhe gesperrt oder in Ruhe offen, mit Zeitlupe, Handbetrieb und Zerlegen.",
+        zustand: "fertig",
+        ordner: "Wegeventil-3-2",
         sinnbild: "3/2-Wegeventil, monostabil",
+        marken: ["ISO 5599-1", "Größe 1", "G1/4", "NC und NO"],
       },
       {
         id: "ventil-4-2",

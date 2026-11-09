@@ -1,0 +1,13 @@
+<svg viewBox="0 0 240 135" role="img" aria-label="Längsschnitt durch ein 3/2-Wegeventil mit Ruhestellung gesperrt in der betätigten Stellung mit drei Anschlüssen 1, 2, 3: Druckluft strömt von 1 nach 2 in kräftigem Blau über den Hals des Schiebers, Anschluss 3 ist leer und durch einen Bund gesperrt; rechts das Schaltzeichen mit zwei Feldern, im linken Feld verbindet ein Pfeil 1 mit 2">
+  <path class="v-wand" d="M8 40H166V108H8Z"/>
+  <path class="v-stark" d="M38 108V78H35V54H95V78H92V108H80V78H50V108Z"/>
+  <path class="v-leitung" d="M12 54H162V78H12ZM122 108V78M134 108V78M34 62H100V70H34Z"/>
+  <path class="v-teil" d="M120 62H140V70H120Z"/>
+  <path class="v-teil" d="M12 54H34V78H12ZM100 54H120V78H100ZM140 54H162V78H140Z"/>
+  <path class="v-hilfslinie" d="M8 114H166"/>
+  <path class="v-leitung" d="M189.5 40V46M181.75 84V90M197.25 84V90"/>
+  <path class="v-wand" d="M174 46H205V84H174ZM205 46H236V84H205Z"/>
+  <path class="v-stark" d="M181 82H182.5L190.3 53H188.7ZM187 54H192L189.5 47Z"/>
+  <path class="v-leitung" d="M197.25 82V73M193.75 73H200.75M220.5 52L228 77M212.75 82V73M209.25 73H216.25"/>
+  <path class="v-teil" d="M225.8 77H230.8L228.3 83Z"/>
+</svg>

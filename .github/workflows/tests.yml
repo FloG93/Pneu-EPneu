@@ -19,3 +19,5 @@ jobs:
         run: npm run pruef:zylinder
       - name: Geometrie des Ventils prüfen
         run: npm run pruef:ventil
+      - name: Geometrie des 3/2-Ventils prüfen
+        run: npm run pruef:ventil32

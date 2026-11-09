@@ -28,6 +28,11 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 | `figur/schaltzeichen.mjs` | Schaltzeichen nach ISO 1219-1 aus einer Beschreibung der Wege (`VENTIL_5_2`), dazu die Laufzeit, die das Symbol mit dem Schieber gleiten lässt und offene Wege färbt |
 | `figur/explode.mjs` | Wege, Federn, Staffelung, Sortierung nach echter Tiefe je Bild, Nummern am nächsten eigenen Teil (`anker`); `ABLAUF`: Bildschleife, Knopf „Zerlegen und zusammenbauen", Escape |
 | `figur/legende.mjs` | Legendenliste, Nummern mit Führungslinie, Erklärzeile, Auswahl; `LAUFZEIT`: Zeigen/Merken, Erzählung beim Zusammenbau |
+| `figur/normteile.mjs` | Zeichenhelfer für Normteile (Schnittfläche, Schraubenkopf, Gewinde, Steckverschraubung, Schalldämpfer, Druckfeder, Schlauchstummel) und die Blocklängenprüfung der Feder; Schnittton `SCHNITT_CSS` |
+| `figur/gehaeuse.mjs` | Das aufgeschnittene Gehäuse eines Schieberventils: Innenseite von Bohrung, Ringnut und Kanal, Nutflanken, Bohrungskante, aufgenommene Körper (`box`, `boxenOhne`), Schnittende des Schlauchs; Bohrung und Nuten kommen als Parameter |
+| `figur/ventilraeume.mjs` | Die Lufträume im Schnitt eines Schieberventils (Nut, Kanal, Hals, Platte, Dichtung, Steuerkammer) und die Wege der Teilchen; das Bauteil sagt, wo seine Hälse liegen |
+| `figur/ventilseite.mjs` | Was jede Ventilseite neben der Zeichnung gemeinsam hat: die drei Regler, das Gleiten von Schieber und Feder, die Anzeige, das Schaltzeichen, die Stilregeln |
+| `figur/bedienung.mjs` | Die Signalknöpfe als Laufzeit: Halten, Impuls und Automatik, alles auf Modellzeit; das Ventil sagt nur, was ein Signal bewirkt |
 | `figur/luft.mjs` | Luftwege als 3D-Pfade, Partikel darauf, Kammerfüllung, die vier Blautöne |
 | `figur/seite.mjs` | Seitengerüst: Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript, Begleitbild (`beiFigur`), Modelldateien als Skripttext (`modulQuelle`) |
 
@@ -70,6 +75,7 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | Verhalten im Browser | `node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/ <Ordner>/tests/tools/pruefe-<name>.mjs` | `all checks passed` |
 | … Zylinder | `npm run pruef:browser` | `all checks passed (50)` |
 | … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
+| … 3/2-Wegeventil | `npm run pruef:browser:ventil32` (dazu `npm run pruef:ventil32` für Audit und Zerlegen) | `all checks passed (132)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |
 
 **Messen statt ansehen.** Geprüft wird nie „Klasse gesetzt", sondern was der Browser danach zeichnet. Ein Bild, das „fast richtig" aussieht, ist der Normalfall.

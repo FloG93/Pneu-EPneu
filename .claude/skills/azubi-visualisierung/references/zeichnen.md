@@ -54,6 +54,18 @@ Das Kit dreht nur volle Körper und kennt keine Teilkreise; `prismOf` ist nur ko
 - Clip der inneren Gruppen beim Zerlegen abschalten (`explode.mjs` macht das), Hub vorher auf 0.
 - **Die Nummer hängt am nächsten eigenen Teil**, nicht am Schwerpunkt der Baugruppe: Der liegt im Leeren, sobald die Teile auseinanderliegen (zwei Schrauben an beiden Enden, zwei Schalldämpfer). `EX.vorbereiten` wählt das Teil, das dem Schwerpunkt am nächsten liegt. Mit `anker: (it) => …` schließt man Teile aus, die in einem Zustand der Figur verborgen sind – beim 5/2-Ventil alles mit `data-variante`, sonst zeigt die Nummer 11 im monostabilen Ventil auf die unsichtbare Steuerleitung 12. Darf kein Teil halten, gilt wieder jedes. Geprüft wird das im gemeinsamen Browsertest (siehe `pruefen.md`).
 
+## Gemeinsame Bausteine in `figur/`
+
+Was mehrere Seiten gleich brauchen, steht bauteilfrei in `figur/` und wird nicht kopiert (Kopien liegen in `vorlage/figur/`):
+
+- `normteile.mjs`: Zeichenhelfer für Normteile (Schnittfläche, Schraubenkopf, Gewinde, Steckverschraubung, Schalldämpfer, Druckfeder mit Blocklängenprüfung, Schlauchstummel) und der Schnittton.
+- `gehaeuse.mjs`: das aufgeschnittene Gehäuse eines Schieberventils (Innenseite von Bohrung, Nut und Kanal, aufgenommene Körper); Bohrung und Nuten kommen als Parameter.
+- `ventilraeume.mjs`: Lufträume im Ventilschnitt und die Wege der Teilchen; das Bauteil sagt, wo seine Hälse liegen.
+- `ventilseite.mjs`: Regler, Gleiten von Schieber und Feder, Anzeige und Schaltzeichen einer Ventilseite.
+- `bedienung.mjs`: Signalknöpfe als Laufzeit (Halten, Impuls, Automatik auf Modellzeit).
+
+Zeigt eine Figur zwei Bauarten in derselben Zeichnung (NC und NO), trägt jede Variante ihre Teile in `data-variante`-Gruppen; die Nummer der Legende hängt an einem Teil, das beide Varianten am selben Ort zeigen.
+
 ## Die gemeinsame Laufzeit
 
 Die Seite ist ein einziges klassisches Skript; die Teile werden als Quelltext hintereinandergehängt. Darum dürfen ihre Namen auf oberster Ebene nicht doppelt vorkommen, und in `String.raw`-Laufzeiten steht kein Backtick.

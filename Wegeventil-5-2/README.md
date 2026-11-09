@@ -146,7 +146,7 @@ zu grob.
 - Das Ventil ist in der Ebene des Schiebers **aufgeschnitten**; die vordere Hälfte
   fehlt. Die Anschlüsse 1 bis 5 sitzen an der Grundplatte.
 - Das Ventil ist **pneumatisch betätigt**. Die Steuerluft kommt vom **Signalventil**
-  (z. B. einem 3/2-Wegeventil), das nicht gezeichnet ist; die Signale 14 und 12 sind
+  (z. B. einem 3/2-Wegeventil, siehe [die 3/2-Seite](../Wegeventil-3-2/)), das hier nicht gezeichnet ist; die Signale 14 und 12 sind
   Knöpfe.
 - Die **Dichtringe** am Schieber sind als Ringe angedeutet, nicht als Dichtungsprofile.
 - Das **Schaltzeichen** ist eine Vereinfachung nach ISO 1219-1 und zeigt, welches Feld
