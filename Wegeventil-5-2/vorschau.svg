@@ -1,12 +1,15 @@
-<svg viewBox="0 0 240 135" role="img" aria-label="Längsschnitt durch ein 5/2-Wegeventil in Stellung 14: Druckluft von 1 nach 4 in kräftigem Blau, Abluft von 2 nach 3 in blassem Blau, rechts das Schaltzeichen mit zwei Feldern">
-  <path class="v-wand" d="M10 36H160V92H10Z"/>
-  <path class="v-stark" d="M28 48H62V56H28ZM84 48H98V56H84ZM27 56H35V104H27ZM65 72H73V104H65Z"/>
-  <path class="v-blass" d="M104 72H118V80H104ZM132 48H146V56H132ZM109 80H117V104H109ZM139 56H147V104H139Z"/>
-  <path class="v-teil" d="M16 58H154V70H16Z"/>
-  <path class="v-teil" d="M42 54H54V74H42ZM84 54H96V74H84ZM126 54H138V74H126Z"/>
-  <path class="v-hilfslinie" d="M10 28H160M10 104H160"/>
-  <path class="v-leitung" d="M27 112H147"/>
-  <path class="v-wand" d="M176 46H206V82H176ZM206 46H236V82H206Z"/>
-  <path class="v-stark" d="M181 54H201V59H181ZM181 69H201V74H181Z"/>
-  <path class="v-blass" d="M211 54H231V59H211ZM211 69H231V74H211Z"/>
+<svg viewBox="0 0 240 135" role="img" aria-label="Längsschnitt durch ein 5/2-Wegeventil in Stellung 14 mit fünf Anschlüssen 5, 4, 1, 2, 3: Druckluft strömt von 1 nach 4 in kräftigem Blau, Abluft von 2 nach 3 in blassem Blau, Anschluss 5 ist gesperrt; rechts das Schaltzeichen mit zwei Feldern, das linke Feld wirkt">
+  <path class="v-wand" d="M8 40H170V108H8Z"/>
+  <path class="v-stark" d="M51 108V78H46V54H93V78H92V108H80V78H63V108Z"/>
+  <path class="v-blass" d="M109 108V78H108V54H151V78H150V108H138V78H121V108Z"/>
+  <path class="v-leitung" d="M12 54H166V78H12ZM22 108V78M34 108V78"/>
+  <path class="v-teil" d="M46 62H108V70H46ZM108 62H151V70H108Z"/>
+  <path class="v-teil" d="M14 54H46V78H14ZM93 54H108V78H93ZM151 54H164V78H151Z"/>
+  <path class="v-hilfslinie" d="M8 114H170"/>
+  <path class="v-leitung" d="M183 40V46M193 40V46M179 84V90M188 84V90M197 84V90"/>
+  <path class="v-wand" d="M174 46H205V84H174ZM205 46H236V84H205Z"/>
+  <path class="v-stark" d="M187.2 82H188.8L183.8 53H182.2ZM180.5 54H185.5L183 47Z"/>
+  <path class="v-blass" d="M192.2 48H193.8L197.8 77H196.2ZM194.5 76H199.5L197 83Z"/>
+  <path class="v-leitung" d="M179 82V73M175.5 73H182.5M219 82L224 52M214 48L210 78M227 82V73M223.5 73H230.5"/>
+  <path class="v-teil" d="M221.5 53H226.5L224 46ZM207.5 77H212.5L210 83Z"/>
 </svg>

@@ -90,6 +90,7 @@ python3 -m http.server 8080   # oder: npm start
 
 ```bash
 npm test                      # Rechenmodell, Kontrast, Bauteile
+npm run test:ventil           # nur die Tests des Wegeventils
 ```
 
 ```bash
@@ -103,4 +104,5 @@ npm run pruef:zylinder        # prüft die Geometrie in Ruhe und zerlegt
 ```bash
 npm run bau:ventil            # erzeugt Wegeventil-5-2/index.html neu
 npm run pruef:ventil          # prüft dort Geometrie in Ruhe und zerlegt
+npm run pruef:browser:ventil  # Browsertest, Server auf Port 8311 nötig
 ```

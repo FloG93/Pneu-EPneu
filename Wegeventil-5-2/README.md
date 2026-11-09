@@ -54,7 +54,7 @@ Gemessene Schaltzeiten des Modells (Schieber bei 98 % seines Weges):
 
 | Vorgang | Druck | Zeit |
 | --- | --- | --- |
-| Umschalten auf 14 | 6 bar | 22 ms |
+| Umschalten auf 14 | 6 bar | 22,0 ms |
 | Rückstellung durch die Feder | 6 bar | 21,8 ms |
 | Rückstellung durch die Feder | 2 bar | 12,6 ms |
 | Rückstellung durch die Feder | 8 bar | 24,2 ms |
