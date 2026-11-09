@@ -17,9 +17,16 @@ export const TAKT = { auseinander: 300, zusammen: 950 };
  *  - `KEYS`   the solved resting order, one per drawn group
  *  - `LIFT`   how much depth an assembly gains on its way out
  *  - `VIEW0`  the viewBox at rest, `VIEW1` the one with everything out
- *  - `MITTE`  the centroid of each assembly, where its number hangs
+ *  - `MITTE`  where each assembly's number hangs: on the part nearest to the
+ *             assembly's centroid. The centroid alone lies in empty space as
+ *             soon as an assembly is made of parts that sit apart (two screws
+ *             at both ends, two silencers), and a leader line into nothing
+ *             explains nothing.
+ *
+ * `anker(item)` may rule items out as a number's hold (default: all may hold
+ * it), for instance parts that are hidden in some state of the figure.
  */
-export function vorbereiten(R, P, MOVE, W, H) {
+export function vorbereiten(R, P, MOVE, W, H, { anker = () => true } = {}) {
   const KEYS = R.items.map((it) => it.key);
 
   const ursprung = k.depthOf([0, 0, 0], P);
@@ -27,16 +34,23 @@ export function vorbereiten(R, P, MOVE, W, H) {
     Object.entries(MOVE).map(([id, m]) => [id, Math.round((k.depthOf(m, P) - ursprung) * 100) / 100]),
   );
 
-  const summe = {};
+  const kandidaten = {};
   for (const it of R.items) {
     if (!it.pos) continue;
-    const c = (summe[it.label] ??= [0, 0, 0, 0]);
-    for (let i = 0; i < 3; i += 1) c[i] += it.pos[i];
-    c[3] += 1;
+    const k2 = (kandidaten[it.label] ??= { alle: [], halten: [] });
+    k2.alle.push(it.pos);
+    if (anker(it)) k2.halten.push(it.pos);
   }
-  const MITTE = Object.fromEntries(
-    Object.entries(summe).map(([id, c]) => [id, [c[0] / c[3], c[1] / c[3], c[2] / c[3]]]),
-  );
+  const MITTE = Object.fromEntries(Object.entries(kandidaten).map(([id, k2]) => {
+    const orte = k2.halten.length ? k2.halten : k2.alle;
+    const c = [0, 1, 2].map((i) => orte.reduce((s, p) => s + p[i], 0) / orte.length);
+    let best = orte[0], bestD = Infinity;
+    for (const p of orte) {
+      const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return [id, best.slice()];
+  }));
 
   // The field of view with everything out: the hull of all parts at the end of
   // their travel, keeping the margin the resting drawing has. A rough guess let

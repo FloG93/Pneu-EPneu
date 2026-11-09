@@ -312,7 +312,7 @@ const MOVE = {
   steuerleitung: [0, 0, 70],      // pilot lines straight up out of their cap threads
   leitung: [0, 60, 0],            // hoses and fittings out of the ports, towards the viewer
   daempfer: [0, 80, 0],           // the same way, further: same centroid as the fittings, so their numbers would sit on each other
-  schrauben: [0, 0, 82],          // top screws up and clear of the lifted housing, high enough that their number clears the housing's
+  schrauben: [0, 0, 82],          // the two top screws up and clear of the lifted housing, high enough that their number clears the housing's
   rueckstell: [146, 0, 0],        // return side beyond the end of the pulled spool
   kappe14: [-45, 0, 0],           // cap 14 with its piston, off to the left
   ringe: [138, 0, 15],            // leaves with the spool, lifted so the rings stay distinct
@@ -787,12 +787,14 @@ function schrauben() {
     put([x, -12, GEH.z1 + 2], schraubenkopf(F, GEH.z1, GEH.z1 + 4.5, 4.2, "schrauben.oben"),
       [rec(A.disc(F, GEH.z1, GEH.z1 + 4.5, 4.2, { name: "schrauben.oben" }))], { name: "schrauben.oben" });
   }
-  for (const [x, richtung] of [[K14.x0, -1], [K12.x1, 1]]) {
+  // The cap screws fasten the end caps: whoever takes a cap off takes its
+  // screws with it, so they belong to the cap's assembly, not to this one.
+  for (const [x, richtung, kappe] of [[K14.x0, -1, "kappe14"], [K12.x1, 1, "rueckstell"]]) {
     for (const z of [KAPPE.z0 + 6, KAPPE.z1 - 6]) {
       const F = G.frameOf([0, -12, z], [richtung, 0, 0], [0, 1, 0], [0, 0, 1]);
       const s0 = richtung * x;
-      put([x + richtung * 2, -12, z], schraubenkopf(F, s0, s0 + 4, 3.6, "schrauben.kappe"),
-        [rec(A.disc(F, s0, s0 + 4, 3.6, { name: "schrauben.kappe" }))], { name: "schrauben.kappe" });
+      put([x + richtung * 2, -12, z], schraubenkopf(F, s0, s0 + 4, 3.6, `${kappe}.schraube`),
+        [rec(A.disc(F, s0, s0 + 4, 3.6, { name: `${kappe}.schraube` }))], { name: `${kappe}.schraube`, gruppe: kappe });
     }
   }
 }
@@ -1129,7 +1131,11 @@ for (const it of R.items) {
 A.settle(R, P);
 R.items.sort((a, b) => a.key - b.key);
 
-const { KEYS, LIFT, VIEW0, VIEW1, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
+// A number hangs on a part that is drawn in both variants: the parts of one
+// variant only are hidden in the other and would leave the leader pointing at nothing.
+const { KEYS, LIFT, VIEW0, VIEW1, MITTE } = EX.vorbereiten(R, P, MOVE, W, H, {
+  anker: (it) => !/data-variante=/.test(it.svg ?? ""),
+});
 if (STAGGER.length !== LEGENDE_IDS.length || !LEGENDE_IDS.every((id) => STAGGER.includes(id))) {
   throw new Error("STAGGER und LEGENDE nennen nicht dieselben Baugruppen");
 }
