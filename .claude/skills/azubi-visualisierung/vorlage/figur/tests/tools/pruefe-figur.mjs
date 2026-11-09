@@ -10,8 +10,10 @@
 // The checks here hold for any figure. What only one component can promise
 // (which chamber fills, which number the readout shows) lives in an optional
 // second module: its default export is called once per colour mode as
-// `await extra({ seite, V, modus })`, after the legend checks and before the
-// figure is taken apart.
+// `await extra({ seite, V, modus, fuehrungen })`, after the legend checks and
+// before the figure is taken apart. `fuehrungen(seite)` is the leader-line
+// measurement below, for a module that takes the figure apart in a state of
+// its own (another variant) and wants the same rule checked there.
 //
 // Playwright lives outside the repo (repo rule: no npm packages here).
 // PLAYWRIGHT and CHROME_PATH override where it is looked for.
@@ -57,6 +59,51 @@ function farbe(text) {
   const zahlen = text.match(/[\d.]+/g);
   if (!zahlen) return null;
   return zahlen.slice(0, 3).map(Number);
+}
+
+/**
+ * Every visible number, taken apart, must point at a part of its own assembly
+ * that is actually drawn. A number hung on the centroid of parts that lie
+ * apart points into empty space (pitfall 2); explode.mjs hangs it on the
+ * nearest own part, and `anker` keeps it off parts a variant hides. Measured
+ * on screen: each leader line is continued from its near end back to the point
+ * it hangs on, and that stretch must meet (within a few px) the box of a drawn
+ * part of the assembly (hidden parts have no box). Waits until the figure is
+ * fully apart and its springs have settled.
+ */
+async function fuehrungen(seite) {
+  await seite.waitForFunction(() => window.__figur.offen() > 0.99, null, { timeout: 15000 }).catch(() => {});
+  await seite.waitForTimeout(2500);         // the last springs settle
+  return seite.evaluate(() => {
+    const piece = {};
+    for (const b of document.querySelectorAll(".pickbtn")) piece[b.querySelector(".picknr").textContent.trim()] = b.dataset.pick;
+    const daneben = [];
+    let gezaehlt = 0;
+    for (const g of document.querySelectorAll(".iso-nums > g")) {
+      if (Number(g.getAttribute("opacity")) <= 0.5) continue;
+      const nr = g.querySelector("text").textContent.trim();
+      const line = g.querySelector("line");
+      const ctm = line.getScreenCTM();
+      const auf = (x, y) => { const pt = line.ownerSVGElement.createSVGPoint(); pt.x = x; pt.y = y; return pt.matrixTransform(ctm); };
+      const [x1, y1, x2, y2] = ["x1", "y1", "x2", "y2"].map((a) => Number(line.getAttribute(a)));
+      // The leader stops 16 px short of its anchor (and runs 30 px): continue
+      // it back to where it points and look along that stretch.
+      const zurueck = 16 / 30;
+      const proben = Array.from({ length: 9 }, (_, i) => auf(x1 - (x2 - x1) * zurueck * (i / 8), y1 - (y2 - y1) * zurueck * (i / 8)));
+      const toleranz = 4;
+      const teile = [...document.querySelectorAll(`[data-g][data-piece="${piece[nr]}"]`)]
+        .map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+      const drin = (q, r) => q.x >= r.left - toleranz && q.x <= r.right + toleranz && q.y >= r.top - toleranz && q.y <= r.bottom + toleranz;
+      const trifft = proben.some((q) => teile.some((r) => drin(q, r)));
+      const q = proben[0];
+      gezaehlt += 1;
+      if (!trifft) {
+        const abstand = Math.min(...teile.map((r) => Math.hypot(Math.max(r.left - q.x, 0, q.x - r.right), Math.max(r.top - q.y, 0, q.y - r.bottom))));
+        daneben.push(`${nr} ${Math.round(abstand)} px`);
+      }
+    }
+    return { gezaehlt, daneben };
+  });
 }
 
 async function laufe(modus) {
@@ -118,7 +165,7 @@ async function laufe(modus) {
   V("ein zweiter Klick hebt die Auswahl auf", (await seite.evaluate(() => document.querySelectorAll("[data-g].mark").length)) === 0);
 
   // --- what only this component can promise -----------------------------
-  if (extra) await extra({ seite, V, modus });
+  if (extra) await extra({ seite, V, modus, fuehrungen });
 
   // --- take apart and rebuild --------------------------------------------
   // Measured on the page, not in the viewport: a click scrolls its button into
@@ -147,6 +194,9 @@ async function laufe(modus) {
   { timeout: zahlen.knoepfe * 300 + 3000 }).catch(() => {});
   const nummernSichtbar = await seite.evaluate(sichtbar);
   V(`im zerlegten Zustand tragen die Baugruppen Nummern (${nummernSichtbar}/${zahlen.knoepfe})`, nummernSichtbar === zahlen.knoepfe);
+  const fl = await fuehrungen(seite);
+  V(`zerlegt zeigt jede Nummer auf ein Teil ihrer Baugruppe (${fl.gezaehlt})${fl.daneben.length ? " — daneben: " + fl.daneben.join(", ") : ""}`,
+    fl.gezaehlt === zahlen.knoepfe && fl.daneben.length === 0);
 
   // Theme and contrast may change mid-flight without anything springing back.
   await seite.click("#btn-theme");

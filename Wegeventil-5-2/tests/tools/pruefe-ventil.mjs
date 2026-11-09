@@ -6,7 +6,7 @@
 //
 // Everything is read from what the browser draws (fills, opacities, the
 // symbol's applied matrix, the readout text) or from the model that drives it.
-export default async function pruefeVentil({ seite, V, modus }) {
+export default async function pruefeVentil({ seite, V, modus, fuehrungen }) {
   const zweiBilder = () => seite.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
   // --- the legend stays under the pointer ---------------------------------
@@ -155,8 +155,35 @@ export default async function pruefeVentil({ seite, V, modus }) {
   V(`Maus verlässt den gehaltenen Knopf: die Feder stellt zurück (${losgelassen.toFixed(3)})`, losgelassen < 0.02);
   await seite.mouse.up();
 
+  // --- the type switch swaps what is drawn (spec §8) ----------------------
+  // Measured as drawn boxes, not as attributes: the spring or the second pilot
+  // piston on the return side, and the matching symbol beside the card.
+  const gezeigt = () => seite.evaluate(() => {
+    const flaeche = (sel) => [...document.querySelectorAll(sel)]
+      .map((el) => el.getBoundingClientRect()).reduce((s, r) => s + r.width * r.height, 0);
+    return {
+      feder: flaeche('.iso-stage [data-variante="feder"]'),
+      kolben12: flaeche('.iso-stage [data-variante="kolben12"]'),
+      symbolFeder: flaeche('.beifigur-symbol[data-variante="feder"] svg'),
+      symbolKolben12: flaeche('.beifigur-symbol[data-variante="kolben12"] svg'),
+      titel14: document.getElementById("btn-14").title,
+      hinweis: document.querySelector('[data-corner="hint"]').textContent,
+    };
+  });
+  const alsMono = await gezeigt();
+  V(`monostabil: Feder gezeichnet, Steuerkolben 12 nicht (${Math.round(alsMono.feder)} / ${Math.round(alsMono.kolben12)} px²)`,
+    alsMono.feder > 0 && alsMono.kolben12 === 0);
+  V("monostabil: das Schaltzeichen zeigt die Feder", alsMono.symbolFeder > 0 && alsMono.symbolKolben12 === 0);
+
   // --- bistable: one press, and it stays ----------------------------------
   await seite.click("#btn-bauart");
+  const alsBi = await gezeigt();
+  V(`bistabil: Steuerkolben 12 gezeichnet, Feder nicht (${Math.round(alsBi.kolben12)} / ${Math.round(alsBi.feder)} px²)`,
+    alsBi.kolben12 > 0 && alsBi.feder === 0);
+  V("bistabil: das Schaltzeichen zeigt die Steuerluft an 12", alsBi.symbolKolben12 > 0 && alsBi.symbolFeder === 0);
+  V(`bistabil: Knopf und Hinweis sagen „kurz drücken" (${alsBi.hinweis})`,
+    /kurz/i.test(alsBi.titel14) && /kurz/i.test(alsBi.hinweis) && !/halten/i.test(alsBi.titel14 + alsBi.hinweis)
+    && /halten/i.test(alsMono.titel14) && /halten/i.test(alsMono.hinweis));
   await seite.click("#btn-14");
   await seite.waitForTimeout(600);
   const impuls = await anteil();
@@ -164,6 +191,15 @@ export default async function pruefeVentil({ seite, V, modus }) {
   const spaeter = await anteil();
   V(`bistabil: ein Druck auf 14 schaltet (${impuls.toFixed(3)}) und es bleibt (${spaeter.toFixed(3)})`,
     impuls > 0.98 && spaeter > 0.98);
+  // The readout's measured time is the one the prose names for the bistable valve.
+  const bistabilTexte = await seite.evaluate(() => ({
+    anzeige: document.querySelector("[data-readout]").textContent,
+    text: document.querySelector(".lesetext").textContent.replace(/\s+/g, " "),
+  }));
+  const gemessen = (bistabilTexte.anzeige.match(/Schaltzeit (\d+) ms/) || [])[1];
+  const genannt = (bistabilTexte.text.match(/Impuls von \d+ ms in (\d+) ms/) || [])[1];
+  V(`bistabil: Anzeige und Text nennen dieselbe Schaltzeit (${gemessen} / ${genannt} ms)`,
+    gemessen !== undefined && gemessen === genannt);
 
   // --- changing the type mid-switch (Review Focus 3) ----------------------
   await seite.click("#btn-14");            // nothing: already there; then back home
@@ -197,53 +233,15 @@ export default async function pruefeVentil({ seite, V, modus }) {
     (await seite.getAttribute("#btn-auto", "aria-pressed")) === "false");
   V("beim Zerlegen ist kein Signal aktiv", !beimZerlegen.s14 && !beimZerlegen.s12);
 
-  // --- every number points at its own assembly, in both variants ----------
-  // A number hung on the centroid of parts that lie apart points into empty
-  // space (pitfall 2). Measured on screen: each visible leader line, from its
-  // near end back to the point it hangs on, must meet (within a few px) a part
-  // of its own assembly that is actually drawn (hidden variants have no box).
-  const fuehrungen = async () => {
-    await seite.waitForFunction(() => window.__figur.offen() > 0.99, null, { timeout: 15000 }).catch(() => {});
-    await seite.waitForTimeout(2500);         // the last springs settle
-    return seite.evaluate(() => {
-      const piece = {};
-      for (const b of document.querySelectorAll(".pickbtn")) piece[b.querySelector(".picknr").textContent.trim()] = b.dataset.pick;
-      const daneben = [];
-      let gezaehlt = 0;
-      for (const g of document.querySelectorAll(".iso-nums > g")) {
-        if (Number(g.getAttribute("opacity")) <= 0.5) continue;
-        const nr = g.querySelector("text").textContent.trim();
-        const line = g.querySelector("line");
-        const ctm = line.getScreenCTM();
-        const auf = (x, y) => { const pt = line.ownerSVGElement.createSVGPoint(); pt.x = x; pt.y = y; return pt.matrixTransform(ctm); };
-        const [x1, y1, x2, y2] = ["x1", "y1", "x2", "y2"].map((a) => Number(line.getAttribute(a)));
-        // The leader stops 16 px short of its anchor (and runs 30 px): continue
-        // it back to where it points and look along that stretch.
-        const zurueck = 16 / 30;
-        const proben = Array.from({ length: 9 }, (_, i) => auf(x1 - (x2 - x1) * zurueck * (i / 8), y1 - (y2 - y1) * zurueck * (i / 8)));
-        const toleranz = 4;
-        const teile = [...document.querySelectorAll(`[data-g][data-piece="${piece[nr]}"]`)]
-          .map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
-        const drin = (q, r) => q.x >= r.left - toleranz && q.x <= r.right + toleranz && q.y >= r.top - toleranz && q.y <= r.bottom + toleranz;
-        const trifft = proben.some((q) => teile.some((r) => drin(q, r)));
-        const q = proben[0];
-        gezaehlt += 1;
-        if (!trifft) {
-          const abstand = Math.min(...teile.map((r) => Math.hypot(Math.max(r.left - q.x, 0, q.x - r.right), Math.max(r.top - q.y, 0, q.y - r.bottom))));
-          daneben.push(`${nr} ${Math.round(abstand)} px`);
-        }
-      }
-      return { gezaehlt, daneben };
-    });
-  };
-  const mono = await fuehrungen();
-  V(`monostabil zerlegt: jede Nummer zeigt auf ein Teil ihrer Baugruppe (${mono.gezaehlt})${mono.daneben.length ? " — daneben: " + mono.daneben.join(", ") : ""}`,
-    mono.gezaehlt === 11 && mono.daneben.length === 0);
+  // --- every number points at its own assembly, in the bistable variant too --
+  // The shared check (pruefe-figur.mjs) measures the leader lines once the
+  // figure is apart in its starting variant, monostable. The bistable variant
+  // shows other parts (piston 12, pilot line 12), so it is taken apart here.
   await seite.keyboard.press("Escape");
   await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
   await seite.click("#btn-bauart");
   await seite.click("#btn-explode");
-  const bi = await fuehrungen();
+  const bi = await fuehrungen(seite);
   V(`bistabil zerlegt: jede Nummer zeigt auf ein Teil ihrer Baugruppe (${bi.gezaehlt})${bi.daneben.length ? " — daneben: " + bi.daneben.join(", ") : ""}`,
     bi.gezaehlt === 11 && bi.daneben.length === 0);
   // Back together and monostable for the checks that follow.
