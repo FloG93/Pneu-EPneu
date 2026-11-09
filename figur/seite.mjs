@@ -72,6 +72,11 @@ ${LEGENDE_CSS}
 .lesetext .hinweis { font-size: 13px; color: color-mix(in srgb, currentColor 72%, transparent) }
 .zurueck { display: inline-block; margin: 26px 0 0; font-size: 13px;
   color: color-mix(in srgb, currentColor 80%, transparent) }
+/* The corner marks span the whole card, so Chrome's scroll anchoring picks a
+   bottom corner as its anchor. When the line under the legend changes length
+   the card's bottom moves, the page scrolls by the same amount, and the legend
+   jumps under the pointer that just clicked it. A decoration is no anchor. */
+.iso-plate-corners { overflow-anchor: none }
 `;
 
 /**
