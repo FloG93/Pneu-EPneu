@@ -1686,15 +1686,96 @@ function symbolStellen(svgEl, anteil, offen) {
 }
 
 
+function bedienungSignale(opt) {
+  const bed = {
+    auto: opt.autoAn,
+    autoZeit: 0,
+    naechstes: opt.erster,
+    impulse: {},
+    gehalten: {},
+  };
+  for (const n of opt.namen) { bed.impulse[n] = 0; bed.gehalten[n] = false; }
+
+  bed.autoAus = function () {
+    if (bed.auto) opt.autoEnde(bed);
+    bed.auto = false;
+    opt.autoAnzeige(false);
+  };
+  bed.autoStart = function (erstes) {
+    bed.auto = true;
+    bed.autoZeit = 0;
+    bed.naechstes = erstes;
+    opt.autoAnzeige(true);
+  };
+  bed.impuls = function (n) {
+    opt.setzeSignal(n, true);
+    bed.impulse[n] = opt.impuls;
+  };
+  // Pulses and the automatic cycle run on model time.
+  bed.takt = function (dm) {
+    for (const n of opt.namen) {
+      if (bed.impulse[n] > 0) {
+        bed.impulse[n] -= dm;
+        if (bed.impulse[n] <= 0) { bed.impulse[n] = 0; if (!bed.gehalten[n]) opt.setzeSignal(n, false); }
+      }
+    }
+    if (!bed.auto) return;
+    bed.autoZeit += dm;
+    if (bed.autoZeit < opt.autoTakt) return;
+    bed.autoZeit = 0;
+    opt.autoSchritt(bed);
+  };
+  // Back to rest: no pulse, no hold, the cycle starts over.
+  bed.zuruecksetzen = function () {
+    for (const n of opt.namen) { bed.impulse[n] = 0; bed.gehalten[n] = false; }
+    bed.autoZeit = 0;
+    bed.naechstes = opt.erster;
+  };
+  /** Held: the signal lasts as long as the button is held. */
+  bed.halte = function (n, an) {
+    if (bed.gehalten[n] === an) return;
+    if (an) bed.autoAus();
+    bed.gehalten[n] = an;
+    opt.setzeSignal(n, an || bed.impulse[n] > 0);
+    opt.geaendert();
+  };
+  bed.knopf = function (el, n) {
+    el.addEventListener("pointerdown", (e) => {
+      if (el.disabled || !opt.haltenModus() || e.button > 0) return;
+      bed.halte(n, true);
+    });
+    // Leaving the button, a cancelled touch or losing focus all end the signal.
+    for (const typ of ["pointerup", "pointerleave", "pointercancel", "blur"]) {
+      el.addEventListener(typ, () => { if (bed.gehalten[n]) bed.halte(n, false); });
+    }
+    el.addEventListener("keydown", (e) => {
+      if ((e.key === " " || e.key === "Enter") && opt.haltenModus()) {
+        e.preventDefault();
+        // A held key repeats keydown; only the first one counts.
+        if (!e.repeat) bed.halte(n, true);
+      }
+    });
+    el.addEventListener("keyup", (e) => {
+      if ((e.key === " " || e.key === "Enter") && bed.gehalten[n]) bed.halte(n, false);
+    });
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+    // Pulse mode: one press is one pulse.
+    el.addEventListener("click", () => {
+      if (opt.haltenModus() || el.disabled) return;
+      bed.autoAus();
+      bed.impuls(n);
+      opt.geaendert();
+    });
+  };
+  return bed;
+}
+
+
 // --- the model drives everything -----------------------------------------
 const v = neuesVentil(MASSE, { bauart: "monostabil", druckBar: 6 });
 let druck = 6;
 let zeitlupe = 1;
-let auto = !still.matches;
 let angehalten = false;
-let autoZeit = 0, autoNaechstes = "14";
-const impulse = { "14": 0, "12": 0 };       // model seconds left of a pulse
-const gehalten = { "14": false, "12": false }; // held by pointer or key
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
@@ -1835,69 +1916,28 @@ function zeichneBedienung() {
   }
 }
 
-function stoppeAuto() {
-  if (auto && mono() && !gehalten["14"]) ventilSignal(v, "14", false);
-  auto = false;
-  knopfAuto.setAttribute("aria-pressed", "false");
-}
-function impuls(n) {
-  ventilSignal(v, n, true);
-  impulse[n] = IMPULS;
-}
-/** Pulses and the automatic cycle run on model time, so slow motion slows them too. */
-function takt(dm) {
-  for (const n of ["14", "12"]) {
-    if (impulse[n] > 0) {
-      impulse[n] -= dm;
-      if (impulse[n] <= 0) { impulse[n] = 0; if (!gehalten[n]) ventilSignal(v, n, false); }
-    }
-  }
-  if (!auto) return;
-  autoZeit += dm;
-  if (autoZeit < AUTO_TAKT) return;
-  autoZeit = 0;
-  if (mono()) ventilSignal(v, "14", !v.signal14);
-  else { impuls(autoNaechstes); autoNaechstes = autoNaechstes === "14" ? "12" : "14"; }
-}
-
-/** Monostable: the signal lasts as long as the button is held. */
-function halte(n, an) {
-  if (gehalten[n] === an) return;
-  if (an) stoppeAuto();
-  gehalten[n] = an;
-  angehalten = false;
-  ventilSignal(v, n, an || impulse[n] > 0);
-  zeichneBedienung();
-  run();
-}
-function signalKnopf(el, n) {
-  el.addEventListener("pointerdown", (e) => {
-    if (el.disabled || !mono() || e.button > 0) return;
-    halte(n, true);
-  });
-  // Leaving the button, a cancelled touch or losing focus all end the signal.
-  for (const typ of ["pointerup", "pointerleave", "pointercancel", "blur"]) {
-    el.addEventListener(typ, () => { if (gehalten[n]) halte(n, false); });
-  }
-  el.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && mono()) { e.preventDefault(); halte(n, true); }
-  });
-  el.addEventListener("keyup", (e) => {
-    if ((e.key === " " || e.key === "Enter") && gehalten[n]) halte(n, false);
-  });
-  el.addEventListener("contextmenu", (e) => e.preventDefault());
-  // Bistable: one press is one pulse.
-  el.addEventListener("click", () => {
-    if (mono() || el.disabled) return;
-    stoppeAuto();
-    angehalten = false;
-    impuls(n);
-    zeichneBedienung();
-    run();
-  });
-}
-signalKnopf(knopf14, "14");
-signalKnopf(knopf12, "12");
+// The signal buttons (hold, pulse, automatic cycle) are figur/bedienung.mjs;
+// this page says what a signal does to its valve.
+const bed = bedienungSignale({
+  namen: ["14", "12"],
+  impuls: IMPULS,
+  autoTakt: AUTO_TAKT,
+  autoAn: !still.matches,
+  erster: "14",
+  haltenModus: mono,
+  setzeSignal: (n, an) => ventilSignal(v, n, an),
+  autoSchritt: (b) => {
+    if (mono()) ventilSignal(v, "14", !v.signal14);
+    else { b.impuls(b.naechstes); b.naechstes = b.naechstes === "14" ? "12" : "14"; }
+  },
+  // Monostable: the automatic cycle releases the signal it holds.
+  autoEnde: (b) => { if (mono() && !b.gehalten["14"]) ventilSignal(v, "14", false); },
+  autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
+  geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
+});
+const stoppeAuto = () => bed.autoAus();
+bed.knopf(knopf14, "14");
+bed.knopf(knopf12, "12");
 
 const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
 // Slides the visible symbol with the spool and colours its open paths.
@@ -1923,9 +1963,7 @@ function zeigeBauart() {
 }
 function wechsleBauart(bauart) {
   bauartWechseln(v, MASSE, bauart, druck);
-  for (const n of ["14", "12"]) { impulse[n] = 0; gehalten[n] = false; }
-  autoZeit = 0;
-  autoNaechstes = "14";
+  bed.zuruecksetzen();
   zeigeBauart();
 }
 knopfBauart.addEventListener("click", () => {
@@ -1936,17 +1974,12 @@ knopfBauart.addEventListener("click", () => {
 });
 
 knopfAuto.addEventListener("click", () => {
-  if (auto) stoppeAuto();
-  else {
-    auto = true;
-    knopfAuto.setAttribute("aria-pressed", "true");
-    autoZeit = 0;
-    autoNaechstes = v.anteil > 0.5 ? "12" : "14";
-  }
+  if (bed.auto) stoppeAuto();
+  else bed.autoStart(v.anteil > 0.5 ? "12" : "14");
   angehalten = false;
   run();
 });
-knopfAuto.setAttribute("aria-pressed", String(auto));
+knopfAuto.setAttribute("aria-pressed", String(bed.auto));
 
 lupeRegler.addEventListener("input", () => {
   zeitlupe = lupeRegler.valueAsNumber;
@@ -1984,7 +2017,7 @@ function bildZeichnen(dt, offen, bewegt) {
   if (offen < 0.01 && !bewegt) {
     const dm = angehalten ? 0 : dt / zeitlupe;
     if (dm > 0) {
-      takt(dm);
+      bed.takt(dm);
       ventilSchritt(v, MASSE, dm, druck);
     }
     zeichneHub();

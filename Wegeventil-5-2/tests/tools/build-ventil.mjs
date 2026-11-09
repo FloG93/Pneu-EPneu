@@ -26,6 +26,8 @@ import * as LEG from "../../../figur/legende.mjs";
 import { ISO_5599_GR1, wegeOffen, neuesVentil, ventilAnzeige, ventilSchaltzeit } from "../../../figur/ventil.mjs";
 import { VENTIL_5_2, wegeventilSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
 import { seite, knopf, schieber as regler, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
+import { normteile, hermite, stummel, sechskant, federPruefen, SCHNITT_CSS } from "../../../figur/normteile.mjs";
+import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
 import { LEGENDE } from "./legende-ventil.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -69,7 +71,7 @@ const R_STEUER_GEWINDE = 2.5;        // M5
 const R_STEUER_BOHRUNG = 1.5;
 
 // Return spring (monostable variant): on a 2 mm plate at the spool's end,
-// against the cap's end wall. It must still fit at full stroke: see federPruefen().
+// against the cap's end wall. It must still fit at full stroke: see federPruefen() in figur/normteile.mjs.
 const FEDER = { sitz: 2, draht: 1.1, windungen: 4.5, rWindung: 7 };
 const FEDER_RESERVE = 1;             // mm the spring must stay above its block length at full stroke
 
@@ -119,27 +121,6 @@ const R_SCHLAUCH_INNEN = 3;
 const R_STEUERSCHLAUCH = 2;          // 4/2.5 hose
 const R_STEUERSCHLAUCH_INNEN = 1.25;
 
-/** A smooth hose between two points, leaving and arriving along the given tangents. */
-function hermite(p0, d0, p1, d1, n = 30) {
-  const punkte = [];
-  for (let i = 0; i <= n; i += 1) {
-    const t = i / n, t2 = t * t, t3 = t2 * t;
-    const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
-    punkte.push([0, 1, 2].map((j) => h00 * p0[j] + h10 * d0[j] + h01 * p1[j] + h11 * d1[j]));
-  }
-  return punkte;
-}
-
-/**
- * A hose stub cut off in the air: a short straight piece out of the fitting,
- * so its end sits flush in the collet, then a gentle curve to the cut.
- */
-function stummel(p0, aus, p1, ende, gerade = 6) {
-  const a0 = p0.map((v, j) => v + aus[j] * gerade);
-  const laenge = Math.hypot(...p1.map((v, j) => v - a0[j]));
-  return [p0, ...hermite(a0, aus.map((v) => v * laenge), p1, ende.map((v) => v * laenge), 24)];
-}
-
 const Y_SCHLAUCH = VERSCHRAUBUNG.ring[1];
 const Z_STEUERSCHLAUCH = STEUER_V.ring[1];
 const WEGE = {
@@ -172,29 +153,6 @@ const TAU = Math.PI * 2;
 const bogen = (von, bis, n) => Array.from({ length: n + 1 }, (_, i) => von + ((bis - von) * i) / n);
 
 // --- Faces -------------------------------------------------------------------
-/** A flat outer face, shaded by its normal like every solid of the kit. */
-const flach = (punkte, normale) => SCH.flaeche(punkte.map(at), normale, P);
-
-/**
- * A cut face: where the saw went through the material. One tone for every
- * cut face of the figure, so the section reads as one plane; `data-schnitt`
- * lets the page give it its own colour.
- */
-const SCHNITT_TON = 3;
-
-/**
- * The cut faces' own tone, one calm warm grey per mode: darker than every
- * outer face in light, lighter than them in dark, ≥ 3:1 against the paper in
- * both. The data-shade above is only the fallback without this rule. Task 6
- * takes this string into the page's style sheet.
- */
-export const SCHNITT_CSS = `
-.iso { --schnitt: #8a877f }
-.iso[data-theme="light"] { --schnitt: #8f8c85 }
-.iso-svg .iso-shade[data-schnitt] { fill: var(--schnitt) }
-`;
-const schnitt = (punkte) => `<path class="iso-shade" data-shade="${SCHNITT_TON}" data-schnitt="" d="${ring3(punkte)}"/>`;
-
 /**
  * Inside a bore, a groove or a channel little light gets in: a cavity takes
  * only the two darkest tones, so it reads as a hollow behind the bright cut.
@@ -335,6 +293,9 @@ function put(pos, svg, shapes = [], extra = {}) {
   if (variante) inhalt = `<g data-variante="${variante}">${inhalt}</g>`;
   R.put({ name: R.nameFor(name), piece: PIECE_OF[gruppe], label: PIECE_OF[gruppe], move: MOVE[PIECE_OF[gruppe]], at: pos, pos, bias, gruppe, svg: inhalt, shapes: shapes.flat(), ...rest });
 }
+// The shared standard parts (figur/normteile.mjs) draw into this figure's recorder.
+const NT = normteile({ P, rec, put, gruppe: (g) => { GRUPPE = g; } });
+const { flach, schnitt } = NT;
 /**
  * Recorded material is a set of axis boxes. A long block is split along x:
  * the crowding check reads anything four times longer than thick as a rod,
@@ -741,26 +702,13 @@ function rueckstellung() {
   // Monostable: a spring on a seat at the end of the spool.
   GRUPPE = "rueckstell";
   const sitz = [K12.x0, K12.x0 + FEDER.sitz];
-  // The wire as a tube along a helix, ground flat at both ends (the last
-  // half turn closes up), drawn back to front.
-  const R_DRAHT = FEDER.draht / 2, R_WINDUNG = FEDER.rWindung, WINDUNGEN = FEDER.windungen;
-  const [fa, fb] = [sitz[1] + R_DRAHT, K12.wand - R_DRAHT];
-  const wendel = Array.from({ length: 221 }, (_, i) => {
-    const t = i / 220;
-    const w = t * WINDUNGEN * TAU;
-    // pitch closes towards the ends: flat seats on the spring plate and the wall
-    const zu = (u) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, u)));
-    const anteil = (0.5 / WINDUNGEN) * zu(t * WINDUNGEN / 0.5) + (1 - 1 / WINDUNGEN) * Math.min(1, Math.max(0, (t * WINDUNGEN - 0.5) / (WINDUNGEN - 1)))
-      + (0.5 / WINDUNGEN) * zu((t * WINDUNGEN - (WINDUNGEN - 0.5)) / 0.5);
-    return G.pointOf(FX, fa + (fb - fa) * anteil, R_WINDUNG, w);
-  });
-  const draht = tubePieces(wendel, R_DRAHT, P, { maxLength: 4, caps: true })
-    .sort((p1, p2) => G.dot3(p1.mid, V) - G.dot3(p2.mid, V));
+  const R_DRAHT = FEDER.draht / 2, R_WINDUNG = FEDER.rWindung;
+  const wendel = NT.druckfeder(FX, sitz[1] + R_DRAHT, K12.wand - R_DRAHT, FEDER);
   put([(sitz[1] + K12.wand) / 2, 0, ZA], [
     `<g data-hub="">${SV(G.disc(sitz[0], sitz[1], 8.2, FX, P), { tone: "hi" })}</g>`,
     // Each piece carries the x of its middle: the page compresses the coil by
     // shifting every piece in proportion to its distance from the end wall.
-    ...draht.map((teil) => `<g data-federx="${teil.mid[0].toFixed(2)}">${tubeSvg(teil, { tone: "hi" })}</g>`),
+    ...wendel,
   ].join(""), [
     rec(A.disc(FX, sitz[0], sitz[1], 8.2, { name: "rueckstell.federsitz", owner: VARIANTEN })),
     rec(A.ring(FX, sitz[1], K12.wand, R_WINDUNG - R_DRAHT, R_WINDUNG + R_DRAHT, { name: "rueckstell.feder", owner: VARIANTEN })),
@@ -770,21 +718,11 @@ function rueckstellung() {
 }
 
 // --- Screws --------------------------------------------------------------------------------
-function schraubenkopf(F, s0, s1, r, name) {
-  const sechs = Array.from({ length: 6 }, (_, i) => [0.42 * r * Math.cos((i * Math.PI) / 3), 0.42 * r * Math.sin((i * Math.PI) / 3)]);
-  const innen6 = sechs.map(([u, v]) => k.iso(G.add3(G.add3(G.pointOf(F, s1, 0, 0), G.mul3(F.u, u)), G.mul3(F.v, v)), P));
-  return [
-    SV(G.disc(s0, s1, r, F, P), { tone: "mid" }),
-    `<path class="iso-shade" data-shade="0" d="${SCH.pfad(innen6)}"/>`,
-    L(SCH.pfad(innen6), { tone: "mid" }),
-  ].join("");
-}
-
 function schrauben() {
   GRUPPE = "schrauben";
   for (const x of [7, 123]) {
     const F = FZ(x, -12);
-    put([x, -12, GEH.z1 + 2], schraubenkopf(F, GEH.z1, GEH.z1 + 4.5, 4.2, "schrauben.oben"),
+    put([x, -12, GEH.z1 + 2], NT.schraubenkopf(F, GEH.z1, GEH.z1 + 4.5, 4.2),
       [rec(A.disc(F, GEH.z1, GEH.z1 + 4.5, 4.2, { name: "schrauben.oben" }))], { name: "schrauben.oben" });
   }
   // The cap screws fasten the end caps: whoever takes a cap off takes its
@@ -793,41 +731,15 @@ function schrauben() {
     for (const z of [KAPPE.z0 + 6, KAPPE.z1 - 6]) {
       const F = G.frameOf([0, -12, z], [richtung, 0, 0], [0, 1, 0], [0, 0, 1]);
       const s0 = richtung * x;
-      put([x + richtung * 2, -12, z], schraubenkopf(F, s0, s0 + 4, 3.6, `${kappe}.schraube`),
+      put([x + richtung * 2, -12, z], NT.schraubenkopf(F, s0, s0 + 4, 3.6),
         [rec(A.disc(F, s0, s0 + 4, 3.6, { name: `${kappe}.schraube` }))], { name: `${kappe}.schraube`, gruppe: kappe });
     }
   }
 }
 
 // --- Threads, fittings, silencers -------------------------------------------------------------
-const sechskant = (r) => Array.from({ length: 6 }, (_, i) => [r * Math.cos((i * Math.PI) / 3 + Math.PI / 6), r * Math.sin((i * Math.PI) / 3 + Math.PI / 6)]);
-
-/** A threaded stub inside a half-cut hole: whole, with its thread as rings. */
-function gewinde(F, s0, s1, r, gruppe, name) {
-  GRUPPE = gruppe;
-  const ringe = [];
-  for (let s = s0 + 1; s < s1 - 0.4; s += 1.3) ringe.push(G.arcOf(F, s, r, P));
-  return [
-    SV(G.disc(s0, s1, r, F, P), { tone: "mid", inner: L(ringe.join(""), { tone: "faint" }) }),
-  ].join("");
-}
-
 function verschraubung(F, D, gruppe, name, ort) {
-  GRUPPE = gruppe;
-  put(ort(D.gewinde), gewinde(F, D.gewinde[0], D.gewinde[1], D === STEUER_V ? R_STEUER_GEWINDE - 0.2 : R_STUMMEL, gruppe),
-    [rec(A.disc(F, D.gewinde[0], D.gewinde[1], D === STEUER_V ? R_STEUER_GEWINDE - 0.2 : R_STUMMEL, { name: `${name}.gewinde` }))],
-    { name: `${name}.gewinde` });
-  const hx = sechskant(D.rS);
-  put(ort([D.sechskant[0], D.ring[1]]), [
-    SV(G.prismOf(F, hx, D.sechskant[0], D.sechskant[1], P), { tone: "mid" }),
-    SV(G.disc(D.koerper[0], D.koerper[1], D.rK, F, P), { tone: "hi" }),
-    SV(G.disc(D.ring[0], D.ring[1], D.rR, F, P), { tone: "hi" }),
-    L(G.circleOf(F, D.ring[1], D.rR - 0.9, P), { tone: "faint" }),
-  ].join(""), [
-    rec(A.prism(F, hx, D.sechskant[0], D.sechskant[1], { name: `${name}.sechskant` })),
-    rec(A.disc(F, D.koerper[0], D.koerper[1], D.rK, { name: `${name}.koerper` })),
-    rec(A.disc(F, D.ring[0], D.ring[1], D.rR, { name: `${name}.ring` })),
-  ], { name: `${name}.koerper` });
+  NT.verschraubung(F, D, gruppe, name, ort, D === STEUER_V ? R_STEUER_GEWINDE - 0.2 : R_STUMMEL);
 }
 
 function anschluesse() {
@@ -836,41 +748,14 @@ function anschluesse() {
       ([a, b]) => [PORT[nr], (a + b) / 2, ZP]);
   }
   for (const nr of [5, 3]) {
-    const F = FY(PORT[nr], ZP);
-    const D = DAEMPFER;
-    GRUPPE = "daempfer";
-    put([PORT[nr], (D.gewinde[0] + D.gewinde[1]) / 2, ZP], gewinde(F, D.gewinde[0], D.gewinde[1], R_STUMMEL, "daempfer"),
-      [rec(A.disc(F, D.gewinde[0], D.gewinde[1], R_STUMMEL, { name: `daempfer.gewinde${nr}` }))], { name: `daempfer.gewinde${nr}` });
-    const hx = sechskant(D.rS);
-    const ende = D.sinter[1];
-    const kuppe = Array.from({ length: 7 }, (_, i) => {
-      const t = ((i + 1) / 7) * (Math.PI / 2);
-      return [ende + D.kuppe * Math.sin(t), D.rD * Math.cos(t) * 0.999 + 0.001, 1];
-    });
-    const profil = [[D.sinter[0], D.rD], [ende, D.rD, 1], ...kuppe.slice(0, -1)];
-    // Sintered bronze: a field of pores that fades towards the limbs.
-    const poren = [];
-    let reihe = 0;
-    for (let s = D.sinter[0] + 1.2; s < ende - 0.4; s += 1.25, reihe += 1) {
-      poren.push(...G.dotsOf(F, s, D.rD, 22, P, { phase: (reihe % 2) * (Math.PI / 22), fade: [0.04, 0.42] }));
-    }
-    put([PORT[nr], (D.sechskant[0] + ende) / 2, ZP], [
-      SV(G.prismOf(F, hx, D.sechskant[0], D.sechskant[1], P), { tone: "mid" }),
-      SV(G.disc(D.hals[0], D.hals[1], D.rH, F, P), { tone: "mid" }),
-      SV(G.solidOf(profil, F, P), { tone: "mid" }),
-      k.dotsSvg(poren, { size: 0.55, tone: "hi" }),
-    ].join(""), [
-      rec(A.prism(F, hx, D.sechskant[0], D.sechskant[1], { name: `daempfer.sechskant${nr}` })),
-      rec(A.disc(F, D.hals[0], D.hals[1], D.rH, { name: `daempfer.hals${nr}` })),
-      rec(A.solid(F, profil, { name: `daempfer.sinter${nr}` })),
-    ], { name: `daempfer.koerper${nr}` });
+    NT.schalldaempfer(FY(PORT[nr], ZP), DAEMPFER, nr, ([a, b]) => [PORT[nr], (a + b) / 2, ZP], R_STUMMEL);
   }
   for (const [nr, gruppe, variante] of [[14, "steuerleitung", null], [12, "steuerleitung", "kolben12"]]) {
     const x = STEUER[nr];
     const F = FZ(x, 0);
     const D = STEUER_V;
     GRUPPE = gruppe;
-    put([x, 0, (D.gewinde[0] + D.gewinde[1]) / 2], gewinde(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2, gruppe),
+    put([x, 0, (D.gewinde[0] + D.gewinde[1]) / 2], NT.gewinde(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2),
       [rec(A.disc(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2, { name: `steuerleitung.gewinde${nr}` }))],
       { name: `steuerleitung.gewinde${nr}`, variante });
     const hx = sechskant(D.rS);
@@ -969,23 +854,6 @@ function ueberdeckungPruefen() {
     process.exit(1);
   }
   return { oeffnetA, oeffnetB, gemessen };
-}
-
-/**
- * The spring has to compress by the full stroke without going solid: in
- * position 14 its length must stay above the block length (n + 1)·d.
- */
-function federPruefen() {
-  const ruhe = K12.wand - (K12.x0 + FEDER.sitz);
-  const gespannt = ruhe - HUB;
-  const block = (FEDER.windungen + 1) * FEDER.draht;
-  const text = `Feder: ${ruhe.toFixed(2)} mm in Ruhe, ${gespannt.toFixed(2)} mm in Stellung 14, Blocklänge `
-    + `(${FEDER.windungen} + 1) · ${FEDER.draht} = ${block.toFixed(2)} mm, Reserve ${(gespannt - block).toFixed(2)} mm`;
-  if (gespannt < block + FEDER_RESERVE) {
-    console.error(`Feder geht auf Block: ${text} (verlangt ≥ ${FEDER_RESERVE} mm)`);
-    process.exit(1);
-  }
-  return text;
 }
 
 // --- Air: the rooms that fill, and the routes the particles take ---------------------------------------
@@ -1108,7 +976,11 @@ const ROUTEN = { "1-4": weg(1, 4), "2-3": weg(2, 3), "1-2": weg(1, 2), "4-5": we
 
 // --- Compose ---------------------------------------------------------------------------------------------
 const UEBERDECKUNG = ueberdeckungPruefen();
-const FEDERTEXT = federPruefen();
+const FEDERTEXT = (() => {
+  try {
+    return federPruefen({ laenge: K12.wand - (K12.x0 + FEDER.sitz), draht: FEDER.draht, windungen: FEDER.windungen }, HUB, FEDER_RESERVE);
+  } catch (e) { console.error(e.message); process.exit(1); }
+})();
 
 grundplatte();
 dichtung();
@@ -1215,16 +1087,13 @@ ${LEG.LAUFZEIT}
 ${EX.ABLAUF}
 ${LU.LAUFZEIT}
 ${SYMBOL_LAUFZEIT}
+${BEDIENUNG_LAUFZEIT}
 
 // --- the model drives everything -----------------------------------------
 const v = neuesVentil(MASSE, { bauart: "monostabil", druckBar: 6 });
 let druck = 6;
 let zeitlupe = 1;
-let auto = !still.matches;
 let angehalten = false;
-let autoZeit = 0, autoNaechstes = "14";
-const impulse = { "14": 0, "12": 0 };       // model seconds left of a pulse
-const gehalten = { "14": false, "12": false }; // held by pointer or key
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
@@ -1365,69 +1234,28 @@ function zeichneBedienung() {
   }
 }
 
-function stoppeAuto() {
-  if (auto && mono() && !gehalten["14"]) ventilSignal(v, "14", false);
-  auto = false;
-  knopfAuto.setAttribute("aria-pressed", "false");
-}
-function impuls(n) {
-  ventilSignal(v, n, true);
-  impulse[n] = IMPULS;
-}
-/** Pulses and the automatic cycle run on model time, so slow motion slows them too. */
-function takt(dm) {
-  for (const n of ["14", "12"]) {
-    if (impulse[n] > 0) {
-      impulse[n] -= dm;
-      if (impulse[n] <= 0) { impulse[n] = 0; if (!gehalten[n]) ventilSignal(v, n, false); }
-    }
-  }
-  if (!auto) return;
-  autoZeit += dm;
-  if (autoZeit < AUTO_TAKT) return;
-  autoZeit = 0;
-  if (mono()) ventilSignal(v, "14", !v.signal14);
-  else { impuls(autoNaechstes); autoNaechstes = autoNaechstes === "14" ? "12" : "14"; }
-}
-
-/** Monostable: the signal lasts as long as the button is held. */
-function halte(n, an) {
-  if (gehalten[n] === an) return;
-  if (an) stoppeAuto();
-  gehalten[n] = an;
-  angehalten = false;
-  ventilSignal(v, n, an || impulse[n] > 0);
-  zeichneBedienung();
-  run();
-}
-function signalKnopf(el, n) {
-  el.addEventListener("pointerdown", (e) => {
-    if (el.disabled || !mono() || e.button > 0) return;
-    halte(n, true);
-  });
-  // Leaving the button, a cancelled touch or losing focus all end the signal.
-  for (const typ of ["pointerup", "pointerleave", "pointercancel", "blur"]) {
-    el.addEventListener(typ, () => { if (gehalten[n]) halte(n, false); });
-  }
-  el.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && mono()) { e.preventDefault(); halte(n, true); }
-  });
-  el.addEventListener("keyup", (e) => {
-    if ((e.key === " " || e.key === "Enter") && gehalten[n]) halte(n, false);
-  });
-  el.addEventListener("contextmenu", (e) => e.preventDefault());
-  // Bistable: one press is one pulse.
-  el.addEventListener("click", () => {
-    if (mono() || el.disabled) return;
-    stoppeAuto();
-    angehalten = false;
-    impuls(n);
-    zeichneBedienung();
-    run();
-  });
-}
-signalKnopf(knopf14, "14");
-signalKnopf(knopf12, "12");
+// The signal buttons (hold, pulse, automatic cycle) are figur/bedienung.mjs;
+// this page says what a signal does to its valve.
+const bed = bedienungSignale({
+  namen: ["14", "12"],
+  impuls: IMPULS,
+  autoTakt: AUTO_TAKT,
+  autoAn: !still.matches,
+  erster: "14",
+  haltenModus: mono,
+  setzeSignal: (n, an) => ventilSignal(v, n, an),
+  autoSchritt: (b) => {
+    if (mono()) ventilSignal(v, "14", !v.signal14);
+    else { b.impuls(b.naechstes); b.naechstes = b.naechstes === "14" ? "12" : "14"; }
+  },
+  // Monostable: the automatic cycle releases the signal it holds.
+  autoEnde: (b) => { if (mono() && !b.gehalten["14"]) ventilSignal(v, "14", false); },
+  autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
+  geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
+});
+const stoppeAuto = () => bed.autoAus();
+bed.knopf(knopf14, "14");
+bed.knopf(knopf12, "12");
 
 const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
 // Slides the visible symbol with the spool and colours its open paths.
@@ -1453,9 +1281,7 @@ function zeigeBauart() {
 }
 function wechsleBauart(bauart) {
   bauartWechseln(v, MASSE, bauart, druck);
-  for (const n of ["14", "12"]) { impulse[n] = 0; gehalten[n] = false; }
-  autoZeit = 0;
-  autoNaechstes = "14";
+  bed.zuruecksetzen();
   zeigeBauart();
 }
 knopfBauart.addEventListener("click", () => {
@@ -1466,17 +1292,12 @@ knopfBauart.addEventListener("click", () => {
 });
 
 knopfAuto.addEventListener("click", () => {
-  if (auto) stoppeAuto();
-  else {
-    auto = true;
-    knopfAuto.setAttribute("aria-pressed", "true");
-    autoZeit = 0;
-    autoNaechstes = v.anteil > 0.5 ? "12" : "14";
-  }
+  if (bed.auto) stoppeAuto();
+  else bed.autoStart(v.anteil > 0.5 ? "12" : "14");
   angehalten = false;
   run();
 });
-knopfAuto.setAttribute("aria-pressed", String(auto));
+knopfAuto.setAttribute("aria-pressed", String(bed.auto));
 
 lupeRegler.addEventListener("input", () => {
   zeitlupe = lupeRegler.valueAsNumber;
@@ -1514,7 +1335,7 @@ function bildZeichnen(dt, offen, bewegt) {
   if (offen < 0.01 && !bewegt) {
     const dm = angehalten ? 0 : dt / zeitlupe;
     if (dm > 0) {
-      takt(dm);
+      bed.takt(dm);
       ventilSchritt(v, MASSE, dm, druck);
     }
     zeichneHub();

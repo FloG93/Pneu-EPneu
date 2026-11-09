@@ -19,6 +19,9 @@ const PAARE = [
   ...["explode", "legende", "schnitt", "toene", "seite", "luft"]
     .map((m) => [`vorlage/figur/${m}.mjs`, `figur/${m}.mjs`]),
   ["vorlage/figur/schaltzeichen.mjs", "figur/schaltzeichen.mjs"],
+  ["vorlage/figur/normteile.mjs", "figur/normteile.mjs"],
+  ["vorlage/figur/bedienung.mjs", "figur/bedienung.mjs"],
+  ["vorlage/figur/tests/normteile.test.mjs", "figur/tests/normteile.test.mjs"],
   ["vorlage/figur/tests/luft.test.mjs", "figur/tests/luft.test.mjs"],
   ["vorlage/figur/tests/tools/build-uebersicht.mjs", "figur/tests/tools/build-uebersicht.mjs"],
   ["vorlage/figur/tests/tools/pruefe-figur.mjs", "figur/tests/tools/pruefe-figur.mjs"],
