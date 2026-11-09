@@ -29,9 +29,9 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 | `figur/explode.mjs` | Wege, Federn, Staffelung, Sortierung nach echter Tiefe je Bild, Nummern am nächsten eigenen Teil (`anker`); `ABLAUF`: Bildschleife, Knopf „Zerlegen und zusammenbauen", Escape |
 | `figur/legende.mjs` | Legendenliste, Nummern mit Führungslinie, Erklärzeile, Auswahl; `LAUFZEIT`: Zeigen/Merken, Erzählung beim Zusammenbau |
 | `figur/normteile.mjs` | Zeichenhelfer für Normteile (Schnittfläche, Schraubenkopf, Gewinde, Steckverschraubung, Schalldämpfer, Druckfeder, Schlauchstummel) und die Blocklängenprüfung der Feder; Schnittton `SCHNITT_CSS` |
-| `figur/gehaeuse.mjs` | Das aufgeschnittene Gehäuse eines Schieberventils: Innenseite von Bohrung, Ringnut und Kanal, Nutflanken, Bohrungskante, aufgenommene Körper (`box`, `boxenOhne`), Schnittende des Schlauchs; Bohrung und Nuten kommen als Parameter |
+| `figur/gehaeuse.mjs` | Der aufgeschnittene Körper eines Schieberventils: Grundplatte, Dichtung, Gehäuse mit Bohrung, Ringnuten und Kanälen, Schieber mit Bunden und Dichtringen, Kappen mit Steuerkolben, Feder, Schrauben, Schläuche, dazu das `put` des Recorders und die aufgenommenen Körper (`box`, `boxenOhne`); Bohrung, Nuten, Bunde und Maße kommen als Parameter |
 | `figur/ventilraeume.mjs` | Die Lufträume im Schnitt eines Schieberventils (Nut, Kanal, Hals, Platte, Dichtung, Steuerkammer) und die Wege der Teilchen; das Bauteil sagt, wo seine Hälse liegen |
-| `figur/ventilseite.mjs` | Was jede Ventilseite neben der Zeichnung gemeinsam hat: die drei Regler, das Gleiten von Schieber und Feder, die Anzeige, das Schaltzeichen, die Stilregeln |
+| `figur/ventilseite.mjs` | Was jede Ventilseite neben der Zeichnung gemeinsam hat: die drei Regler, das Gleiten von Schieber und Feder, die Anzeige, das Schaltzeichen, die Stilregeln, das Bild der Bildschleife (`bildZeichnen`) und die Hilfen der Luftzeichnung (Töne, Tempo, Räume, Steuerstrom) |
 | `figur/bedienung.mjs` | Die Signalknöpfe als Laufzeit: Halten, Impuls und Automatik, alles auf Modellzeit; das Ventil sagt nur, was ein Signal bewirkt |
 | `figur/luft.mjs` | Luftwege als 3D-Pfade, Partikel darauf, Kammerfüllung, die vier Blautöne |
 | `figur/seite.mjs` | Seitengerüst: Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript, Begleitbild (`beiFigur`), Modelldateien als Skripttext (`modulQuelle`) |

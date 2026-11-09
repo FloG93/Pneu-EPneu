@@ -1901,6 +1901,78 @@ function bindeRegler() {
   });
 }
 
+// --- air and frame loop ----------------------------------------------------
+// The page defines raeume (its rooms, [data-raum]), luftLage (the layer of
+// particles), stroeme (name -> stream), bed (the signal buttons),
+// zeichneLuft(dt) and zeichneBedienung().
+
+// Strong blue above 0,5 bar, pale blue while a room is being vented, else empty.
+const luftTon = (F, p, raus) => (p - AUSSEN > 0.5 ? F.druck : raus ? F.abluft : "none");
+// A room is vented while a path to the exhaust is open and it still holds air.
+const entlueftet = (offen, p) => offen > 0 && p - AUSSEN > 0.02;
+// Speed follows conductance times pressure difference; a shut path shows nothing.
+const luftTempo = (q) => Math.max(-600, Math.min(600, q * 2.6e-4));
+
+// The pilot lines are thin, so the same flow runs through them faster. The
+// factor is the working path's conductance over the pilot filling path's
+// (3,2e5 / 8e4 = 4): a filling pilot line shows its particles at the speed a
+// working line would at the same pressure difference. Drawing only; the model
+// does not read it.
+const STEUER_TEMPO = MASSE.leitwertZu / MASSE.leitwertSteuer;
+// A pilot chamber is vented while its signal is off and it still holds air.
+const steuerRaus = (an, p) => !an && p - AUSSEN > 0.02;
+// The stream of a pilot line: filling while the signal is on, venting after it;
+// stumm for a line that does not exist in this state of the figure.
+function steuerStrom(name, dt, an, p, quelle, F, stumm) {
+  const leit = an ? MASSE.leitwertSteuer : MASSE.leitwertEntlueft;
+  const q = leit * ((an ? quelle : AUSSEN) - p);
+  const staerke = stumm ? 0 : an ? 1 : Math.max(0, Math.min(1, (p - AUSSEN) / 0.3));
+  stromSchritt(stroeme[name], dt, luftTempo(q * STEUER_TEMPO), staerke, an ? F.druck : F.abluft);
+}
+
+// Paint every room with the tone its number has in farbe.
+function setzeRaumFarben(farbe) {
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
+}
+// A stream whose particles are all transparent is hidden as a whole.
+function blendeLeereStroeme() {
+  for (const name in stroeme) {
+    const s = stroeme[name];
+    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    s.g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+function blende(sicht) {
+  luftLage.style.opacity = String(sicht);
+  for (const el of raeume) {
+    if (sicht < 1) el.style.opacity = (0.82 * sicht).toFixed(3);
+    else el.style.removeProperty("opacity");
+  }
+}
+// One frame; the loop itself is EX.ABLAUF.
+function bildZeichnen(dt, offen, bewegt) {
+  blende(Math.max(0, 1 - offen * 3));
+  // The valve stops while it is being taken apart and carries on afterwards.
+  if (offen < 0.01 && !bewegt) {
+    const dm = angehalten ? 0 : dt / zeitlupe;
+    if (dm > 0) {
+      bed.takt(dm);
+      ventilSchritt(v, MASSE, dm, druck);
+    }
+    zeichneHub();
+    zeichneLuft(dm);
+    zeichneAnzeige();
+    zeichneBedienung();
+  } else {
+    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+  }
+  zeichneSymbol();
+}
+
 
 // --- the model drives everything -----------------------------------------
 // One valve state for both variants: switching variant refills it from the
@@ -1926,14 +1998,9 @@ function zeichneKammern(s) {
   steuerkammer.setAttribute("d", kammerD(KAMMER.st[0], KAMMER.st[1] + s));
 }
 
-// The pilot line is thin, so the same flow runs through it faster. The factor
-// is the working path's conductance over the pilot filling path's: a filling
-// pilot line shows its particles at the speed a working line would at the
-// same pressure difference. Drawing only; the model does not read it.
-const STEUER_TEMPO = MASSE.leitwertZu / MASSE.leitwertSteuer;
 const feldOffen = (o, felder) => felder.reduce((summe, i) => summe + ventilFeldOffen(o, i), 0);
 
-// Strong blue above 0,5 bar, pale blue while a room is being vented, else empty.
+// The air: figur/ventilseite.mjs says how a room and a stream are drawn; this valve says which are which.
 function zeichneLuft(dt) {
   const F = luftFarben();
   const quelle = AUSSEN + druck;
@@ -1942,33 +2009,19 @@ function zeichneLuft(dt) {
   const zu = feldOffen(o, v.wege["2"].zu), ab = feldOffen(o, v.wege["2"].ab);
   const q12 = zu * MASSE.leitwertZu * (quelle - v.p[2]);
   const q23 = ab * MASSE.leitwertAb * (v.p[2] - AUSSEN);
-  const entlueftet = ab > 0 && v.p[2] - AUSSEN > 0.02;
-  const ton = (p, raus) => (p - AUSSEN > 0.5 ? F.druck : raus ? F.abluft : "none");
-  const steuerRaus = !v.signal14 && v.p14 - AUSSEN > 0.02;
+  const raus = entlueftet(ab, v.p[2]);
   const farbe = {
-    "1": ton(quelle, false),
-    "2": ton(v.p[2], entlueftet),
-    "3": entlueftet ? F.abluft : "none",
-    "st": ton(v.p14, steuerRaus),
+    "1": luftTon(F, quelle, false),
+    "2": luftTon(F, v.p[2], raus),
+    "3": raus ? F.abluft : "none",
+    "st": luftTon(F, v.p14, steuerRaus(v.signal14, v.p14)),
   };
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
+  setzeRaumFarben(farbe);
 
-  // Speed follows conductance times pressure difference; a shut path shows nothing.
-  const tempo = (q) => Math.max(-600, Math.min(600, q * 2.6e-4));
-  stromSchritt(stroeme["1-2"], dt, tempo(q12), zu, F.druck);
-  stromSchritt(stroeme["2-3"], dt, tempo(q23), ab, F.abluft);
-  const leit = v.signal14 ? MASSE.leitwertSteuer : MASSE.leitwertEntlueft;
-  const q = leit * ((v.signal14 ? quelle : AUSSEN) - v.p14);
-  const staerke = v.signal14 ? 1 : Math.max(0, Math.min(1, (v.p14 - AUSSEN) / 0.3));
-  stromSchritt(stroeme.st, dt, tempo(q * STEUER_TEMPO), staerke, v.signal14 ? F.druck : F.abluft);
-  for (const name in stroeme) {
-    const s = stroeme[name];
-    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    s.g.style.opacity = sichtbar ? "" : "0";
-  }
+  stromSchritt(stroeme["1-2"], dt, luftTempo(q12), zu, F.druck);
+  stromSchritt(stroeme["2-3"], dt, luftTempo(q23), ab, F.abluft);
+  steuerStrom("st", dt, v.signal14, v.p14, quelle, F, false);
+  blendeLeereStroeme();
 }
 
 // --- controls -------------------------------------------------------------
@@ -2038,34 +2091,6 @@ knopfAuto.addEventListener("click", () => {
 });
 knopfAuto.setAttribute("aria-pressed", String(bed.auto));
 bindeRegler();
-
-// --- frame loop -----------------------------------------------------------
-function blende(sicht) {
-  luftLage.style.opacity = String(sicht);
-  for (const el of raeume) {
-    if (sicht < 1) el.style.opacity = (0.82 * sicht).toFixed(3);
-    else el.style.removeProperty("opacity");
-  }
-}
-// One frame; the loop itself is EX.ABLAUF.
-function bildZeichnen(dt, offen, bewegt) {
-  blende(Math.max(0, 1 - offen * 3));
-  // The valve stops while it is being taken apart and carries on afterwards.
-  if (offen < 0.01 && !bewegt) {
-    const dm = angehalten ? 0 : dt / zeitlupe;
-    if (dm > 0) {
-      bed.takt(dm);
-      ventilSchritt(v, MASSE, dm, druck);
-    }
-    zeichneHub();
-    zeichneLuft(dm);
-    zeichneAnzeige();
-    zeichneBedienung();
-  } else {
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
-  }
-  zeichneSymbol();
-}
 
 // Before taking it apart: no automatic, no signal, no hand, spool home in
 // the rest position — or the spool would leave its bore from somewhere else.

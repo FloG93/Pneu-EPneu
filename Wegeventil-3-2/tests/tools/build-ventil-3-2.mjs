@@ -22,7 +22,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../../../.claude/skills/anatomy/kit/lathe.mjs";
-import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mjs";
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
 import * as SCH from "../../../figur/schnitt.mjs";
 import * as EX from "../../../figur/explode.mjs";
@@ -34,7 +33,7 @@ import { seite, knopf, hausBedienung, modulQuelle } from "../../../figur/seite.m
 import { ventilRaeume } from "../../../figur/ventilraeume.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
 import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
-import { gehaeuseSchnitt, bogen, nahtlos } from "../../../figur/gehaeuse.mjs";
+import { gehaeuseSchnitt, nahtlos } from "../../../figur/gehaeuse.mjs";
 import { normteile, stummel, sechskant, federPruefen } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-ventil-3-2.mjs";
 
@@ -161,12 +160,9 @@ const P = k.fitProjection(
 );
 
 const at = (p) => k.iso(p, P);
-const V = G.viewOf(P);
-const SV = (paths, style) => k.solidSvg(paths, style);
 const L = (d, style) => k.lineSvg(d, style);
 const linie = (punkte) => punkte.map(at).map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join("");
 const ring3 = (punkte) => SCH.pfad(punkte.map(at));
-const TAU = Math.PI * 2;
 
 // --- Assemblies: the explode tables (all the maths lives in figur/explode.mjs) --
 // Looking from +x/+y/+z: the kept half is y <= 0, ports and fittings point +y, towards the viewer.
@@ -204,7 +200,7 @@ const GH = gehaeuseSchnitt({
   R_SCHLAUCH, R_SCHLAUCH_INNEN, R_STEUERSCHLAUCH, R_STEUERSCHLAUCH_INNEN,
 });
 const { put, inGruppe, NT, flach, schnitt, rec, grundplatte, dichtung, gehaeuse,
-  schieber, kappe, steuerkolben, federsitz, schrauben, schlaeuche,
+  schieber, kappe, steuerkolben, federsitz, schrauben, schlaeuche, steuerverschraubung,
   innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung, kanalInnen, aufNut, aufGewinde,
   box, boxenOhne, unterLoch, schnittEnde } = GH;
 
@@ -265,24 +261,7 @@ function anschluesse() {
   }
   NT.schalldaempfer(FY(PORT[3], ZP), DAEMPFER, 3, ([a, b]) => [PORT[3], (a + b) / 2, ZP], R_STUMMEL);
 
-  // The pilot fitting in the control cap: M5, a smaller push-in fitting.
-  const x = STEUER_X;
-  const F = FZ(x, 0);
-  const D = STEUER_V;
-  inGruppe("steuerleitung");
-  put([x, 0, (D.gewinde[0] + D.gewinde[1]) / 2], NT.gewinde(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2),
-    [rec(A.disc(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2, { name: "steuerleitung.gewinde" }))],
-    { name: "steuerleitung.gewinde" });
-  const hx = sechskant(D.rS);
-  put([x, 0, (D.sechskant[0] + D.ring[1]) / 2], [
-    SV(G.prismOf(F, hx, D.sechskant[0], D.sechskant[1], P), { tone: "mid" }),
-    SV(G.disc(D.koerper[0], D.koerper[1], D.rK, F, P), { tone: "hi" }),
-    SV(G.disc(D.ring[0], D.ring[1], D.rR, F, P), { tone: "hi" }),
-  ].join(""), [
-    rec(A.prism(F, hx, D.sechskant[0], D.sechskant[1], { name: "steuerleitung.sechskant" })),
-    rec(A.disc(F, D.koerper[0], D.koerper[1], D.rK, { name: "steuerleitung.koerper" })),
-    rec(A.disc(F, D.ring[0], D.ring[1], D.rR, { name: "steuerleitung.ring" })),
-  ], { name: "steuerleitung.verschraubung" });
+  steuerverschraubung(STEUER_X);   // the pilot fitting in the control cap
 }
 
 // --- The overlap, measured on the drawn edges ------------------------------------------------------
@@ -599,14 +578,9 @@ function zeichneKammern(s) {
   steuerkammer.setAttribute("d", kammerD(KAMMER.st[0], KAMMER.st[1] + s));
 }
 
-// The pilot line is thin, so the same flow runs through it faster. The factor
-// is the working path's conductance over the pilot filling path's: a filling
-// pilot line shows its particles at the speed a working line would at the
-// same pressure difference. Drawing only; the model does not read it.
-const STEUER_TEMPO = MASSE.leitwertZu / MASSE.leitwertSteuer;
 const feldOffen = (o, felder) => felder.reduce((summe, i) => summe + ventilFeldOffen(o, i), 0);
 
-// Strong blue above 0,5 bar, pale blue while a room is being vented, else empty.
+// The air: figur/ventilseite.mjs says how a room and a stream are drawn; this valve says which are which.
 function zeichneLuft(dt) {
   const F = luftFarben();
   const quelle = AUSSEN + druck;
@@ -615,33 +589,19 @@ function zeichneLuft(dt) {
   const zu = feldOffen(o, v.wege["2"].zu), ab = feldOffen(o, v.wege["2"].ab);
   const q12 = zu * MASSE.leitwertZu * (quelle - v.p[2]);
   const q23 = ab * MASSE.leitwertAb * (v.p[2] - AUSSEN);
-  const entlueftet = ab > 0 && v.p[2] - AUSSEN > 0.02;
-  const ton = (p, raus) => (p - AUSSEN > 0.5 ? F.druck : raus ? F.abluft : "none");
-  const steuerRaus = !v.signal14 && v.p14 - AUSSEN > 0.02;
+  const raus = entlueftet(ab, v.p[2]);
   const farbe = {
-    "1": ton(quelle, false),
-    "2": ton(v.p[2], entlueftet),
-    "3": entlueftet ? F.abluft : "none",
-    "st": ton(v.p14, steuerRaus),
+    "1": luftTon(F, quelle, false),
+    "2": luftTon(F, v.p[2], raus),
+    "3": raus ? F.abluft : "none",
+    "st": luftTon(F, v.p14, steuerRaus(v.signal14, v.p14)),
   };
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
+  setzeRaumFarben(farbe);
 
-  // Speed follows conductance times pressure difference; a shut path shows nothing.
-  const tempo = (q) => Math.max(-600, Math.min(600, q * 2.6e-4));
-  stromSchritt(stroeme["1-2"], dt, tempo(q12), zu, F.druck);
-  stromSchritt(stroeme["2-3"], dt, tempo(q23), ab, F.abluft);
-  const leit = v.signal14 ? MASSE.leitwertSteuer : MASSE.leitwertEntlueft;
-  const q = leit * ((v.signal14 ? quelle : AUSSEN) - v.p14);
-  const staerke = v.signal14 ? 1 : Math.max(0, Math.min(1, (v.p14 - AUSSEN) / 0.3));
-  stromSchritt(stroeme.st, dt, tempo(q * STEUER_TEMPO), staerke, v.signal14 ? F.druck : F.abluft);
-  for (const name in stroeme) {
-    const s = stroeme[name];
-    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    s.g.style.opacity = sichtbar ? "" : "0";
-  }
+  stromSchritt(stroeme["1-2"], dt, luftTempo(q12), zu, F.druck);
+  stromSchritt(stroeme["2-3"], dt, luftTempo(q23), ab, F.abluft);
+  steuerStrom("st", dt, v.signal14, v.p14, quelle, F, false);
+  blendeLeereStroeme();
 }
 
 // --- controls -------------------------------------------------------------
@@ -711,34 +671,6 @@ knopfAuto.addEventListener("click", () => {
 });
 knopfAuto.setAttribute("aria-pressed", String(bed.auto));
 bindeRegler();
-
-// --- frame loop -----------------------------------------------------------
-function blende(sicht) {
-  luftLage.style.opacity = String(sicht);
-  for (const el of raeume) {
-    if (sicht < 1) el.style.opacity = (0.82 * sicht).toFixed(3);
-    else el.style.removeProperty("opacity");
-  }
-}
-// One frame; the loop itself is EX.ABLAUF.
-function bildZeichnen(dt, offen, bewegt) {
-  blende(Math.max(0, 1 - offen * 3));
-  // The valve stops while it is being taken apart and carries on afterwards.
-  if (offen < 0.01 && !bewegt) {
-    const dm = angehalten ? 0 : dt / zeitlupe;
-    if (dm > 0) {
-      bed.takt(dm);
-      ventilSchritt(v, MASSE, dm, druck);
-    }
-    zeichneHub();
-    zeichneLuft(dm);
-    zeichneAnzeige();
-    zeichneBedienung();
-  } else {
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
-  }
-  zeichneSymbol();
-}
 
 // Before taking it apart: no automatic, no signal, no hand, spool home in
 // the rest position — or the spool would leave its bore from somewhere else.
@@ -882,9 +814,10 @@ const EIGENES_CSS = `${VS.CSS}
 
 // `--vorschau=<Datei>` writes the page somewhere else (a scratch folder) instead of into the figure's folder.
 const vorschauArg = process.argv.find((a) => a.startsWith("--vorschau="));
-const ZIEL = vorschauArg ? vorschauArg.slice("--vorschau=".length) : join(HIER, "..", "..", "index.html");
-mkdirSync(dirname(ZIEL), { recursive: true });
-writeFileSync(ZIEL, seite({
+// A build of one spool only (`--nur=`) is for the audit and must not overwrite the page.
+const ZIEL = vorschauArg ? vorschauArg.slice("--vorschau=".length) : NUR ? null : join(HIER, "..", "..", "index.html");
+if (ZIEL) mkdirSync(dirname(ZIEL), { recursive: true });
+const seiteHtml = seite({
   titel: "3/2-Wegeventil – Pneumatik",
   fig: "Bild 1",
   kartenTitel: "3/2-Wegeventil, Längsschieber",
@@ -910,8 +843,9 @@ writeFileSync(ZIEL, seite({
   buehneLabel: "3/2-Wegeventil im Schnitt: Schieber, Luftwege und Baugruppen",
   beiFigur: BEIFIGUR,
   beiFigurLabel: "Schaltzeichen",
-}).replace("</style>", `${EIGENES_CSS}</style>`));
-console.log(`geschrieben: ${ZIEL}`);
+}).replace("</style>", `${EIGENES_CSS}</style>`);
+if (ZIEL) writeFileSync(ZIEL, seiteHtml);
+console.log(ZIEL ? `geschrieben: ${ZIEL}` : "keine Seite geschrieben (--nur)");
 
 console.log(`Teile: ${R.items.length}, Körper: ${R.solids.length}, Rohre: ${R.tubes.length}`);
 for (const u of UEBERDECKUNG) {

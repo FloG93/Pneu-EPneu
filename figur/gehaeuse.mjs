@@ -36,7 +36,7 @@
 //     GH.kappe(gruppe, K, steuerX, links, { nummer, mitPort, ohnePort }),
 //     GH.steuerkolben(gruppe, [a, b], name, variante, owner),
 //     GH.federsitz(K, FEDER, { variante, owner }),
-//     GH.schrauben({ oben, kappen }), GH.schlaeuche(WEGE, { istSteuer, name, variante })
+//     GH.steuerverschraubung(x, suffix, variante), GH.schrauben({ oben, kappen }), GH.schlaeuche(WEGE, { istSteuer, name, variante })
 //   GH.put, GH.inGruppe(name), GH.NT (normteile), GH.flach, GH.schnitt, GH.rec
 //   Helpers: innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung,
 //     kanalInnen, aufNut, aufGewinde, box, boxenOhne, unterLoch, schnittEnde
@@ -46,7 +46,7 @@ import * as G from "../.claude/skills/anatomy/kit/lathe.mjs";
 import * as A from "../.claude/skills/anatomy/kit/audit.mjs";
 import * as SCH from "./schnitt.mjs";
 import { tubePieces, tubeSvg } from "../.claude/skills/anatomy/kit/tube.mjs";
-import { normteile } from "./normteile.mjs";
+import { normteile, sechskant } from "./normteile.mjs";
 
 const TAU = Math.PI * 2;
 
@@ -679,5 +679,29 @@ export function gehaeuseSchnitt({ P, R, PIECE_OF, MOVE, FX, FY, FZ, NUTEN, STEGE
     }
   }
 
-  return { schieber, kappe, steuerkolben, federsitz, schrauben, schlaeuche, put, inGruppe: gruppe, NT, flach, schnitt, rec, grundplatte, dichtung, gehaeuse, innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung, kanalInnen, aufNut, aufGewinde, box, boxenOhne, unterLoch, schnittEnde };
+  /**
+   * The pilot fitting in a cap's thread: an M5 push-in fitting standing on the
+   * cap's top at x. `suffix` ends the part names (one per pilot port),
+   * `variante` is the variant the port belongs to, if any.
+   */
+  function steuerverschraubung(x, suffix = "", variante = null) {
+    const F = FZ(x, 0);
+    const D = STEUER_V;
+    gruppe("steuerleitung");
+    put([x, 0, (D.gewinde[0] + D.gewinde[1]) / 2], NT.gewinde(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2),
+      [rec(A.disc(F, D.gewinde[0], D.gewinde[1], R_STEUER_GEWINDE - 0.2, { name: `steuerleitung.gewinde${suffix}` }))],
+      { name: `steuerleitung.gewinde${suffix}`, variante });
+    const hx = sechskant(D.rS);
+    put([x, 0, (D.sechskant[0] + D.ring[1]) / 2], [
+      SV(G.prismOf(F, hx, D.sechskant[0], D.sechskant[1], P), { tone: "mid" }),
+      SV(G.disc(D.koerper[0], D.koerper[1], D.rK, F, P), { tone: "hi" }),
+      SV(G.disc(D.ring[0], D.ring[1], D.rR, F, P), { tone: "hi" }),
+    ].join(""), [
+      rec(A.prism(F, hx, D.sechskant[0], D.sechskant[1], { name: `steuerleitung.sechskant${suffix}` })),
+      rec(A.disc(F, D.koerper[0], D.koerper[1], D.rK, { name: `steuerleitung.koerper${suffix}` })),
+      rec(A.disc(F, D.ring[0], D.ring[1], D.rR, { name: `steuerleitung.ring${suffix}` })),
+    ], { name: `steuerleitung.verschraubung${suffix}`, variante });
+  }
+
+  return { steuerverschraubung, schieber, kappe, steuerkolben, federsitz, schrauben, schlaeuche, put, inGruppe: gruppe, NT, flach, schnitt, rec, grundplatte, dichtung, gehaeuse, innen, bohrungInnen, flanke, rBohrung, bohrungsKante, gehaeuseBohrung, kanalInnen, aufNut, aufGewinde, box, boxenOhne, unterLoch, schnittEnde };
 }

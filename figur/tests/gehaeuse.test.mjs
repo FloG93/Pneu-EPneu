@@ -103,11 +103,11 @@ test("Grundplatte, Dichtung und Gehäuse legen ihre Teile in die Gruppe ab, die 
 test("Schieber, Kolben, Feder und Schrauben: Namen, Naben-Gruppe, Variante, Gruppe der Kappe", () => {
   const items2 = [];
   const R3 = { solid: (s) => s, put: (i) => { items2.push(i); return i; }, nameFor: (n) => n };
-  const PIECE = { schieber: "schieber", ringe: "ringe", kappe: "kappe", rueckstell: "rueckstell", schrauben: "schrauben" };
+  const PIECE = { schieber: "schieber", ringe: "ringe", kappe: "kappe", rueckstell: "rueckstell", schrauben: "schrauben", steuerleitung: "steuerleitung" };
   const H = gehaeuseSchnitt({
     P, R: R3, PIECE_OF: PIECE, MOVE: {}, FX, FY: () => null, FZ, NUTEN, STEGE: [], FOLGE: [], PORT: {}, RB: 6.5, R_NUT: 10.5, ZA,
     GEH: { x0: 0, x1: 60, y0: -21, z0: 18, z1: 66 }, PLATTE: {}, DICHT: {}, R_KANAL: 4, ZP: 8.5, R_GEWINDE: 6.5, Y_BOHR: -4.5,
-    R_KAMMER: 10, R_KOLBEN: 9.8, KAPPE: { y0: -20, z0: 23, z1: 65 }, STEUER_V: {}, R_STEUER_GEWINDE: 2.5, R_STEUER_BOHRUNG: 1.5,
+    R_KAMMER: 10, R_KOLBEN: 9.8, KAPPE: { y0: -20, z0: 23, z1: 65 }, STEUER_V: { gewinde: [59, 65], sechskant: [65, 69], rS: 5, koerper: [69, 73], rK: 3.6, ring: [73, 74.5], rR: 3 }, R_STEUER_GEWINDE: 2.5, R_STEUER_BOHRUNG: 1.5,
     SP: [-7, 60], R_HALS: 3.6, R_BUND: 6.3, R_RINGNUT: 5.3, RING_B: 2.2,
   });
   H.schieber({ bunde: [[-7, 11], [40, 60]], ringe: [4, 50], namen: { kolben: "nc.kolben", hinten: "nc.ring.hinten", vorn: "nc.ring.vorn" }, variante: "nc", owner: "x" });
@@ -124,6 +124,10 @@ test("Schieber, Kolben, Feder und Schrauben: Namen, Naben-Gruppe, Variante, Grup
   H.federsitz({ x0: 90, wand: 107 }, { sitz: 2, draht: 1.1, windungen: 4.5, rWindung: 7 });
   assert.deepEqual(items2[0].feder, [92, 107]);
   assert.ok(items2[0].svg.includes("data-federx"), "die Windungen tragen ihr x");
+  items2.length = 0;
+  H.steuerverschraubung(-14.5, "12", "nc");
+  assert.deepEqual(items2.map((i) => i.name), ["steuerleitung.gewinde12", "steuerleitung.verschraubung12"]);
+  assert.ok(items2.every((i) => i.svg.startsWith('<g data-variante="nc">') && i.piece === "steuerleitung"));
   items2.length = 0;
   H.schrauben({ oben: [7, 53], kappen: [[-22, -1, "kappe"], [112, 1, "rueckstell"]] });
   assert.deepEqual(items2.map((i) => i.piece), ["schrauben", "schrauben", "kappe", "kappe", "rueckstell", "rueckstell"]);
