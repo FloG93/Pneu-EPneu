@@ -179,9 +179,20 @@ test("3/2 NC: Signal weg → Feder stellt zurück, p2 fällt wieder", () => {
   ventilSignal(v, "14", false); lauf(v, 1.5);
   assert.ok(v.anteil < 0.02 && Math.abs(v.p[2] - AUSSEN) < 0.05);
 });
-test("3/2 von Hand auf 50 %: alle Wege zu, p2 hält", () => {
-  for (const art of [NC, NO]) {
-    const v = lauf(v32(art), 0.1); vonHand(v, 0.5); const p2 = v.p[2]; lauf(v, 0.5);
+test("3/2 von Hand auf 50 %: alle Wege zu, p2 hält – nach Signal, aus beiden Grundstellungen", () => {
+  // The signal first drives p2 to the other end (NC: supply, NO: ambient); then the
+  // signal goes and the hand takes the spool to the middle. A signal ends hand
+  // mode, so it is taken away before the hand holds the spool, within one step.
+  for (const [art, danach] of [[NC, AUSSEN + 6], [NO, AUSSEN]]) {
+    const v = v32(art);
+    ventilSignal(v, "14", true); lauf(v, 1.5);
+    assert.ok(Math.abs(v.p[2] - danach) < 0.05, `vor dem Halten steht p2 auf ${danach}`);
+    ventilSignal(v, "14", false); vonHand(v, 0.5);
+    const p2 = v.p[2]; lauf(v, 0.8);
+    assert.ok(Math.abs(v.p[2] - p2) < 1e-9 && v.anteil === 0.5 && Math.abs(v.p[2] - danach) < 0.05);
+  }
+  for (const art of [NC, NO]) {            // and from the rest position
+    const v = lauf(v32(art), 0.1); vonHand(v, 0.5); const p2 = v.p[2]; lauf(v, 0.8);
     assert.ok(Math.abs(v.p[2] - p2) < 1e-9 && v.anteil === 0.5);
   }
 });

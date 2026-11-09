@@ -1158,7 +1158,7 @@ ISO 5599-3 haben einen Vorteil: Man liest an der Steuerleitung ab, was sie bewir
 
 <h2>Wovon die Schaltzeit abhängt</h2>
 <p>Die Anzeige nennt die <strong>Schaltzeit</strong>: die Zeit vom Signal, bis der Schieber 98 % seines Weges geschafft
-hat. Sie hängt fast nur an der Steuerkammer. Die Steuerluft kommt durch eine enge Leitung und muss die Kammer erst
+hat. Im Modell hängt sie fast nur an der Steuerkammer. Die Steuerluft kommt durch eine enge Leitung und muss die Kammer erst
 füllen. Erst wenn der Druck auf dem Steuerkolben genug Kraft aufbringt, um Feder und Haftreibung zu überwinden, setzt
 sich der Schieber in Bewegung. Der Schieber selbst wiegt nur ${Math.round(M.masseSchieber * 1000)} g und wäre ohne das
 Füllen der Kammer fast sofort drüben. Darum schalten die beiden Bauarten verschieden schnell.</p>
@@ -1176,7 +1176,8 @@ Mit weniger Druck füllt sich die Kammer langsamer, und der Kolben drückt schw�
 ${ms(T.bi14)} ms, in beide Richtungen gleich schnell. Ihm fehlt die Feder: Der Steuerkolben muss nur die Haftreibung
 überwinden, und dafür genügt schon ein wenig Druck in der Kammer.</p>
 <p>Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms. Diese Werte gelten für Ventile mit Federrückstellung und
-für magnetbetätigte Ventile; ohne Feder schaltet das Impulsventil schneller. Mit der Zeitlupe (1× bis 1/50) sieht man,
+für magnetbetätigte Ventile; ohne Feder schaltet das Impulsventil schneller. Die Spanne gilt bei 6 bar: bei 2 bar liegt das
+Modell mit ${ms(T.mono14bei2)} ms darüber. Mit der Zeitlupe (1× bis 1/50) sieht man,
 wie sich die Steuerkammer erst füllt und der Schieber dann losläuft.</p>
 <p class="hinweis">Jede Zahl auf dieser Seite wird aus demselben Modell gerechnet, das auch den Schieber bewegt. Kräfte
 sind theoretische Werte; die Reibung der Dichtungen zieht in der Praxis noch einmal 3 bis 10 Prozent ab. Baulänge, Bohrung, Hub, Steuerkolben, Federkraft, Überdeckung und das Volumen hinter 2 und 4

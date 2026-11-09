@@ -12,6 +12,13 @@ export default async function pruefeVentil32({ seite, V, modus }) {
   const zweiBilder = () => seite.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const anteil = () => seite.evaluate(() => window.__figur.modell().anteil);
   const tag = (n) => n.toUpperCase();
+  // Waiting for a state of the page: a timeout is a failed check, never a silent
+  // continuation (the checks after it would measure a state that never came).
+  const erwarte = async (was, fn, arg, opt) => {
+    const ok = await seite.waitForFunction(fn, arg, opt).then(() => true, () => false);
+    if (!ok) V(`Zeitüberschreitung beim Warten auf: ${was}`, false);
+    return ok;
+  };
 
   // --- the legend stays under the pointer ---------------------------------
   await seite.mouse.move(5, 5);
@@ -172,8 +179,8 @@ export default async function pruefeVentil32({ seite, V, modus }) {
   await seite.fill("#druck", "3");
   await seite.dispatchEvent("#druck", "input");
   await seite.evaluate(() => { window.__figur.stelle(1, "nc"); window.__figur.weiter(); });
-  await seite.waitForFunction(() => document.querySelector("[data-readout]").textContent.startsWith("p2 3,0 bar"),
-    null, { timeout: 5000, polling: 50 }).catch(() => {});
+  await erwarte("die Anzeige p2 3,0 bar", () => document.querySelector("[data-readout]").textContent.startsWith("p2 3,0 bar"),
+    null, { timeout: 5000, polling: 50 });
   const anzeige = (await seite.textContent("[data-readout]")).trim();
   V(`NC betätigt bei 3 bar zeigt die Anzeige p2 3,0 bar (${anzeige})`, anzeige.startsWith("p2 3,0 bar · Schaltzeit"));
   await seite.fill("#druck", "6");
@@ -188,7 +195,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
     const gehalten = await anteil();
     V(`${tag(name)}: Signal gehalten, der Schieber steht in der betätigten Stellung (${gehalten.toFixed(3)})`, gehalten > 0.98);
     await seite.mouse.move(5, 5);
-    await seite.waitForFunction(() => window.__figur.modell().anteil < 0.02, null, { timeout: 3000, polling: 50 }).catch(() => {});
+    await erwarte("die Rückstellung nach dem Loslassen", () => window.__figur.modell().anteil < 0.02, null, { timeout: 3000, polling: 50 });
     const los = await anteil();
     V(`${tag(name)}: Maus verlässt den gehaltenen Knopf, die Feder stellt zurück (${los.toFixed(3)})`, los < 0.02);
     await seite.mouse.up();
@@ -203,7 +210,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
     await seite.evaluate((n) => { window.__figur.stelle(0, n); window.__figur.weiter(); }, name);
     await seite.hover("#btn-signal");
     await seite.mouse.down();
-    await seite.waitForFunction(() => window.__figur.modell().anteil > 0.5 && window.__figur.modell().signal14, null, { timeout: 3000, polling: 50 }).catch(() => {});
+    await erwarte("den gehaltenen Schieber in der betätigten Hälfte", () => window.__figur.modell().anteil > 0.5 && window.__figur.modell().signal14, null, { timeout: 3000, polling: 50 });
     const davor = await seite.evaluate(() => ({ s: window.__figur.modell().signal14, a: window.__figur.modell().anteil }));
     await seite.evaluate(() => document.getElementById("btn-explode").click());
     const zustandHalten = () => seite.evaluate(() => ({
@@ -211,7 +218,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
       knopf: document.getElementById("btn-signal").getAttribute("aria-pressed"), zerlegt: window.__figur.zerlegt(),
     }));
     const sofort = await zustandHalten();
-    await seite.waitForFunction(() => window.__figur.offen() > 0.3, null, { timeout: 8000, polling: 50 }).catch(() => {});
+    await erwarte("das Auseinanderfahren", () => window.__figur.offen() > 0.3, null, { timeout: 8000, polling: 50 });
     await rahmen();
     const spaeter = await zustandHalten();
     V(`${tag(name)}: Zerlegen während des Haltens (vorher Signal ${davor.s}, Schieber ${davor.a.toFixed(2)}): Signal aus, Feder hat zurückgestellt, Knopf nicht gedrückt, bleibt so`,
@@ -220,7 +227,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
       && !spaeter.s && spaeter.a === 0 && spaeter.knopf === "false");
     await seite.mouse.up();
     await seite.keyboard.press("Escape");
-    await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+    await erwarte("den Zusammenbau", () => window.__figur.offen() < 0.02, null, { timeout: 30000 });
     const zusammen = await zustandHalten();
     V(`${tag(name)}: nach dem Zusammenbau ist der Schieber in Ruhe und kein Signal aktiv (${zusammen.a})`, !zusammen.s && zusammen.a === 0);
   }
@@ -265,8 +272,8 @@ export default async function pruefeVentil32({ seite, V, modus }) {
     await seite.fill("#zeitlupe", "50");
     await seite.dispatchEvent("#zeitlupe", "input");
     await seite.evaluate(() => window.__figur.signal(true));
-    await seite.waitForFunction(() => { const a = window.__figur.modell().anteil; return a > 0.05 && a < 0.95; },
-      null, { timeout: 4000, polling: "raf" }).catch(() => {});
+    await erwarte("den Schieber unterwegs", () => { const a = window.__figur.modell().anteil; return a > 0.05 && a < 0.95; },
+      null, { timeout: 4000, polling: "raf" });
     const unterwegs = await anteil();
     await seite.click("#btn-bauart");
     const nach1 = await seite.evaluate(() => ({ a: window.__figur.modell().anteil, s: window.__figur.modell().signal14, v: window.__figur.variante() }));
@@ -294,7 +301,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
   // number's assembly and be visible (not hidden, opacity above 0). The
   // number of numbers is the number of legend entries.
   const streng = async () => {
-    await seite.waitForFunction(() => window.__figur.offen() > 0.99, null, { timeout: 20000 }).catch(() => {});
+    await erwarte("die zerlegte Figur", () => window.__figur.offen() > 0.99, null, { timeout: 20000 });
     await seite.waitForTimeout(2500);        // the last springs settle, as in the shared check
     return seite.evaluate(() => {
       document.querySelector(".iso-stage").scrollIntoView({ block: "center" });
@@ -343,7 +350,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
     V(`${tag(name)} zerlegt: jede Nummer trifft ein sichtbar gezeichnetes Teil ihrer Baugruppe (${r.gezaehlt} von ${r.eintraege})${r.daneben.length ? " — daneben: " + r.daneben.join(", ") : ""}`,
       r.gezaehlt === r.eintraege && r.eintraege > 0 && r.daneben.length === 0);
     await seite.keyboard.press("Escape");
-    await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+    await erwarte("den Zusammenbau", () => window.__figur.offen() < 0.02, null, { timeout: 30000 });
   }
   if ((await seite.evaluate(() => window.__figur.variante())) !== "nc") await seite.click("#btn-bauart");
 
@@ -354,7 +361,7 @@ export default async function pruefeVentil32({ seite, V, modus }) {
   V("beim Zerlegen ist kein Signal aktiv", !(await seite.evaluate(() => window.__figur.modell().signal14)));
   // Back together, so the shared take-apart check that follows starts from rest.
   await seite.keyboard.press("Escape");
-  await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+  await erwarte("den Zusammenbau", () => window.__figur.offen() < 0.02, null, { timeout: 30000 });
 
   // --- a fresh load with ?variante=no: the valve is the NO one from the start --
   // Last, because it reloads the page; the shared check goes on with a fresh

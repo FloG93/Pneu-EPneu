@@ -2,8 +2,8 @@
 // The behaviour is checked by figur/tests/tools/pruefe-figur.mjs; this catches
 // the things that would otherwise only show as a blank or broken page.
 //
-// The page is built here first: it is not committed until it is published, so
-// a fresh checkout has none to read.
+// The page is built here first, so the test reads what the build script makes
+// now and not an older copy that happens to be committed.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -114,4 +114,19 @@ test("Der Text nennt die Schaltzeit, wie die Anzeige sie rundet", () => {
   assert.match(html, new RegExp(`brauchen bei 6 bar ${ms} ms bis in die betätigte Stellung`));
   assert.match(html, /12 bis 52 ms/);
   assert.match(html, /href="\.\.\/Wegeventil-5-2\/"/, "Hinweis auf die 5/2-Seite fehlt");
+});
+
+// The README's table of switching times is prose a person reads, so it is held
+// against the model here: every row, rounded as printed, for both valves (they
+// switch equally fast: the time hangs on the pilot chamber).
+test("Die Schaltzeiten in der README sind die des Modells", () => {
+  const md = readFileSync(join(WURZEL, "Wegeventil-3-2", "README.md"), "utf8");
+  const zeilen = [...md.matchAll(/^\| (Umschalten in die betätigte Stellung|Rückstellung durch die Feder) \| (\d) bar \| ([\d,]+) ms \|$/gm)];
+  assert.equal(zeilen.length, 6, `nur ${zeilen.length} Zeilen gefunden`);
+  for (const [, vorgang, bar, ms] of zeilen) {
+    for (const art of [VENTIL_3_2_NC, VENTIL_3_2_NO]) {
+      const t = ventilSchaltzeit(ISO_5599_GR1, Number(bar), vorgang.startsWith("Rück") ? { art, richtung: "12" } : { art });
+      assert.equal(ms, (t * 1000).toFixed(1).replace(".", ","), `${vorgang} ${bar} bar`);
+    }
+  }
 });

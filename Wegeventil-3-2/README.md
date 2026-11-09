@@ -77,7 +77,8 @@ Bauarten gleich, denn die Zeit hängt an der Steuerkammer und nicht am Schieber:
 | Rückstellung durch die Feder | 6 bar | 21,8 ms |
 | Rückstellung durch die Feder | 8 bar | 24,2 ms |
 
-Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms. Die Anzeige auf der Seite
+Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms, bei 6 bar; bei 2 bar liegt das
+Modell mit 74,2 ms darüber. Die Anzeige auf der Seite
 rundet auf ganze Millisekunden. `figur/tests/ventil.test.mjs` und
 `Wegeventil-3-2/tests/seite.test.mjs` halten Modell und Seite zusammen.
 
@@ -136,8 +137,9 @@ Einzelmaß im Katalog steht:
 - Schieberbohrung Ø 13 mm, Schieberhub 7 mm, Steuerkolben Ø 20 mm, Federkraft etwa
   30 N vorgespannt, Überdeckung 30 % des Hubs, Leitwerte: alle wie im 5/2-Ventil
   (`ISO_5599_GR1`)
-- Volumen hinter 2: wie im 5/2-Ventil, ein Schlauch von 0,5 m (6/4 mm) plus 50 cm³ – es
-  steht für „irgendein Verbraucher"
+- Volumen hinter 2: wie im 5/2-Ventil, rund 59 cm³ (grob ein halber Meter Schlauch plus
+  50 cm³, siehe `volumen2` in `figur/ventil.mjs`) – es steht für „irgendein Verbraucher";
+  die gezeichneten Schläuche (8/6 mm) gehören nicht dazu
 - Masse des Schiebers 30 g, Haftreibung 8 N, Gleitreibung 5 N
 
 **Zwei Leitwerte sind auf die Datenblatt-Schaltzeiten abgestimmt**, nicht gemessen oder

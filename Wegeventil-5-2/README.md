@@ -69,7 +69,8 @@ Stellung 14 geruht, die Kammer 14 ist also entlüftet:
 | bistabil | Impuls 12 | 6 bar | 9,6 ms |
 
 Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms. Diese Werte gelten für
-Ventile mit Federrückstellung und für magnetbetätigte Ventile. Das bistabile Ventil hat
+Ventile mit Federrückstellung und für magnetbetätigte Ventile, und bei 6 bar; bei 2 bar
+liegt das Modell mit 74,2 ms darüber. Das bistabile Ventil hat
 keine Feder: Sein Steuerkolben muss nur die Haftreibung überwinden, darum schaltet es im
 Modell schneller, bei 6 bar in knapp 10 ms. Die Anzeige auf der Seite rundet auf ganze
 Millisekunden. `figur/tests/ventil.test.mjs` und `Wegeventil-5-2/tests/seite.test.mjs`
@@ -122,8 +123,9 @@ Einzelmaß im Katalog steht:
 - Steuerkolben Ø 20 mm
 - Federkraft etwa 30 N, vorgespannt
 - Überdeckung 30 % des Hubs, wie im Zylindermodell
-- Volumen hinter 2 und 4: ein Schlauch von 0,5 m (6/4 mm) plus 50 cm³ – es steht für
-  „irgendein Verbraucher"
+- Volumen hinter 2 und 4: rund 59 cm³ (grob ein halber Meter Schlauch plus 50 cm³, siehe
+  `volumen2` in `figur/ventil.mjs`) – es steht für „irgendein Verbraucher"; die gezeichneten
+  Schläuche (8/6 mm) gehören nicht dazu
 - Masse des Schiebers 30 g, Haftreibung 8 N, Gleitreibung 5 N
 
 **Zwei Leitwerte sind auf die Datenblatt-Schaltzeiten abgestimmt**, nicht gemessen oder

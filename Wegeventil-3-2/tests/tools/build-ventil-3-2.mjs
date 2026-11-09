@@ -1213,8 +1213,9 @@ unterscheiden; mit dem Knopf „NO-Ventil“ wechselst du zwischen ihnen.</p>
 <p>Beim Ventil mit <strong>Ruhestellung offen</strong> (<em>normally open</em>, NO) ist es umgekehrt: Ohne Signal verbindet
 der Schieber <strong>1 mit 2</strong> und sperrt 3. Steuerluft an <strong>10</strong> schaltet um: Jetzt ist 1 gesperrt, und
 <strong>2 ist mit 3 verbunden</strong>. Das Signal 10 sperrt also die Zufuhr 1. Beim Umschalten der Bauart steht das Ventil
-sofort wieder in Ruhe, damit der Schieber nie in der Mitte hängen bleibt. Ein Ventil dieser Art liefert zum Beispiel
-das Steuersignal für das Ventil auf der Seite 14 des 5/2-Ventils (<a href="../Wegeventil-5-2/">zur 5/2-Seite</a>).</p>
+sofort wieder in Ruhe, damit der Schieber nie in der Mitte hängen bleibt.</p>
+<p>Wozu braucht man das? Ein 3/2-Ventil liefert zum Beispiel das Steuersignal für Anschluss 14 des 5/2-Ventils – meist ein
+Taster mit Sperr-Grundstellung (NC). Dieses Ventil siehst du auf der <a href="../Wegeventil-5-2/">5/2-Seite</a>.</p>
 
 <h2>Warum in der Mitte kurz alles zu ist</h2>
 <p>Die Bunde sind etwas länger, als sie sein müssten. Darum öffnet der neue Weg erst, wenn der alte schon geschlossen
@@ -1233,7 +1234,7 @@ ab, was sie bewirkt.</p>
 
 <h2>Wovon die Schaltzeit abhängt</h2>
 <p>Die Anzeige nennt die <strong>Schaltzeit</strong>: die Zeit vom Signal, bis der Schieber 98 % seines Weges geschafft
-hat. Sie hängt fast nur an der Steuerkammer. Die Steuerluft kommt durch eine enge Leitung und muss die Kammer erst
+hat. Im Modell hängt sie fast nur an der Steuerkammer. Die Steuerluft kommt durch eine enge Leitung und muss die Kammer erst
 füllen. Erst wenn der Druck auf dem Steuerkolben genug Kraft aufbringt, um Feder und Haftreibung zu überwinden, setzt
 sich der Schieber in Bewegung. Der Schieber selbst wiegt nur ${Math.round(M.masseSchieber * 1000)} g und wäre ohne das
 Füllen der Kammer fast sofort drüben.</p>
@@ -1245,7 +1246,7 @@ Feder ${M.federVor} N + Haftreibung ${M.haftreibung} N = ${M.federVor + M.haftre
 </p>
 <p>Beide Bauarten brauchen bei 6 bar ${ms(T.nc12)} ms bis in die betätigte Stellung und ${ms(T.nc_zurueck)} ms, bis die Feder sie
 zurückgestellt hat. Bei 2 bar sind es ${ms(T.nc12bei2)} ms bis in die betätigte Stellung: Mit weniger Druck füllt sich die
-Kammer langsamer, und der Kolben drückt schwächer gegen die Feder. Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms.
+Kammer langsamer, und der Kolben drückt schwächer gegen die Feder. Datenblätter nennen für Ventile dieser Größe 12 bis 52 ms; die Spanne gilt bei 6 bar, bei 2 bar liegt das Modell darüber.
 Mit der Zeitlupe (1× bis 1/50) sieht man, wie sich die Steuerkammer erst füllt und der Schieber dann losläuft.</p>
 <p class="hinweis">Jede Zahl auf dieser Seite wird aus demselben Modell gerechnet, das auch den Schieber bewegt. Kräfte
 sind theoretische Werte; die Reibung der Dichtungen zieht in der Praxis noch einmal 3 bis 10 Prozent ab. Baulänge, Bohrung,
@@ -1316,9 +1317,11 @@ if (process.argv.includes("--audit")) {
     allow: NUR ? [] : [
       // The two spools fill the same bore on purpose and the page shows one of
       // them: no drawing order between them is right, and none is ever seen.
-      // (They also share the owner "schieber.variante", so the support check
-      // does not call them sunk.) Each spool alone passes without this entry:
-      // `--audit --nur=nc`, `--audit --nur=no`.
+      // This pair is the first of TWO excuses. The second is the shared owner
+      // "schieber.variante" on the spools and their rings (see VARIANTEN): it
+      // switches the support check ("sunk") off between the two spools and, as
+      // a side effect, between a spool and its own rings. Each spool alone
+      // passes without either excuse: `--audit --nur=nc`, `--audit --nur=no`.
       ["nc.kolben", "no.kolben"],
     ],
     crowd: [],
