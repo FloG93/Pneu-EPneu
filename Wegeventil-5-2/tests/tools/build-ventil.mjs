@@ -24,11 +24,13 @@ import * as EX from "../../../figur/explode.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import * as LEG from "../../../figur/legende.mjs";
 import { ISO_5599_GR1, wegeOffen, neuesVentil, ventilAnzeige, ventilSchaltzeit } from "../../../figur/ventil.mjs";
-import { VENTIL_5_2, wegeventilSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
-import { seite, knopf, schieber as regler, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
+import { VENTIL_5_2, wegeventilSymbol, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
+import { seite, knopf, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
 import { gehaeuseSchnitt, bogen, nahtlos } from "../../../figur/gehaeuse.mjs";
-import { normteile, hermite, stummel, sechskant, federPruefen, SCHNITT_CSS } from "../../../figur/normteile.mjs";
+import { normteile, hermite, stummel, sechskant, federPruefen } from "../../../figur/normteile.mjs";
 import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
+import { ventilRaeume } from "../../../figur/ventilraeume.mjs";
+import * as VS from "../../../figur/ventilseite.mjs";
 import { LEGENDE } from "./legende-ventil.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -698,79 +700,18 @@ function ueberdeckungPruefen() {
 // it fills. It is appended to the item that draws that hollow, so it takes
 // exactly that item's place in the painter's order: a fittings stub that
 // stands in front of a channel stays in front of its air as well.
-const ZN = ZA - 9;                   // groove bottom: still visible under a land
-const ZG = ZA - 5.6;                 // gap under a web: visible under a neck, not under a land
-const kz = (punkte) => ring3(punkte.map(([x, z]) => [x, 0, z]));
-const raumGruppe = (nr, inhalt) => `<g class="kammer" data-raum="${nr}" fill="none">${inhalt}</g>`;
-const flaeche = (d, extra = "") => `<path${extra} d="${d}"/>`;
 const NAEHE = { 4: [BUNDE[0][1], BUNDE[1][0]], 2: [BUNDE[1][1], BUNDE[2][0]] };   // necks at rest
 const ZK0 = KAPPE.z1 - (STEUER_V.gewinde[1] - STEUER_V.gewinde[0]);  // bottom of a pilot thread
 const KAMMER = { 14: [K14.wand, KOLBEN14[0]], 12: [KOLBEN12[1], K12.wand], z: [ZA - R_KAMMER, ZA + R_KAMMER] };
-const kammerRechteck = ([x0, x1]) => kz([[x0, KAMMER.z[0]], [x1, KAMMER.z[0]], [x1, KAMMER.z[1]], [x0, KAMMER.z[1]]]);
-
-/**
- * Housing, below the axis: the lower part of the groove, the channel under it
- * and the lower gap round the neck. These lie behind the spool's front half,
- * so they are drawn before the spool and the spool covers what it covers.
- */
-function raumGehaeuse(nr) {
-  const x = PORT[nr];
-  const [a, b] = [x - NUT_HALB, x + NUT_HALB];
-  const unten = kz([[x - R_KANAL, GEH.z0], [x - R_KANAL, ZA - R_NUT], [a, ZA - R_NUT], [a, ZA - RB], [b, ZA - RB],
-    [b, ZA - R_NUT], [x + R_KANAL, ZA - R_NUT], [x + R_KANAL, GEH.z0]]);
-  // The neck between two lands always opens onto groove 4 (A–B) or groove 2 (B–C):
-  // its air is that port's air.
-  const hals = NAEHE[nr]
-    ? `<g data-hub="">${flaeche(kz([[NAEHE[nr][0], ZA - RB], [NAEHE[nr][1], ZA - RB], [NAEHE[nr][1], ZA - R_HALS], [NAEHE[nr][0], ZA - R_HALS]]))}</g>`
-    : "";
-  return raumGruppe(nr, flaeche(unten) + hals);
-}
-
-/**
- * Above the axis it is the other way round: the spool's BACK half lies behind
- * the cut plane there, yet is painted after the housing. So the upper part of
- * the groove and the gap above the neck are drawn right after the spool. Only
- * the next land to the right can stand in front of that gap (the camera looks
- * from +x); the gap ends where a sight line from it would enter that land.
- */
-function raumUeberSchieber(nr) {
-  const x = PORT[nr];
-  const oben = kz([[x - NUT_HALB, ZA + RB], [x + NUT_HALB, ZA + RB], [x + NUT_HALB, ZA + R_NUT], [x - NUT_HALB, ZA + R_NUT]]);
-  if (!NAEHE[nr]) return raumGruppe(nr, flaeche(oben));
-  const [h0, h1] = NAEHE[nr];
-  // Sight line from (x, 0, ZA + h) towards the camera: how far along x until it is R_BUND from the axis.
-  const quer2 = V[1] ** 2 + V[2] ** 2;
-  const vorlauf = (h) => {
-    if (h >= R_BUND) return 0;
-    const t = (-h * V[2] + Math.sqrt(h * h * V[2] ** 2 - quer2 * (h * h - R_BUND ** 2))) / quer2;
-    return V[0] * t;
-  };
-  const kante = bogen(R_HALS, R_BUND, 8).map((h) => [h1 - vorlauf(h), ZA + h]);
-  const luecke = kz([[h0, ZA + R_HALS], ...kante, [h1, ZA + RB], [h0, ZA + RB]]);
-  return raumGruppe(nr, flaeche(oben) + `<g data-hub="">${flaeche(luecke)}</g>`);
-}
-/** Sub-base behind the cut: the upper half of the port drilling and the channel up to the gasket. */
-function raumPlatte(nr) {
-  const x = PORT[nr];
-  const knick = Math.atan2(Math.sqrt(R_GEWINDE ** 2 - R_KANAL ** 2), R_KANAL);
-  const bogenPunkte = (von, bis) => bogen(von, bis, 10).map((t) => [x + R_GEWINDE * Math.cos(t), ZP + R_GEWINDE * Math.sin(t)]);
-  return raumGruppe(nr, flaeche(kz([
-    ...bogenPunkte(0, knick), [x + R_KANAL, PLATTE.z1], [x - R_KANAL, PLATTE.z1], ...bogenPunkte(Math.PI - knick, Math.PI),
-  ])));
-}
-/** Gasket: the slot of each channel. */
-const raumDichtung = (nr) => raumGruppe(nr, flaeche(kz([[PORT[nr] - R_KANAL, DICHT.z0], [PORT[nr] + R_KANAL, DICHT.z0],
-  [PORT[nr] + R_KANAL, DICHT.z1], [PORT[nr] - R_KANAL, DICHT.z1]])));
-/** The trough in the step, seen from above, up to where the fitting's stub begins. */
-const raumRinne = (nr) => raumGruppe(nr, flaeche(ring3([[PORT[nr] - R_GEWINDE, 0, ZP], [PORT[nr] + R_GEWINDE, 0, ZP],
-  [PORT[nr] + R_GEWINDE, VERSCHRAUBUNG.gewinde[0], ZP], [PORT[nr] - R_GEWINDE, VERSCHRAUBUNG.gewinde[0], ZP]])));
-/** A pilot chamber: its drilling and the space between end wall and piston, which the page redraws. */
-function raumSteuer(nr) {
-  const x = STEUER[nr];
-  const bohrung = kz([[x - R_STEUER_BOHRUNG, KAMMER.z[1]], [x + R_STEUER_BOHRUNG, KAMMER.z[1]],
-    [x + R_STEUER_BOHRUNG, ZK0], [x - R_STEUER_BOHRUNG, ZK0]]);
-  return raumGruppe(nr, flaeche(bohrung) + flaeche(kammerRechteck(KAMMER[nr]), ` data-steuerkammer="${nr}"`));
-}
+// The shapes of the rooms are figur/ventilraeume.mjs; this valve says where its necks lie.
+const RA = ventilRaeume({
+  P, PORT, GEH, PLATTE, DICHT, ZA, ZP, RB, R_NUT, NUT_HALB, R_KANAL, R_GEWINDE, R_HALS, R_BUND,
+  GEWINDE_START: VERSCHRAUBUNG.gewinde[0], R_STEUER_BOHRUNG, ZK0, KAMMER_Z: KAMMER.z,
+});
+// The neck between two lands always opens onto groove 4 (A–B) or groove 2 (B–C): its air is that port's air.
+const raumGehaeuse = (nr) => RA.raumUnten(nr, NAEHE[nr] ? RA.halsUnten(...NAEHE[nr]) : "");
+const raumUeberSchieber = (nr) => RA.raumOben(nr, NAEHE[nr] ? RA.halsOben(...NAEHE[nr]) : "");
+const { raumPlatte, raumDichtung, raumRinne } = RA;
 
 function luftEinfuellen() {
   const item = (name) => {
@@ -785,29 +726,13 @@ function luftEinfuellen() {
   // The step pieces in the order they were built: piece i carries the trough of FOLGE[i].
   const stufen = R.items.filter((i) => i.name.startsWith("grundplatte.stufe"));
   FOLGE.forEach((nr, i) => { stufen[i].svg += raumRinne(nr); });
-  item("kappe14.unten").svg += raumSteuer(14);
-  item("rueckstell.unten").svg += raumSteuer(12);
+  item("kappe14.unten").svg += RA.raumSteuer(14, STEUER[14], KAMMER[14]);
+  item("rueckstell.unten").svg += RA.raumSteuer(12, STEUER[12], KAMMER[12]);
 }
 
 // Particle routes, outside in: from the cut hose end (or the silencer) to the bottom of the groove.
-function vonAussen(nr) {
-  const x = PORT[nr];
-  const innen = [[x, VERSCHRAUBUNG.gewinde[0], ZP], [x, 0, ZP], [x, 0, ZN]];
-  if (nr === 3 || nr === 5) {
-    // Out through the silencer and a little way into the open air.
-    const spitze = DAEMPFER.sinter[1] + DAEMPFER.kuppe;
-    return [[x, spitze + 8, ZP], [x, spitze, ZP], [x, DAEMPFER.sechskant[0], ZP], ...innen];
-  }
-  return [...WEGE[nr].slice().reverse(), [x, VERSCHRAUBUNG.gewinde[1], ZP], ...innen];
-}
-/** From the bottom of groove a, under the web, to the bottom of groove b. */
-function quer(a, b) {
-  const [xa, xb] = [PORT[a], PORT[b]];
-  const r = Math.sign(xb - xa);
-  const steg = [xa + r * NUT_HALB, xb - r * NUT_HALB];
-  return [[xa + r * 3, 0, ZN], [steg[0] - r * 1.5, 0, ZG], [steg[1] + r * 1.5, 0, ZG], [xb - r * 3, 0, ZN]];
-}
-const weg = (von, nach) => [...vonAussen(von), ...quer(von, nach), ...vonAussen(nach).slice().reverse()];
+const AUSSEN_WEG = { wege: WEGE, daempfer: DAEMPFER, abluft: [3, 5], gewinde: VERSCHRAUBUNG.gewinde };
+const weg = (von, nach) => [...RA.vonAussen(von, AUSSEN_WEG), ...RA.quer(von, nach), ...RA.vonAussen(nach, AUSSEN_WEG).slice().reverse()];
 const steuerWeg = (nr) => [...WEGE[nr].slice().reverse(), [STEUER[nr], 0, ZA + R_KAMMER], [STEUER[nr], 0, ZA]];
 const ROUTEN = { "1-4": weg(1, 4), "2-3": weg(2, 3), "1-2": weg(1, 2), "4-5": weg(4, 5), st14: steuerWeg(14), st12: steuerWeg(12) };
 
@@ -926,18 +851,13 @@ ${EX.ABLAUF}
 ${LU.LAUFZEIT}
 ${SYMBOL_LAUFZEIT}
 ${BEDIENUNG_LAUFZEIT}
+${VS.LAUFZEIT}
 
 // --- the model drives everything -----------------------------------------
 const v = neuesVentil(MASSE, { art: ART, bauart: "monostabil", druckBar: 6 });
-let druck = 6;
-let zeitlupe = 1;
-let angehalten = false;
-
-const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
-  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
-  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
-});
+const ANSCHLUESSE = ["2", "4"];   // working ports the readout names
+const schaltzeitOptionen = () => (v.bauart === "bistabil"
+  ? { art: ART, bauart: v.bauart, impuls: IMPULS } : { art: ART, bauart: v.bauart });   // bistable with the page's own pulse, as a press of the button gives it
 const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
 const steuerkammer = {
   "14": svg.querySelector('[data-steuerkammer="14"]'),
@@ -953,23 +873,9 @@ function kammerD(x0, x1) {
     .map((q) => iso([q[0], 0, q[1]], P).map((n) => n.toFixed(1)).join(" ")).join("L") + "Z";
 }
 
-// The spool with its rings and pistons slides; the spring is compressed piece
-// by piece, each in proportion to its distance from the fixed end wall.
-let gezeichnet = null;
-function zeichneHub() {
-  const s = v.anteil * HUB;
-  if (gezeichnet !== null && Math.abs(s - gezeichnet) < 1e-4) return;
-  gezeichnet = s;
-  const t = s > 1e-4 ? translateAlong(P, [s, 0, 0]) : null;
-  for (const el of hubTeile) {
-    if (t) el.setAttribute("transform", t);
-    else el.removeAttribute("transform");
-  }
-  for (const f of federTeile) {
-    const dx = (s * (f.b - f.x)) / (f.b - f.a);
-    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
-    else f.el.removeAttribute("transform");
-  }
+// The pilot chambers grow and shrink with the spool; everything else that
+// slides is figur/ventilseite.mjs.
+function zeichneKammern(s) {
   steuerkammer["14"].setAttribute("d", kammerD(KAMMER["14"][0], KAMMER["14"][1] + s));
   steuerkammer["12"].setAttribute("d", kammerD(KAMMER["12"][0] + s, KAMMER["12"][1]));
 }
@@ -1029,47 +935,17 @@ function zeichneLuft(dt) {
   }
 }
 
-// The last measured switching time; until there is one, the time this
-// pressure and this type give, computed once per change.
-let rechenZeit = { druck: null, bauart: null, wert: null };
-let letzteZeile = "";
-const komma = (x) => x.toFixed(1).replace(".", ",");
-function zeichneAnzeige() {
-  let a;
-  if (v.schaltzeit === null) {
-    if (rechenZeit.druck !== druck || rechenZeit.bauart !== v.bauart) {
-      // Bistable with the page's own pulse, as a press of the button gives it.
-      const wie = v.bauart === "bistabil" ? { art: ART, bauart: v.bauart, impuls: IMPULS } : { art: ART, bauart: v.bauart };
-      rechenZeit = { druck, bauart: v.bauart, wert: ventilSchaltzeit(MASSE, druck, wie) };
-    }
-    a = ventilAnzeige(Object.assign({}, v, { schaltzeit: rechenZeit.wert }), MASSE, druck);
-  } else a = ventilAnzeige(v, MASSE, druck);
-  const text = "p2 " + komma(a.drucke[2]) + " bar · p4 " + komma(a.drucke[4]) + " bar · Schaltzeit "
-    + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
-}
-
 // --- controls -------------------------------------------------------------
 const knopf14 = document.getElementById("btn-14");
 const knopf12 = document.getElementById("btn-12");
 const knopfBauart = document.getElementById("btn-bauart");
 const knopfAuto = document.getElementById("btn-auto");
-const lupeRegler = document.getElementById("zeitlupe");
-const lupeWert = document.getElementById("zeitlupe-wert");
-const handRegler = document.getElementById("hand");
-const handWert = document.getElementById("hand-wert");
-const druckRegler = document.getElementById("druck");
-const druckWert = document.getElementById("druck-wert");
 
 const mono = () => v.bauart === "monostabil";
 function zeichneBedienung() {
   if (knopf14.getAttribute("aria-pressed") !== String(v.signal14)) knopf14.setAttribute("aria-pressed", String(v.signal14));
   if (knopf12.getAttribute("aria-pressed") !== String(v.signal12)) knopf12.setAttribute("aria-pressed", String(v.signal12));
-  // The slider follows the spool unless a hand holds it.
-  if (v.hand === null) {
-    const w = String(Math.round(v.anteil * 100));
-    if (handRegler.value !== w) { handRegler.value = w; handWert.textContent = w + " %"; }
-  }
+  zeichneHandRegler();
 }
 
 // The signal buttons (hold, pulse, automatic cycle) are figur/bedienung.mjs;
@@ -1095,12 +971,6 @@ const stoppeAuto = () => bed.autoAus();
 bed.knopf(knopf14, "14");
 bed.knopf(knopf12, "12");
 
-const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
-// Slides the visible symbol with the spool and colours its open paths.
-function zeichneSymbol() {
-  const sym = symbole.find((el) => !el.hidden);
-  if (sym) symbolStellen(sym.querySelector("svg"), v.anteil, wegeOffen(v.anteil, MASSE.ueberdeckung));
-}
 function zeigeBauart() {
   const bi = !mono();
   knopfBauart.setAttribute("aria-pressed", String(bi));
@@ -1137,26 +1007,7 @@ knopfAuto.addEventListener("click", () => {
 });
 knopfAuto.setAttribute("aria-pressed", String(bed.auto));
 
-lupeRegler.addEventListener("input", () => {
-  zeitlupe = lupeRegler.valueAsNumber;
-  lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
-});
-handRegler.addEventListener("input", () => {
-  stoppeAuto();
-  vonHand(v, handRegler.valueAsNumber / 100);
-  handWert.textContent = handRegler.value + " %";
-  angehalten = false;
-  run();
-});
-druckRegler.addEventListener("input", () => {
-  druck = druckRegler.valueAsNumber;
-  // The last measured time belonged to the old pressure.
-  v.schaltzeit = null;
-  angehalten = false;
-  druckWert.textContent = komma(druck) + " bar";
-  zeichneAnzeige();
-  run();
-});
+bindeRegler();
 
 // --- frame loop -----------------------------------------------------------
 function blende(sicht) {
@@ -1247,12 +1098,7 @@ const LEISTE =
   + hausBedienung()
   + `<span class="umbruch"></span>`
   // Each slider stays one unit with its label and value when the bar wraps on a phone.
-  + [
-    regler("zeitlupe", "Zeitlupe", { min: 1, max: 50, step: 1, wert: 1, einheit: "×", beschreibung: "Zeitlupe: Modellzeit geteilt durch diesen Wert" }),
-    regler("hand", "Schieber von Hand", { min: 0, max: 100, step: 1, wert: 0, einheit: " %", beschreibung: "Schieber von Hand: 0 % ist Stellung 12, 100 % ist Stellung 14" }),
-    regler("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Versorgungsdruck in bar" })
-      .replace(">6 bar</output>", ">6,0 bar</output>"),
-  ].map((r) => `<span class="regler">${r}</span>`).join("");
+  + VS.reglerLeiste({ handBeschreibung: "Schieber von Hand: 0 % ist Stellung 12, 100 % ist Stellung 14" });
 
 const ms = (zeit) => Math.round(zeit * 1000);
 const A_ST = (Math.PI * M.steuerkolben ** 2) / 4;
@@ -1339,17 +1185,8 @@ sind Annahmen; sie stehen in der Anleitung zur Figur.</p>
 </div>`;
 
 // What only this page needs on top of the shared sheet.
-const EIGENES_CSS = `${LU.CSS}${SCHNITT_CSS}${SYMBOL_CSS}
-[data-variante][hidden] { display: none }
-.iso { --sz-strich: var(--anatomy-strong); --sz-stark: ${LU.FARBEN.dark.druck}; --sz-blass: ${LU.FARBEN.dark.abluft} }
-.iso[data-theme="light"] { --sz-stark: ${LU.FARBEN.light.druck}; --sz-blass: ${LU.FARBEN.light.abluft} }
-.beifigur-titel { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--anatomy-strong) }
-.beifigur-symbol .sz-symbol { display: block; width: 100%; height: auto; margin: 10px 0 12px }
-.beifigur-text { margin: 0; font-size: 12.5px; line-height: 1.55 }
-.leiste .umbruch { flex-basis: 100%; height: 0 }
-.leiste .regler { display: inline-flex; align-items: center; gap: 9px; margin-right: 14px; white-space: nowrap }
+const EIGENES_CSS = `${VS.CSS}
 #btn-14, #btn-12 { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none }
-.playbtn:disabled { cursor: not-allowed; color: var(--anatomy-text); border-style: dashed; box-shadow: none }
 `;
 
 writeFileSync(ZIEL, seite({

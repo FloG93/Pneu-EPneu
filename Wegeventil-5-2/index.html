@@ -138,8 +138,9 @@ body{margin:0;background:var(--anatomy-page);color:var(--anatomy-text);font:14px
 .beifigur-text { margin: 0; font-size: 12.5px; line-height: 1.55 }
 .leiste .umbruch { flex-basis: 100%; height: 0 }
 .leiste .regler { display: inline-flex; align-items: center; gap: 9px; margin-right: 14px; white-space: nowrap }
-#btn-14, #btn-12 { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none }
 .playbtn:disabled { cursor: not-allowed; color: var(--anatomy-text); border-style: dashed; box-shadow: none }
+
+#btn-14, #btn-12 { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none }
 </style><link rel="icon" type="image/svg+xml" href="favicon.svg"></head><body class="iso" data-theme="dark"><script>
 (function () {
   var Q = {"dark":{"shade-0":"#0f0f0f","shade-1":"#121212","shade-2":"#151515","shade-3":"#181818","top":"#1c1c1c","face":"#1b1b1b","lit-top":"#262626","lit-shade":"#1d1d1d","faint":"#2a2a2a","lo":"#3e3e3e","mid":"#6a6a6a","hi":"#d4d4d4"},"light":{"shade-0":"#dcdcd9","shade-1":"#e5e5e2","shade-2":"#ededea","shade-3":"#f4f4f1","top":"#ffffff","face":"#ffffff","lit-top":"#ffffff","lit-shade":"#eeeeeb","faint":"#d4d4d6","lo":"#b4b4b8","mid":"#8a8a8f","hi":"#26262a"}}, S = {"dark":{"shade-0":"#353535","shade-1":"#5e5e5e","shade-2":"#868686","shade-3":"#afafaf","top":"#c9c9c9","face":"#676767","lit-top":"#eaeaea","lit-shade":"#a5a5a5","faint":"#717171","lo":"#b4b4b4","mid":"#e6e6e6","hi":"#ffffff"},"light":{"shade-0":"#8e8e85","shade-1":"#b0b0a6","shade-2":"#d0d0c9","shade-3":"#edede8","top":"#ffffff","face":"#ffffff","lit-top":"#ffffff","lit-shade":"#cfcfc7","faint":"#88888f","lo":"#5b5b64","mid":"#33333f","hi":"#0b0b0f"}};
@@ -1814,8 +1815,7 @@ function bedienungSignale(opt) {
 }
 
 
-// --- the model drives everything -----------------------------------------
-const v = neuesVentil(MASSE, { art: ART, bauart: "monostabil", druckBar: 6 });
+const komma = (x) => x.toFixed(1).replace(".", ",");
 let druck = 6;
 let zeitlupe = 1;
 let angehalten = false;
@@ -1825,20 +1825,6 @@ const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) =>
   const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
   return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
 });
-const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
-const steuerkammer = {
-  "14": svg.querySelector('[data-steuerkammer="14"]'),
-  "12": svg.querySelector('[data-steuerkammer="12"]'),
-};
-const luftLage = svg.querySelector("[data-luftlage]");
-const stroeme = {};
-for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[name], Math.max(5, Math.round(BAHNEN[name].gesamt / 26)));
-
-function kammerD(x0, x1) {
-  const z0 = KAMMER.z[0], z1 = KAMMER.z[1];
-  return "M" + [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]
-    .map((q) => iso([q[0], 0, q[1]], P).map((n) => n.toFixed(1)).join(" ")).join("L") + "Z";
-}
 
 // The spool with its rings and pistons slides; the spring is compressed piece
 // by piece, each in proportion to its distance from the fixed end wall.
@@ -1857,6 +1843,97 @@ function zeichneHub() {
     if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
     else f.el.removeAttribute("transform");
   }
+  zeichneKammern(s);
+}
+
+// The last measured switching time; until there is one, the time this
+// pressure and this type give, computed once per change.
+let rechenZeit = { druck: null, schluessel: null, wert: null };
+let letzteZeile = "";
+function zeichneAnzeige() {
+  let a;
+  if (v.schaltzeit === null) {
+    const wie = schaltzeitOptionen();
+    const schluessel = JSON.stringify(wie);
+    if (rechenZeit.druck !== druck || rechenZeit.schluessel !== schluessel) {
+      rechenZeit = { druck, schluessel, wert: ventilSchaltzeit(MASSE, druck, wie) };
+    }
+    a = ventilAnzeige(Object.assign({}, v, { schaltzeit: rechenZeit.wert }), MASSE, druck);
+  } else a = ventilAnzeige(v, MASSE, druck);
+  const text = ANSCHLUESSE.map((w) => "p" + w + " " + komma(a.drucke[w]) + " bar").join(" · ")
+    + " · Schaltzeit " + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
+  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+
+// The hand slider follows the spool unless a hand holds it.
+const handRegler = document.getElementById("hand");
+const handWert = document.getElementById("hand-wert");
+function zeichneHandRegler() {
+  if (v.hand === null) {
+    const w = String(Math.round(v.anteil * 100));
+    if (handRegler.value !== w) { handRegler.value = w; handWert.textContent = w + " %"; }
+  }
+}
+
+const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
+// Slides the visible symbol with the spool and colours its open paths.
+function zeichneSymbol() {
+  const sym = symbole.find((el) => !el.hidden);
+  if (sym) symbolStellen(sym.querySelector("svg"), v.anteil, wegeOffen(v.anteil, MASSE.ueberdeckung));
+}
+
+// Slow motion, the spool by hand, the supply pressure.
+function bindeRegler() {
+  const lupeRegler = document.getElementById("zeitlupe");
+  const lupeWert = document.getElementById("zeitlupe-wert");
+  const druckRegler = document.getElementById("druck");
+  const druckWert = document.getElementById("druck-wert");
+  lupeRegler.addEventListener("input", () => {
+    zeitlupe = lupeRegler.valueAsNumber;
+    lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
+  });
+  handRegler.addEventListener("input", () => {
+    stoppeAuto();
+    vonHand(v, handRegler.valueAsNumber / 100);
+    handWert.textContent = handRegler.value + " %";
+    angehalten = false;
+    run();
+  });
+  druckRegler.addEventListener("input", () => {
+    druck = druckRegler.valueAsNumber;
+    // The last measured time belonged to the old pressure.
+    v.schaltzeit = null;
+    angehalten = false;
+    druckWert.textContent = komma(druck) + " bar";
+    zeichneAnzeige();
+    run();
+  });
+}
+
+
+// --- the model drives everything -----------------------------------------
+const v = neuesVentil(MASSE, { art: ART, bauart: "monostabil", druckBar: 6 });
+const ANSCHLUESSE = ["2", "4"];   // working ports the readout names
+const schaltzeitOptionen = () => (v.bauart === "bistabil"
+  ? { art: ART, bauart: v.bauart, impuls: IMPULS } : { art: ART, bauart: v.bauart });   // bistable with the page's own pulse, as a press of the button gives it
+const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
+const steuerkammer = {
+  "14": svg.querySelector('[data-steuerkammer="14"]'),
+  "12": svg.querySelector('[data-steuerkammer="12"]'),
+};
+const luftLage = svg.querySelector("[data-luftlage]");
+const stroeme = {};
+for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[name], Math.max(5, Math.round(BAHNEN[name].gesamt / 26)));
+
+function kammerD(x0, x1) {
+  const z0 = KAMMER.z[0], z1 = KAMMER.z[1];
+  return "M" + [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]
+    .map((q) => iso([q[0], 0, q[1]], P).map((n) => n.toFixed(1)).join(" ")).join("L") + "Z";
+}
+
+// The pilot chambers grow and shrink with the spool; everything else that
+// slides is figur/ventilseite.mjs.
+function zeichneKammern(s) {
   steuerkammer["14"].setAttribute("d", kammerD(KAMMER["14"][0], KAMMER["14"][1] + s));
   steuerkammer["12"].setAttribute("d", kammerD(KAMMER["12"][0] + s, KAMMER["12"][1]));
 }
@@ -1916,47 +1993,17 @@ function zeichneLuft(dt) {
   }
 }
 
-// The last measured switching time; until there is one, the time this
-// pressure and this type give, computed once per change.
-let rechenZeit = { druck: null, bauart: null, wert: null };
-let letzteZeile = "";
-const komma = (x) => x.toFixed(1).replace(".", ",");
-function zeichneAnzeige() {
-  let a;
-  if (v.schaltzeit === null) {
-    if (rechenZeit.druck !== druck || rechenZeit.bauart !== v.bauart) {
-      // Bistable with the page's own pulse, as a press of the button gives it.
-      const wie = v.bauart === "bistabil" ? { art: ART, bauart: v.bauart, impuls: IMPULS } : { art: ART, bauart: v.bauart };
-      rechenZeit = { druck, bauart: v.bauart, wert: ventilSchaltzeit(MASSE, druck, wie) };
-    }
-    a = ventilAnzeige(Object.assign({}, v, { schaltzeit: rechenZeit.wert }), MASSE, druck);
-  } else a = ventilAnzeige(v, MASSE, druck);
-  const text = "p2 " + komma(a.drucke[2]) + " bar · p4 " + komma(a.drucke[4]) + " bar · Schaltzeit "
-    + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
-}
-
 // --- controls -------------------------------------------------------------
 const knopf14 = document.getElementById("btn-14");
 const knopf12 = document.getElementById("btn-12");
 const knopfBauart = document.getElementById("btn-bauart");
 const knopfAuto = document.getElementById("btn-auto");
-const lupeRegler = document.getElementById("zeitlupe");
-const lupeWert = document.getElementById("zeitlupe-wert");
-const handRegler = document.getElementById("hand");
-const handWert = document.getElementById("hand-wert");
-const druckRegler = document.getElementById("druck");
-const druckWert = document.getElementById("druck-wert");
 
 const mono = () => v.bauart === "monostabil";
 function zeichneBedienung() {
   if (knopf14.getAttribute("aria-pressed") !== String(v.signal14)) knopf14.setAttribute("aria-pressed", String(v.signal14));
   if (knopf12.getAttribute("aria-pressed") !== String(v.signal12)) knopf12.setAttribute("aria-pressed", String(v.signal12));
-  // The slider follows the spool unless a hand holds it.
-  if (v.hand === null) {
-    const w = String(Math.round(v.anteil * 100));
-    if (handRegler.value !== w) { handRegler.value = w; handWert.textContent = w + " %"; }
-  }
+  zeichneHandRegler();
 }
 
 // The signal buttons (hold, pulse, automatic cycle) are figur/bedienung.mjs;
@@ -1982,12 +2029,6 @@ const stoppeAuto = () => bed.autoAus();
 bed.knopf(knopf14, "14");
 bed.knopf(knopf12, "12");
 
-const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
-// Slides the visible symbol with the spool and colours its open paths.
-function zeichneSymbol() {
-  const sym = symbole.find((el) => !el.hidden);
-  if (sym) symbolStellen(sym.querySelector("svg"), v.anteil, wegeOffen(v.anteil, MASSE.ueberdeckung));
-}
 function zeigeBauart() {
   const bi = !mono();
   knopfBauart.setAttribute("aria-pressed", String(bi));
@@ -2024,26 +2065,7 @@ knopfAuto.addEventListener("click", () => {
 });
 knopfAuto.setAttribute("aria-pressed", String(bed.auto));
 
-lupeRegler.addEventListener("input", () => {
-  zeitlupe = lupeRegler.valueAsNumber;
-  lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
-});
-handRegler.addEventListener("input", () => {
-  stoppeAuto();
-  vonHand(v, handRegler.valueAsNumber / 100);
-  handWert.textContent = handRegler.value + " %";
-  angehalten = false;
-  run();
-});
-druckRegler.addEventListener("input", () => {
-  druck = druckRegler.valueAsNumber;
-  // The last measured time belonged to the old pressure.
-  v.schaltzeit = null;
-  angehalten = false;
-  druckWert.textContent = komma(druck) + " bar";
-  zeichneAnzeige();
-  run();
-});
+bindeRegler();
 
 // --- frame loop -----------------------------------------------------------
 function blende(sicht) {
