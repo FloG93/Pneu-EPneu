@@ -1406,6 +1406,11 @@ signalKnopf(knopf14, "14");
 signalKnopf(knopf12, "12");
 
 const symbole = Array.from(document.querySelectorAll(".beifigur-symbol"));
+// Slides the visible symbol with the spool and colours its open paths.
+function zeichneSymbol() {
+  const sym = symbole.find((el) => !el.hidden);
+  if (sym) symbolStellen(sym.querySelector("svg"), v.anteil, wegeOffen(v.anteil, MASSE.ueberdeckung));
+}
 function zeigeBauart() {
   const bi = !mono();
   knopfBauart.setAttribute("aria-pressed", String(bi));
@@ -1416,8 +1421,7 @@ function zeigeBauart() {
   }
   knopf12.disabled = !bi;
   knopf12.title = bi ? "Signal an 12: zurück in die Stellung 12" : "Feder stellt zurück";
-  const sichtbar = symbole.find((el) => !el.hidden);
-  if (sichtbar) symbolStellen(sichtbar.querySelector("svg"), v.anteil, wegeOffen(v.anteil, MASSE.ueberdeckung));
+  zeichneSymbol();
 }
 function wechsleBauart(bauart) {
   bauartWechseln(v, MASSE, bauart, druck);
@@ -1496,6 +1500,7 @@ function tick(now) {
   } else {
     for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
   }
+  zeichneSymbol();
   frame = sichtbar ? requestAnimationFrame(tick) : 0;
 }
 const run = () => { if (!frame && sichtbar) { last = 0; frame = requestAnimationFrame(tick); } };
@@ -1585,6 +1590,7 @@ window.__figur = {
     zeichneLuft(0);
     zeichneAnzeige();
     zeichneBedienung();
+    zeichneSymbol();
   },
   signal(name, an) {
     stoppeAuto();

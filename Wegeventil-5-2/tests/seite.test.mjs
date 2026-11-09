@@ -62,6 +62,24 @@ test("Neben der Karte steht das Schaltzeichen", () => {
   assert.ok(aside[0].includes('aria-label="Schaltzeichen 5/2-Wegeventil'), "das Schaltzeichen fehlt im aside");
 });
 
+test("Beide Symbolvarianten stehen im HTML, genau eine ist sichtbar", () => {
+  const aside = html.match(/<aside class="beifigur"[\s\S]*?<\/aside>/)[0];
+  const teile = [...aside.matchAll(/<div class="beifigur-symbol" data-variante="(feder|kolben12)"([^>]*)>/g)];
+  assert.deepEqual(teile.map((m) => m[1]).sort(), ["feder", "kolben12"]);
+  assert.equal(teile.filter((m) => !/hidden/.test(m[2])).length, 1, "genau ein Symbol ohne hidden");
+});
+
+test("Das Symbol bekommt seine Farben aus den Luftfarben und folgt dem Modus", () => {
+  assert.match(html, /\.iso\s*\{[^}]*--sz-strich: var\(--anatomy-strong\)/);
+  assert.match(html, /\.iso\[data-theme="light"\]\s*\{[^}]*--sz-stark/);
+});
+
+test("Das Symbol wird in jedem Bild nachgeführt, nicht nur beim Bauartwechsel", () => {
+  const tick = html.match(/function tick\(now\) \{[\s\S]*?\n\}\n/)[0];
+  assert.match(tick, /zeichneSymbol\(\)/);
+  assert.equal((html.match(/function symbolStellen/g) || []).length, 1, "symbolStellen ist doppelt eingebettet");
+});
+
 test("Die Anzeige steht schon ohne JavaScript in der Seite", () => {
   assert.match(html, /p2 6,0 bar · p4 0,0 bar · Schaltzeit \d+ ms/);
 });
