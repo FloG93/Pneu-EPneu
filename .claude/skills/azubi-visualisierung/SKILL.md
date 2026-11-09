@@ -63,6 +63,9 @@ Das ausgearbeitete Beispiel liegt in `beispiel/zylinder-doppeltwirkend/` (Zylind
 | `legende.mjs` | Legende, Nummern mit Führungslinie, Erklärzeile, Auswahl |
 | `luft.mjs` | Medienschicht: Wege, Partikel, Kammerfüllung, die zwei Töne (Name bleibt, auch bei Öl oder Strom) |
 | `schnitt.mjs` | Schnittfenster in Drehteilen |
+| `normteile.mjs` | Zeichenhelfer für Normteile (Schnittfläche, Schraube, Gewinde, Verschraubung, Schalldämpfer, Feder) |
+| `bedienung.mjs` | Signalknöpfe als Laufzeit: Halten, Impuls, Automatik auf Modellzeit |
+| `gehaeuse.mjs`, `ventilraeume.mjs`, `ventilseite.mjs` | Schieberventil-Familie: aufgeschnittenes Gehäuse, Lufträume und Teilchenwege, Regler, Anzeige und Schaltzeichen. Kennen den Aufbau der Bauart, kein bestimmtes Ventil |
 | `seite.mjs` | Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript |
 | `toene.mjs` | Grautöne und Kontraststufen |
 | `kacheln.mjs` | Inhalt der Übersicht (`SEITE`, `RUBRIKEN`) |

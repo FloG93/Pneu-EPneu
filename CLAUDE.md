@@ -24,8 +24,8 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 | Modul | Verantwortung |
 |---|---|
 | `figur/pneumatik.mjs` | Das Rechenmodell des Zylinders: Flächen, Kräfte, Kammerdrücke, Kolbenbewegung. Reine Funktionen, keine Zeichnung. |
-| `figur/ventil.mjs` | Das Rechenmodell des 5/2-Wegeventils: Öffnung der Wegesätze, Kammerdruck-Schritt (beides nutzt auch der Zylinder), Schieber, Steuerkammern, Schaltzeit. Reine Funktionen, keine Zeichnung. |
-| `figur/schaltzeichen.mjs` | Schaltzeichen nach ISO 1219-1 aus einer Beschreibung der Wege (`VENTIL_5_2`), dazu die Laufzeit, die das Symbol mit dem Schieber gleiten lässt und offene Wege färbt |
+| `figur/ventil.mjs` | Das Rechenmodell der Wegeventile aus der Wegebeschreibung (5/2 und 3/2, NC und NO): Öffnung der Wegesätze, Kammerdruck-Schritt (beides nutzt auch der Zylinder), Schieber, Steuerkammern, Schaltzeit. Reine Funktionen, keine Zeichnung. |
+| `figur/schaltzeichen.mjs` | Schaltzeichen nach ISO 1219-1 aus einer Beschreibung der Wege (`VENTIL_5_2`, `VENTIL_3_2_NC`, `VENTIL_3_2_NO`), dazu die Laufzeit, die das Symbol mit dem Schieber gleiten lässt und offene Wege färbt |
 | `figur/explode.mjs` | Wege, Federn, Staffelung, Sortierung nach echter Tiefe je Bild, Nummern am nächsten eigenen Teil (`anker`); `ABLAUF`: Bildschleife, Knopf „Zerlegen und zusammenbauen", Escape |
 | `figur/legende.mjs` | Legendenliste, Nummern mit Führungslinie, Erklärzeile, Auswahl; `LAUFZEIT`: Zeigen/Merken, Erzählung beim Zusammenbau |
 | `figur/normteile.mjs` | Zeichenhelfer für Normteile (Schnittfläche, Schraubenkopf, Gewinde, Steckverschraubung, Schalldämpfer, Druckfeder, Schlauchstummel) und die Blocklängenprüfung der Feder; Schnittton `SCHNITT_CSS` |
@@ -36,7 +36,7 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 | `figur/luft.mjs` | Luftwege als 3D-Pfade, Partikel darauf, Kammerfüllung, die vier Blautöne |
 | `figur/seite.mjs` | Seitengerüst: Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript, Begleitbild (`beiFigur`), Modelldateien als Skripttext (`modulQuelle`) |
 
-**Bekannte Ausnahmen:** Die beiden Rechenmodelle `pneumatik.mjs` und `ventil.mjs` kennen ihr Bauteil – ein Modell ohne Bauteil gibt es nicht. Sie liegen in `figur/`, weil mehrere Seiten mit ihnen rechnen (der Zylinder auch mit `ventil.mjs`) und dieselbe Physik nicht zweimal stehen darf. Alles andere in `figur/` bleibt bauteilfrei.
+**Bekannte Ausnahmen:** Die beiden Rechenmodelle `pneumatik.mjs` und `ventil.mjs` kennen ihr Bauteil – ein Modell ohne Bauteil gibt es nicht. Sie liegen in `figur/`, weil mehrere Seiten mit ihnen rechnen (der Zylinder auch mit `ventil.mjs`) und dieselbe Physik nicht zweimal stehen darf. Die zweite Ausnahme ist die **Schieberventil-Familie**: `gehaeuse.mjs`, `ventilraeume.mjs` und `ventilseite.mjs` kennen den Aufbau eines Längsschieberventils (Bohrung mit Ringnuten, Kanäle nach unten, Schieber mit Bunden, Steuerkappe und Feder), aber kein bestimmtes Ventil: Anschlüsse, Nuten, Bunde und Maße kommen als Parameter vom Bauskript. Alles andere in `figur/` bleibt bauteilfrei.
 
 Ein Bauteil liefert **nur** Geometrie und vier Datentabellen (`MOVE`, `STAGGER`, `PIECE_OF`, `LEGENDE`), bei beweglichen Bauteilen dazu die Luftwege und das Modell, das sie treibt. Seine Laufzeit gibt `EX.ABLAUF` genau zwei Funktionen: `bildZeichnen(dt, offen, bewegt)` und `vorDemZerlegen()`.
 
@@ -77,6 +77,8 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 3/2-Wegeventil | `npm run pruef:browser:ventil32` (dazu `npm run pruef:ventil32` für Audit und Zerlegen) | `all checks passed (132)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |
+
+Die Browserprüfungen laufen **nicht** in der CI: Playwright ist außerhalb des Repos installiert (keine npm-Pakete im Repo). Sie sind ein manueller Schritt vor jeder Veröffentlichung.
 
 **Messen statt ansehen.** Geprüft wird nie „Klasse gesetzt", sondern was der Browser danach zeichnet. Ein Bild, das „fast richtig" aussieht, ist der Normalfall.
 
