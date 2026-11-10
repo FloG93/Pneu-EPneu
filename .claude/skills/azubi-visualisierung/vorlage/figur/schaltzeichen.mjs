@@ -249,3 +249,97 @@ function symbolStellen(svgEl, anteil, offen) {
   }
 }
 `;
+
+/**
+ * The symbol of an adjustable throttle check valve (ISO 1219-1): port 1 on the
+ * left, port 2 on the right, two parallel branches between them.
+ * Upper branch = adjustable throttle: two facing arcs (the constriction) that
+ * the line passes between, crossed by a slanted arrow (adjustable).
+ * Lower branch = check valve with spring: a ball (circle) pressed by a spring
+ * against a V seat. The seat lies on the 2 side, so flow 1→2 presses the ball
+ * onto it (blocked) and flow 2→1 lifts it (free).
+ * Each branch is one group with `data-weg` ("drossel" / "rueckschlag") for the
+ * runtime to colour. `feld` is the scale in px (distance of the two branches
+ * is 0,9 · feld).
+ */
+export function drosselRueckschlagSymbol({ feld = 60 } = {}) {
+  const f = feld;
+  const rand = 4, tH = f * 0.2;
+  const anschl = f * 0.5;                       // port stub length
+  const xL = rand + anschl, xR = xL + f * 1.8;  // the two junctions
+  const xm = (xL + xR) / 2;
+  const yOben = rand + f * 0.3;                 // throttle line
+  const ym = yOben + f * 0.45;                  // port line
+  const yUnten = ym + f * 0.45;                 // check valve line
+  const strich = `fill="none" stroke="currentColor" stroke-width="${STRICH}"`;
+
+  // Throttle: line through the gap of two arcs, slanted arrow across.
+  const a = f * 0.2, b = f * 0.17, s = f * 0.11;
+  const rb = (a * a + s * s) / (2 * s);          // radius of an arc with chord 2a and sagitta s
+  const bogenOben = `M${zahl(xm - a)} ${zahl(yOben - b)}A${zahl(rb)} ${zahl(rb)} 0 0 0 ${zahl(xm + a)} ${zahl(yOben - b)}`;
+  const bogenUnten = `M${zahl(xm - a)} ${zahl(yOben + b)}A${zahl(rb)} ${zahl(rb)} 0 0 1 ${zahl(xm + a)} ${zahl(yOben + b)}`;
+  const pa = { x: xm - f * 0.3, y: yOben + f * 0.24 }, pe = { x: xm + f * 0.3, y: yOben - f * 0.24 };
+  const drossel = `<g class="sz-zweig" data-weg="drossel">`
+    + `<path class="sz-leitung" d="M${zahl(xL)} ${zahl(yOben)}L${zahl(xR)} ${zahl(yOben)}" ${strich}/>`
+    + `<path class="sz-bogen" d="${bogenOben}" ${strich}/>`
+    + `<path class="sz-bogen" d="${bogenUnten}" ${strich}/>`
+    + `<path class="sz-verstell" d="M${zahl(pa.x)} ${zahl(pa.y)}L${zahl(pe.x)} ${zahl(pe.y)}${spitze(pe.x, pe.y, pe.x - pa.x, pe.y - pa.y, f * 0.15, f * 0.055)}" fill="currentColor" stroke="currentColor" stroke-width="${STRICH}" stroke-linejoin="miter"/>`
+    + `</g>`;
+
+  // Check valve: stop, spring, ball, V seat opening towards the ball.
+  const r = f * 0.1, d = f * 0.17;
+  const xb = xm - f * 0.02;                     // ball centre
+  const xSpitze = xb + r * Math.SQRT2;          // seat apex, arms at 45° touch the ball
+  const xStop = xb - r - f * 0.3;
+  const zick = 6, h = f * 0.065;
+  let feder = `M${zahl(xStop)} ${zahl(yUnten)}`;
+  const fa = xStop + f * 0.03, fe = xb - r - f * 0.02;
+  for (let i = 0; i < zick; i += 1) feder += `L${zahl(fa + ((fe - fa) * (i + 0.5)) / zick)} ${zahl(yUnten + (i % 2 === 0 ? -h : h))}`;
+  feder += `L${zahl(xb - r)} ${zahl(yUnten)}`;
+  const rueck = `<g class="sz-zweig" data-weg="rueckschlag">`
+    + `<path class="sz-leitung" d="M${zahl(xL)} ${zahl(yUnten)}L${zahl(xStop)} ${zahl(yUnten)}M${zahl(xSpitze)} ${zahl(yUnten)}L${zahl(xR)} ${zahl(yUnten)}" ${strich}/>`
+    + `<path class="sz-anschlag" d="M${zahl(xStop)} ${zahl(yUnten - d * 0.7)}L${zahl(xStop)} ${zahl(yUnten + d * 0.7)}" ${strich}/>`
+    + `<path class="sz-feder" d="${feder}" ${strich} stroke-linejoin="round"/>`
+    + `<circle class="sz-kugel" cx="${zahl(xb)}" cy="${zahl(yUnten)}" r="${zahl(r)}" ${strich}/>`
+    + `<path class="sz-sitz" d="M${zahl(xSpitze - d)} ${zahl(yUnten - d)}L${zahl(xSpitze)} ${zahl(yUnten)}L${zahl(xSpitze - d)} ${zahl(yUnten + d)}" ${strich} stroke-linejoin="miter"/>`
+    + `</g>`;
+
+  // Fixed parts: the two junction lines and the ports with their numbers.
+  const fest = `<path class="sz-knoten" d="M${zahl(xL)} ${zahl(yOben)}L${zahl(xL)} ${zahl(yUnten)}M${zahl(xR)} ${zahl(yOben)}L${zahl(xR)} ${zahl(yUnten)}" ${strich}/>`
+    + [[1, rand, xL], [2, xR, xR + anschl]].map(([nr, x0, x1]) =>
+      `<g data-anschluss="${nr}"><path d="M${zahl(x0)} ${zahl(ym)}L${zahl(x1)} ${zahl(ym)}" ${strich}/>`
+      + `<text class="sz-text" x="${zahl((x0 + x1) / 2)}" y="${zahl(ym - 3)}" text-anchor="middle" font-size="${zahl(tH)}" fill="currentColor">${nr}</text></g>`).join("");
+
+  const breite = Math.ceil(xR + anschl + rand);
+  const hoehe = Math.ceil(yUnten + f * 0.2 + rand);
+  const beschr = "Schaltzeichen Drosselrückschlagventil: oben die einstellbare Drossel, unten parallel das federbelastete Rückschlagventil, von Anschluss 1 nach Anschluss 2";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" color="currentColor">`
+    + drossel + rueck + fest + "</svg>";
+  return { svg, breite, hoehe };
+}
+
+/** Styles for the throttle check valve symbol; add to SYMBOL_CSS on the page. */
+export const DROSSEL_SYMBOL_CSS = `
+.sz-symbol .sz-zweig { color: var(--sz-strich, currentColor); }
+.sz-symbol .sz-zweig.stark { color: var(--sz-stark, #123f87); }
+.sz-symbol .sz-zweig.blass { color: var(--sz-blass, #5a8cbf); }
+`;
+
+/**
+ * Runtime, inlined as a classic script. `drosselSymbolStellen(svgEl, offen)`
+ * colours the branches that carry air: `offen` is { drossel, rueckschlag, ton }
+ * with the share of each branch in use (0 = none) and the tone of the air,
+ * "stark" or "blass". A branch with no flow takes no tone.
+ */
+export const DROSSEL_SYMBOL_LAUFZEIT = String.raw`
+function drosselSymbolStellen(svgEl, offen) {
+  var zweige = svgEl.querySelectorAll("[data-weg]");
+  for (var i = 0; i < zweige.length; i += 1) {
+    var z = zweige[i];
+    var mass = Number(offen && offen[z.getAttribute("data-weg")]) || 0;
+    z.classList.remove("stark");
+    z.classList.remove("blass");
+    if (mass > 0) z.classList.add(offen.ton === "blass" ? "blass" : "stark");
+  }
+}
+`;

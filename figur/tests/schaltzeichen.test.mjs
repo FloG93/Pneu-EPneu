@@ -2,7 +2,10 @@
 // each, the fixed ports under one field, and a runtime that slides the fields.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, zylinderSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT } from "../schaltzeichen.mjs";
+import {
+  VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, zylinderSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT,
+  drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT,
+} from "../schaltzeichen.mjs";
 
 test("5/2 hat zwei Felder mit je zwei Wegen", () => {
   const { svg } = wegeventilSymbol(VENTIL_5_2);
@@ -192,4 +195,85 @@ test("Druckknopf als Betätigung: Stummel mit Halbkreis, die Wölbung weg vom Ve
   const rechts = wegeventilSymbol(VENTIL_3_2_NC, { links: "feder", rechts: "taster" }).svg;
   assert.match(rechts.match(/data-seite="rechts" data-art="taster"><path d="([^"]+)"/)[1], /A[\d.]+ [\d.]+ 0 0 1 /);
   assert.ok(!svg.includes("NaN"));
+});
+
+// --- Drosselrückschlagventil (ISO 1219-1) ---------------------------------
+
+test("Drosselrückschlagventil: zwei parallele Wege, einstellbare Drossel und Rückschlagventil mit Feder", () => {
+  const { svg, breite, hoehe } = drosselRueckschlagSymbol();
+  assert.ok(!svg.includes("NaN"));
+  assert.match(svg, new RegExp(`viewBox="0 0 ${breite} ${hoehe}"`));
+  assert.match(svg, /role="img"/);
+  assert.match(svg, /aria-label="Schaltzeichen Drosselrückschlagventil/);
+  assert.equal((svg.match(/data-weg="drossel"/g) || []).length, 1);
+  assert.equal((svg.match(/data-weg="rueckschlag"/g) || []).length, 1);
+  const drossel = svg.slice(svg.indexOf('data-weg="drossel"'), svg.indexOf('data-weg="rueckschlag"'));
+  const rueck = svg.slice(svg.indexOf('data-weg="rueckschlag"'), svg.indexOf("</svg>"));
+  // throttle: two facing arcs and the slanted adjusting arrow
+  assert.equal((drossel.match(/class="sz-bogen"/g) || []).length, 2);
+  assert.equal((drossel.match(/A[\d.]+ [\d.]+ 0 0 [01] /g) || []).length, 2, "Drossel: zwei Bögen");
+  assert.match(drossel, /class="sz-verstell"/);
+  const pfeil = drossel.match(/class="sz-verstell" d="M([\d.]+) ([\d.]+)L([\d.]+) ([\d.]+)/);
+  assert.ok(pfeil, "Schrägpfeil");
+  assert.ok(+pfeil[1] !== +pfeil[3] && +pfeil[2] !== +pfeil[4], "Pfeil ist schräg");
+  assert.ok(!/class="sz-kugel"/.test(drossel));
+  // check valve: ball as a circle, V seat, spring
+  assert.equal((rueck.match(/<circle class="sz-kugel"/g) || []).length, 1);
+  assert.match(rueck, /class="sz-sitz"/);
+  assert.match(rueck, /class="sz-feder"/);
+  assert.ok((rueck.match(/class="sz-feder" d="([^"]+)"/)[1].match(/L/g) || []).length >= 6, "Feder als Zickzack");
+  assert.ok(!/class="sz-bogen"/.test(rueck));
+});
+
+test("Drosselrückschlagventil: nur die Anschlüsse 1 und 2 als Schrift, 1 links, 2 rechts", () => {
+  const { svg } = drosselRueckschlagSymbol({ feld: 90 });
+  const texte = [...svg.matchAll(/<text[^>]*x="([\d.]+)"[^>]*>([^<]*)<\/text>/g)].map((m) => [+m[1], m[2]]);
+  assert.deepEqual(texte.map((t) => t[1]).sort(), ["1", "2"]);
+  assert.ok(texte.find((t) => t[1] === "1")[0] < texte.find((t) => t[1] === "2")[0]);
+  assert.match(svg, /data-anschluss="1"/); assert.match(svg, /data-anschluss="2"/);
+  assert.ok(!drosselRueckschlagSymbol({ feld: 90 }).svg.includes("NaN"));
+});
+
+test("Drosselrückschlagventil: alle Koordinaten liegen in der viewBox", () => {
+  for (const feld of [60, 90]) {
+    const { svg, breite, hoehe } = drosselRueckschlagSymbol({ feld });
+    for (const m of svg.matchAll(/ d="([^"]+)"/g)) {
+      for (const p of m[1].matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)) {
+        assert.ok(+p[1] >= 0 && +p[1] <= breite && +p[2] >= 0 && +p[2] <= hoehe, `${feld}: ${p[0]}`);
+      }
+    }
+    for (const m of svg.matchAll(/<circle[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)"[^>]*r="([\d.]+)"/g)) {
+      assert.ok(+m[1] - +m[3] >= 0 && +m[1] + +m[3] <= breite && +m[2] - +m[3] >= 0 && +m[2] + +m[3] <= hoehe);
+    }
+  }
+});
+
+test("Drosselrückschlagventil: Laufzeit färbt nur den durchströmten Weg", () => {
+  const { svg } = drosselRueckschlagSymbol();
+  const klassen = () => { const set = new Set(); return { set, add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) }; };
+  const wege = ["drossel", "rueckschlag"].map((w) => ({ w, classList: klassen(), getAttribute: (n) => (n === "data-weg" ? w : null) }));
+  const el = { querySelectorAll: (s) => (s === "[data-weg]" ? wege : []) };
+  const stellen = new Function(`${DROSSEL_SYMBOL_LAUFZEIT}; return drosselSymbolStellen;`)();
+  const k = (w) => [...wege.find((x) => x.w === w).classList.set].join(" ");
+  stellen(el, { drossel: 1, rueckschlag: 0, ton: "stark" });
+  assert.match(k("drossel"), /stark/); assert.equal(k("rueckschlag"), "");
+  stellen(el, { drossel: 0.4, rueckschlag: 1, ton: "blass" });
+  assert.match(k("drossel"), /blass/); assert.match(k("rueckschlag"), /blass/);
+  stellen(el, { drossel: 0, rueckschlag: 0, ton: "stark" });
+  assert.equal(k("drossel"), ""); assert.equal(k("rueckschlag"), "");
+  assert.ok(svg.length > 0);
+});
+
+test("Drosselrückschlagventil: Laufzeit und Stil ohne Backtick, Laufzeit ist gültig", () => {
+  assert.ok(!DROSSEL_SYMBOL_LAUFZEIT.includes("`") && !DROSSEL_SYMBOL_CSS.includes("`"));
+  assert.doesNotThrow(() => new Function(DROSSEL_SYMBOL_LAUFZEIT));
+  // top-level names must not clash with the directional runtime
+  assert.doesNotThrow(() => new Function(`${SYMBOL_LAUFZEIT}\n${DROSSEL_SYMBOL_LAUFZEIT}`));
+});
+
+test("Das neue Symbol ändert 3/2 nicht: Ausgabe von 3/2 NC und NO byte-gleich", async () => {
+  const { createHash } = await import("node:crypto");
+  const h = (art) => createHash("sha256").update(wegeventilSymbol(art, { links: "pneumatisch", rechts: "feder" }).svg).digest("hex");
+  assert.equal(h(VENTIL_3_2_NC), "ff4923901b55559e44a706ecff2fde89f05d3940c72d290d00daf31e588608af");
+  assert.equal(h(VENTIL_3_2_NO), "71676cac767375e535260c7131341e57834498535cce9450a6496f6f8a565355");
 });
