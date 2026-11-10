@@ -1400,7 +1400,7 @@ const ESNU_50_25 = {
   reibung: 40,          // N, seal friction (Coulomb)         – Annahme, wie ISO_15552_50
   viskos: 80,           // N per (m/s), seal drag + load      – Annahme, kleiner als beim großen Zylinder
   // Conductances are set so a stroke takes 0.05–0.15 s in real time and the return is clearly
-  // slower than the advance: at 6 bar about 0.06 s out, 0.12 s back. The exhaust path is the
+  // slower than the advance: at 6 bar about 0.08 s out (spool travel included), 0.11 s back. The exhaust path is the
   // wide one (a valve's Qn of several hundred l/min is some 1e7 mm³/s per bar) because the whole
   // stroke volume plus the hose has to leave through it before the spring can win. The way back
   // is slower anyway: the spring pushes with only 42–65 N net of friction (82 − 40 N in, 105 − 40 N

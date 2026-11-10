@@ -217,7 +217,7 @@ const svg = ZT.figur({
 
 // --- The page ------------------------------------------------------------
 const AUTO_TAKT = 0.5;              // s of model time between two automatic signals
-const ZEITLUPE0 = 10;              // the page starts in slow motion: the stroke takes 0,06 s
+const ZEITLUPE0 = 10;              // the page starts in slow motion: the stroke takes 0.08 s
 
 // What only this page does on top of the shared frame (figur/zylinderseite.mjs): the push
 // button (figur/bedienung.mjs), slow motion, the vent filter and the symbols beside the card.

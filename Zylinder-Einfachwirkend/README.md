@@ -17,8 +17,8 @@ nach ISO 1219-1: der Zylinder mit Federrückstellung und das Ventil mit Druckkno
   Kammer entlüftet, und die Feder des Zylinders schiebt den Kolben zurück – ohne dass
   Druckluft hilft.
 - **Automatik** drückt den Taster von selbst im Takt.
-- **Zeitlupe** (am Anfang 1/10): Ein Hub dauert in Wirklichkeit nur etwa 0,06 s
-  (aus) und 0,11 s (zurück); erst in Zeitlupe sieht man, wie sich die Kammer füllt.
+- **Zeitlupe** (am Anfang 1/10): Ein Hub dauert in Wirklichkeit nur etwa 0,08 s
+  (aus, mit Umschalten des Ventils) und 0,11 s (zurück); erst in Zeitlupe sieht man, wie sich die Kammer füllt.
 - **Druck** stellt den Betriebsdruck zwischen 2 und 8 bar ein.
 - **Zerlegen und zusammenbauen** fährt die elf Baugruppen entlang der Achsen
   auseinander, hält kurz und setzt sie von innen nach außen wieder zusammen. Wer dabei

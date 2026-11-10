@@ -28,7 +28,7 @@ export default async function pruefeZylinderEw({ seite, V, modus }) {
   // "Under pressure" is the stronger tone: darker on paper, lighter at night.
   const staerker = (voll, leer) => (modus === "light" ? voll < leer - 0.05 : voll > leer + 0.05);
 
-  // Slow motion off: the stroke takes 0,06 s and the checks have to be quick.
+  // Slow motion off: the stroke takes 0.08 s and the checks have to be quick.
   await seite.evaluate(() => { const r = document.getElementById("zeitlupe"); r.value = 1; r.dispatchEvent(new Event("input")); });
 
   // Rest: no signal, the piston home, chamber A at the ambient tone.
