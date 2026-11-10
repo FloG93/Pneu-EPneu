@@ -548,6 +548,9 @@ function vorDemZerlegen() {
   stoppeAuto();
   bed.zuruecksetzen();
   Object.assign(zustand, neuerZustand(MASSE, { weg: 0, stellung: "einfahren" }));
+  // The chambers take the rest tone now, not when the springs have settled: the air
+  // layer comes back into view long before that.
+  zeichneLuft(0);
   zeichneBedienung();
 }
 
