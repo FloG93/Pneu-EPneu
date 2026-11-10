@@ -471,3 +471,17 @@ test("Einfachwirkend: keine Zahl wird NaN, Kammer A bleibt zwischen Umgebung und
     assert.ok(Number.isFinite(s.weg) && s.pA >= P.UMGEBUNG - 1e-6 && s.pA <= 9 + 1e-6);
   }
 });
+
+test("Einfachwirkend: die Kraft jetzt ist p · A − Feder an der aktuellen Stelle", () => {
+  // 6 bar: p · A = 0,6 · 1963,495 = 1178,10 N
+  //   Hub 0:  1178,10 − 82   = 1096,10 N  → 1096
+  //   Hub 25: 1178,10 − 105,3 = 1072,8 N  → 1073 (Katalog)
+  // 3 bar am Hubende: 589,05 − 105,3 = 483,75 N → 484
+  assert.ok(Math.abs(P.kraftJetzt(6, { weg: 0 }, E) - 1096.097) < 0.01);
+  assert.ok(Math.abs(P.kraftJetzt(6, { weg: 25 }, E) - 1072.797) < 0.01);
+  assert.equal(P.kraftJetzt(6, { weg: 25 }, E), P.kraftAus(6, E), "am Hubende ist es die Katalogkraft");
+  assert.equal(P.anzeige(P.neuerZustand(E, { weg: 0 }), E, 6).kraftJetzt, 1096);
+  assert.equal(P.anzeige(P.neuerZustand(E, { weg: 25 }), E, 6).kraftJetzt, 1073);
+  assert.equal(P.anzeige(P.neuerZustand(E, { weg: 25 }), E, 3).kraftJetzt, 484);
+  assert.ok(!("kraftJetzt" in P.anzeige(P.neuerZustand(Z), Z, 6)), "doppeltwirkend zeigt keine Federkraft");
+});

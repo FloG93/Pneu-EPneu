@@ -92,11 +92,13 @@ function betaetigung(seite, art, xKante, yMitte, f, nummer) {
     return `<g ${attr}><path d="${d}" fill="none" stroke="currentColor" stroke-width="${STRICH}" stroke-linejoin="round"/></g>`;
   }
   if (art === "taster") {
-    // Push button: a short stub out of the field, a bar across its end.
-    const stub = lang * 0.55, balken = f * 0.22;
+    // Push button (ISO 1219-1 Druckknopf): a short stub out of the field that ends in a
+    // half circle, the flat side at the stub's end, the bulge pointing away from the valve.
+    const stub = lang * 0.55, rad = f * 0.14;
     const xe = xKante + r * stub;
-    const d = `M${zahl(xKante)} ${zahl(yMitte)}L${zahl(xe)} ${zahl(yMitte)}M${zahl(xe)} ${zahl(yMitte - balken)}L${zahl(xe)} ${zahl(yMitte + balken)}`;
-    return `<g ${attr}><path d="${d}" fill="none" stroke="currentColor" stroke-width="${STRICH}" stroke-linecap="butt"/></g>`;
+    const d = `M${zahl(xKante)} ${zahl(yMitte)}L${zahl(xe)} ${zahl(yMitte)}`
+      + `M${zahl(xe)} ${zahl(yMitte - rad)}A${zahl(rad)} ${zahl(rad)} 0 0 ${r > 0 ? 1 : 0} ${zahl(xe)} ${zahl(yMitte + rad)}Z`;
+    return `<g ${attr}><path d="${d}" fill="none" stroke="currentColor" stroke-width="${STRICH}" stroke-linejoin="round"/></g>`;
   }
   // Pneumatic: a filled triangle pointing at the field, a dashed pilot line out.
   const tl = f * 0.2, tb = f * 0.1;
@@ -158,7 +160,7 @@ export function wegeventilSymbol(art, { links = "pneumatisch", rechts = "feder",
       + `<text class="sz-text" x="${zahl(x)}" y="${zahl(ty)}" text-anchor="middle" font-size="${zahl(tH)}" fill="currentColor">${nr}</text></g>`;
   }).join("");
 
-  const text = (a) => (a === "feder" ? "Feder" : a === "taster" ? "Drucktaster" : "pneumatisch");
+  const text = (a) => (a === "feder" ? "Feder" : a === "taster" ? "Druckknopf" : "pneumatisch");
   const beschr = `Schaltzeichen ${alle.length}/${n}-Wegeventil, links ${text(links)}${links === "pneumatisch" && nummer[0] != null ? ` (${nummer[0]})` : ""}, rechts ${text(rechts)}${rechts === "pneumatisch" && nummer[1] != null ? ` (${nummer[1]})` : ""}`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" data-feldbreite="${f}" color="currentColor">`
     + `<g data-felder>${feldTeile.join("")}${seitlich}</g><!--felder-->`

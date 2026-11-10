@@ -105,6 +105,15 @@ export function kraftAus(druckBar, masse) {
 }
 
 /**
+ * The extending force the piston has right now, N: the air force on the full piston
+ * area minus what the return spring pushes back at this position (so 1096 N at stroke 0
+ * and 1073 N at full stroke for the ESNU at 6 bar). `kraftAus` is the value at full stroke.
+ */
+export function kraftJetzt(druckBar, z, masse) {
+  return druckBar * NMM2_JE_BAR * flaechen(masse).kolben - federKraft(z, masse);
+}
+
+/**
  * Theoretical retracting force, N. Only the annulus is left — the rod takes area away.
  * A single-acting cylinder has no air on that side: the spring alone brings it back.
  */
@@ -303,6 +312,7 @@ export function anzeige(z, masse, druckBar) {
   const feder = masse.feder
     ? {
         federJetzt: runde(federKraft(z, masse), 0),
+        kraftJetzt: runde(kraftJetzt(druckBar, z, masse), 0),
         federAus: runde(federKraft({ weg: masse.hub }, masse), 0),
         federEin: runde(federKraft({ weg: 0 }, masse), 0),
       }

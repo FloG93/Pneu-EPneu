@@ -183,9 +183,13 @@ test("Zylinder einfachwirkend: Gehäuse, Kolben, Stange, Feder, ein Luftanschlus
   assert.equal((svg.match(/class="sz-feder" d="([^"]+)"/)[1].match(/L/g) || []).length, 10);
 });
 
-test("Drucktaster als Betätigung: Stummel mit Querstrich, in der Beschreibung genannt", () => {
+test("Druckknopf als Betätigung: Stummel mit Halbkreis, die Wölbung weg vom Ventil", () => {
   const { svg } = wegeventilSymbol(VENTIL_3_2_NC, { links: "taster", rechts: "feder" });
   assert.match(svg, /data-seite="links" data-art="taster"/);
-  assert.match(svg, /links Drucktaster, rechts Feder/);
+  assert.match(svg, /links Druckknopf, rechts Feder/);
+  const bogen = svg.match(/data-art="taster"><path d="([^"]+)"/)[1];
+  assert.match(bogen, /A[\d.]+ [\d.]+ 0 0 0 /, "links: Bogen gegen den Uhrzeigersinn, Wölbung nach links");
+  const rechts = wegeventilSymbol(VENTIL_3_2_NC, { links: "feder", rechts: "taster" }).svg;
+  assert.match(rechts.match(/data-seite="rechts" data-art="taster"><path d="([^"]+)"/)[1], /A[\d.]+ [\d.]+ 0 0 1 /);
   assert.ok(!svg.includes("NaN"));
 });
