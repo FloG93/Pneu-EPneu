@@ -55,8 +55,10 @@ export const RUBRIKEN = [
         id: "zylinder-einfachwirkend",
         name: "Einfachwirkender Zylinder",
         satz: "Druckluft schiebt nur in eine Richtung, zurück drückt eine Feder. Warum das Kraft kostet und wann es trotzdem reicht.",
-        zustand: "geplant",
+        zustand: "fertig",
+        ordner: "Zylinder-Einfachwirkend",
         sinnbild: "Zylinder einfach wirkend mit Federrückstellung",
+        marken: ["Rundzylinder", "Ø 50 mm", "Hub 25 mm", "mit 3/2-Wegeventil"],
       },
       {
         id: "zylinder-durchgehend",

@@ -11,7 +11,7 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 - Nur relative Pfade (läuft lokal mit `python3 -m http.server` und auf GitHub Pages). Design und Bedienelemente aus `shared/`.
 - Jeder Ordner mit einer `index.html` wird von `pages.yml` veröffentlicht: **`index.html` erst anlegen, wenn die Seite vorzeigbar ist.** `figur/` und `docs/` haben bewusst keine.
 - Browser-Speicher: Hell/Dunkel und Kontrast stehen in `3d-druck.theme` und `3d-druck.kontrast` — **gemeinsam mit dem Repo 3D-Druck**, weil beide Seiten auf derselben Domain liegen und sich gleich anfühlen sollen. Alles Eigene beginnt mit `pneumatik.`
-- Tests: `npm test` (Node ≥ 22, `node --test`), dazu `npm run pruef:zylinder` für die Geometrie. Vor jedem Commit laufen lassen.
+- Tests: `npm test` (Node ≥ 22, `node --test`), dazu `npm run pruef:zylinder`, `pruef:zylinder-ew`, `pruef:ventil` und `pruef:ventil32` für die Geometrie. Vor jedem Commit laufen lassen.
 
 ## Die Figuren
 
@@ -76,6 +76,7 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | Linienenden | `CHROME_PATH=/opt/pw-browsers/chromium node .claude/skills/anatomy/scripts/lines.mjs <Ordner>/index.html` | `line ends: 0 of N` |
 | Verhalten im Browser | `node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/<Ordner>/ <Ordner>/tests/tools/pruefe-<name>.mjs` | `all checks passed` |
 | … Zylinder | `npm run pruef:browser` | `all checks passed (50)` |
+| … einfachwirkender Zylinder | `npm run pruef:browser:zylinder-ew` (dazu `npm run pruef:zylinder-ew` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 3/2-Wegeventil | `npm run pruef:browser:ventil32` (dazu `npm run pruef:ventil32` für Audit und Zerlegen) | `all checks passed (132)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |

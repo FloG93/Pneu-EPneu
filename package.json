@@ -5,7 +5,7 @@
   "description": "Pneumatik und E-Pneumatik: erklärte Bauteile als interaktive isometrische Figuren für Auszubildende",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "npm run test:shared && npm run test:figur && npm run test:zylinder && npm run test:ventil && npm run test:ventil32",
+    "test": "npm run test:shared && npm run test:figur && npm run test:zylinder && npm run test:zylinder-ew && npm run test:ventil && npm run test:ventil32",
     "test:shared": "node --test \"shared/tests/*.test.mjs\"",
     "test:figur": "node --test \"figur/tests/*.test.mjs\"",
     "test:zylinder": "node --test \"Zylinder-Doppeltwirkend/tests/*.test.mjs\"",
