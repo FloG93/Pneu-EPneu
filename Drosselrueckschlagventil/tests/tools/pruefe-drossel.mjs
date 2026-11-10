@@ -153,11 +153,22 @@ export default async function pruefeDrossel({ seite, V, modus }) {
     V(`${r === "frei" ? "2 → 1" : "1 → 2"}, ${u} Umdrehungen: kein Teilchen liegt auf festem Material${treffer.length ? " — " + treffer.slice(0, 3).join(", ") : ""}`, treffer.length === 0);
   }
   // Direction: the first particle of a stream moves right in 1 → 2 (along the upper passage's second half)
-  // and left in 2 → 1. Two samples of one stream a moment apart; the stream wraps, so use a short gap.
+  // and left in 2 → 1. Two samples of one stream one frame apart.
   const lauf = async (name) => {
-    const lies = () => seite.evaluate((n) => [...document.querySelectorAll(`[data-strom="${n}"] circle`)]
-      .map((c) => [Number(c.getAttribute("opacity")), Number(c.getAttribute("cx")), Number(c.getAttribute("cy"))]), name);
-    const a = await lies(); await seite.waitForTimeout(50); const b = await lies();
+    // Both samples are read inside the page, one frame apart: a round trip per sample let a loaded
+    // machine stretch the gap until the particles of this short stream wrapped round and the sign flipped.
+    const [a, b] = await seite.evaluate(async (n) => {
+      const lies = () => [...document.querySelectorAll(`[data-strom="${n}"] circle`)]
+        .map((c) => [Number(c.getAttribute("opacity")), Number(c.getAttribute("cx")), Number(c.getAttribute("cy"))]);
+      const bild = () => new Promise((r) => requestAnimationFrame(r));
+      // One frame apart, and only a pair whose frames really were close together counts: after a long
+      // frame the particles have run far enough to alias.
+      for (let i = 0; i < 40; i += 1) {
+        const t0 = await bild(); const eins = lies(); const t1 = await bild(); const zwei = lies();
+        if (t1 - t0 < 30) return [eins, zwei];
+      }
+      return [[], []];
+    }, name);
     // along the upper passage both screen coordinates grow in the direction 1 → 2; a particle that wrapped round jumps, so it is left out
     const d = a.map((p, i) => (p[0] > 0.3 && b[i][0] > 0.3 ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null)).filter((v) => v !== null && Math.abs(v) < 25).sort((x, y) => x - y);
     return d.length ? d[Math.floor(d.length / 2)] : 0;

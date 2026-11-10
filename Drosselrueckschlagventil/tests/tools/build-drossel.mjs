@@ -679,7 +679,7 @@ oben die <strong>Drossel</strong> mit der Drosselnadel, unten das <strong>Rücks
 engen Spalt zwischen Drosselnadel und Sitz. Dort fällt der Druck ab: Vor der Drossel ist die Luft im <strong>kräftigen Blau</strong> unter Druck, dahinter im
 <strong>blassen Blau</strong> entspannt. Bei ganz offener Drossel schafft das Ventil so ${q(DROSSELRICHTUNG, M.umdrehungen).gesamt} l/min.</p>
 <p>Strömt sie von <strong>2 nach 1</strong>, hebt der Druck die Kugel gegen die Feder vom Sitz ab (im Modell ab ${komma(M.oeffnungsdruck, 1)} bar Druckunterschied, hier
-um ${M.kugelHubMm} mm). Jetzt fließt die Luft durch <strong>beide</strong> Wege, und der untere nimmt den größeren Teil: Zu den ${q(DROSSELRICHTUNG, M.umdrehungen).drossel} l/min der
+um ${M.kugelHubMm} mm). Jetzt fließt die Luft durch <strong>beide</strong> Wege: Zu den ${q(DROSSELRICHTUNG, M.umdrehungen).drossel} l/min der
 offenen Drossel kommen ${q(FREIE_RICHTUNG, 0).rueckschlag} l/min durch den Rückschlagweg, zusammen ${q(FREIE_RICHTUNG, M.umdrehungen).gesamt} l/min. Auch bei ganz zugedrehter Drossel
 fließen in dieser Richtung im Modell noch ${q(FREIE_RICHTUNG, 0).gesamt} l/min (${M.qnFrei} − ${M.qnDrossel}, angenommen: die beiden Wege wirken unabhängig voneinander). Die Drossel wirkt also nur in <strong>einer</strong> Richtung.</p>
 
