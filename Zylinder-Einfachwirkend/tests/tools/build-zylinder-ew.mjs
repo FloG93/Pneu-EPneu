@@ -112,6 +112,10 @@ const STAGGER = [
   "leitung", "betaetigung", "schieber", "gehaeuse", "fuss",
   "kopf", "stange", "feder", "kolben", "rohr", "boden",
 ];
+// Escape path of each assembly in mm, along the machine's axes like a dismantling
+// (x along the cylinder, y towards the viewer, z up). Measured with --apart:
+// nothing passes through anything on the way out. The spring leaves forwards and up
+// (out of the head side, it was compressed against the head), the piston sideways.
 const MOVE = {
   grund: [0, 0, 0], luft: [0, 0, 0],
   boden: [-120, 20, 50],
