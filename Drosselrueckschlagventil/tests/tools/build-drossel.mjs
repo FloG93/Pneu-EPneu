@@ -90,13 +90,13 @@ const STAGGER = ["leitung", "verschraubung", "schraube", "kontermutter", "versch
 const MOVE = {
   grund: [0, 0, 0],
   luft: [0, 0, 0],
-  leitung: [0, 190, 20],
-  verschraubung: [0, 110, 10],
-  schraube: [0, 0, 100],
-  kontermutter: [0, 0, 55],
-  verschluss: [0, 0, -75],
-  feder: [0, 125, -35],
-  kugel: [0, 160, 45],
+  leitung: [0, 100, 16],
+  verschraubung: [0, 62, 8],
+  schraube: [0, 0, 72],
+  kontermutter: [0, 0, 40],
+  verschluss: [0, 0, -52],
+  feder: [0, 74, -24],
+  kugel: [0, 98, 30],
   gehaeuse: [0, 0, 0],
 };
 
@@ -167,10 +167,11 @@ function gehaeuse() {
     NT.flach([[LAENGE, -TIEFE, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [LAENGE, -TIEFE, HOEHE]], [1, 0, 0]),
     // the cut face
     NT.schnitt([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]),
-    ...HOHLRAUM.map(hohlraum),
-    // the ball seat as a chamfer, the bores' edges as lines
-    L(ring3([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]), { tone: "mid" }),
+    // The hollows: all outlines first, then all fills over them, so the lines inside a junction
+    // of two channels are covered and only the outline of the union stays.
     L(HOHLRAUM.map(([x0, x1, z0, z1]) => ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])).join(""), { tone: "mid" }),
+    ...HOHLRAUM.map(hohlraum),
+    L(ring3([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]), { tone: "mid" }),
     L(k.segment([LAENGE, -TIEFE, HOEHE], [LAENGE, 0, HOEHE], P) + k.segment([0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE], P)
       + k.segment([LAENGE, -TIEFE, 0], [LAENGE, -TIEFE, HOEHE], P) + k.segment([LAENGE, -TIEFE, 0], [LAENGE, 0, 0], P), { tone: "mid" }),
   ];
