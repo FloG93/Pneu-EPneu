@@ -56,7 +56,7 @@ test("Die Zahlen kommen aus dem Modell: 420, 210, 0, 780, 360 l/min", () => {
   assert.equal(durchfluss(FREIE_RICHTUNG, M.umdrehungen, 1, M).gesamt, 780);
   assert.equal(durchfluss(FREIE_RICHTUNG, 0, 1, M).gesamt, 360);
   // the readout stands in the page without JavaScript, at the catalogue's conditions
-  assert.match(html, /Q 210 l\/min · Drossel 210 · Rückschlag 0 · Kugel zu \(1 → 2, 6 bar, Δp 1 bar\)/);
+  assert.match(html, /Q 210 l\/min \(Drossel 210 \+ Rückschlag 0\) · Kugel zu\n1 → 2 · 6 bar · Δp 1 bar/);
   // the legend and the prose name the model's numbers
   const legendeText = LEGENDE.map((e) => e.satz).join(" ");
   assert.match(legendeText, /420 l\/min/);
@@ -70,4 +70,13 @@ test("Der Text nennt nur die Anschlüsse 1 und 2 und begründet die Abluftdrosse
   assert.match(html, /in <strong>einer<\/strong> Richtung/);
   const texte = [...html.matchAll(/<text[^>]*class="sz-text"[^>]*>([^<]*)</g)].map((m) => m[1]).sort();
   assert.deepEqual(texte, ["1", "2"]);
+});
+
+test("Der Text sagt, welcher Anschluss zum Zylinder zeigt, und nennt die Ausnahme der Zuluftdrosselung", () => {
+  assert.match(html, /Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil/);
+  assert.match(html, /einfachwirkende und sehr kleine Zylinder/);
+  assert.match(html, /Lösering/);
+  assert.ok(!/P, A und R/.test(html), "die alten Buchstaben gehören nicht auf diese Seite");
+  // what is an assumption says so
+  assert.match(html, /im Modell noch 360 l\/min/);
 });

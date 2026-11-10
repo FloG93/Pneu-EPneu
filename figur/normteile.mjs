@@ -206,3 +206,27 @@ export function normteile({ P, rec, put, gruppe }) {
 
   return { flach, schnitt, schraubenkopf, gewinde, verschraubung, schalldaempfer, druckfeder };
 }
+
+/**
+ * The runtime that compresses a coil drawn by `druckfeder`, inlined as source into a page's
+ * classic script (no backtick, top-level names unique). Expects `svg` and `P`, and
+ * `translateAlong` of the kit. Every piece of the coil carries the x of its middle
+ * (data-federx), the group the x range [a, b] of the coil (data-feder).
+ * `federnVerschieben(s, festesEnde)` compresses it by the travel `s` in mm:
+ *   "b": the end b stands, the end a follows a shift of +s (a piston pushing a spring against a head);
+ *   "a": the end a stands, the end b follows a shift of -s (a ball pushed back against a post).
+ */
+export const FEDER_LAUFZEIT = String.raw`
+const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
+  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
+  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
+});
+
+function federnVerschieben(s, festesEnde) {
+  for (const f of federTeile) {
+    const dx = festesEnde === "a" ? (s * (f.x - f.a)) / (f.b - f.a) : (s * (f.b - f.x)) / (f.b - f.a);
+    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [festesEnde === "a" ? -dx : dx, 0, 0]));
+    else f.el.removeAttribute("transform");
+  }
+}
+`;

@@ -1984,25 +1984,29 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
 
 
 
-const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
-
-// A return spring between the piston and the head: every piece of the coil
-// carries the x of its middle, the group the x range [a, b] of the coil. The
-// piston end follows the piston, the head end stands still.
 const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
   const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
   return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
 });
 
+function federnVerschieben(s, festesEnde) {
+  for (const f of federTeile) {
+    const dx = festesEnde === "a" ? (s * (f.x - f.a)) / (f.b - f.a) : (s * (f.b - f.x)) / (f.b - f.a);
+    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [festesEnde === "a" ? -dx : dx, 0, 0]));
+    else f.el.removeAttribute("transform");
+  }
+}
+
+
+const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
+const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
+
+// The return spring between the piston and the head is compressed by federnVerschieben
+// (figur/normteile.mjs): the piston end follows the piston, the head end stands still.
 function teileVerschieben(weg, schieber, schieberWeg) {
   const t = translateAlong(P, [weg, 0, 0]);
   for (const el of hubTeile) el.setAttribute("transform", t);
-  for (const f of federTeile) {
-    const dx = (weg * (f.b - f.x)) / (f.b - f.a);
-    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
-    else f.el.removeAttribute("transform");
-  }
+  federnVerschieben(weg, "b");
   const ts = translateAlong(P, [(schieber - 0.5) * 2 * schieberWeg, 0, 0]);
   for (const el of schieberTeile) el.setAttribute("transform", ts);
 }

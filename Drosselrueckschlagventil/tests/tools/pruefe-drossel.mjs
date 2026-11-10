@@ -35,15 +35,29 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   const mittel = (t, namen) => { const n = summe(t, namen); return n ? namen.reduce((s, x) => s + t[x].n * t[x].mittel, 0) / n : 0; };
   /** Luminance of the drawn fill of a room (computed style: floats too). */
   const hell = (sel) => seite.evaluate((s) => {
-    const el = document.querySelector(s);
-    const t = el.getAttribute("fill");
-    const c = [1, 3, 5].map((i) => parseInt(t.slice(i, i + 2), 16) / 255);
+    const t = getComputedStyle(document.querySelector(s)).fill;
+    const srgb = t.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+    const c = srgb ? [1, 2, 3].map((i) => Number(srgb[i])) : (t.match(/[\d.]+/g) || []).slice(0, 3).map((v) => Number(v) / 255);
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   }, sel);
   // Under pressure is the stronger tone: darker on paper, lighter at night.
   const staerker = (voll, leer) => (modus === "light" ? voll < leer - 0.05 : voll > leer + 0.05);
   const zweig = (name) => seite.evaluate((n) => document.querySelector(`.beifigur-symbol [data-weg="${n}"]`).classList.contains("stark")
     || document.querySelector(`.beifigur-symbol [data-weg="${n}"]`).classList.contains("blass"), name);
+
+  // The scale and the seat, measured on the drawing: the ridge in the upper passage is 9 mm long and
+  // 3,5 mm high (the page marks it data-sitz); its top edge is where the needle's tip has to land.
+  const sitz = await seite.evaluate(() => {
+    const pfad = document.querySelector("[data-sitz]");
+    const zahlen = pfad.getAttribute("d").match(/-?[\d.]+/g).map(Number);
+    const ctm = pfad.getScreenCTM();
+    const punkte = [0, 2, 4, 6].map((i) => { const q = pfad.ownerSVGElement.createSVGPoint(); q.x = zahlen[i]; q.y = zahlen[i + 1]; const r = q.matrixTransform(ctm); return { x: r.x, y: r.y }; });
+    return punkte;   // bottom left, bottom right, top right, top left
+  });
+  const pxX = abstand(sitz[0], sitz[1]) / 9;
+  const pxZ = abstand(sitz[0], sitz[3]) / 3.5;
+  const obenMitte = { x: (sitz[2].x + sitz[3].x) / 2, y: (sitz[2].y + sitz[3].y) / 2 };
+  const MASSE = await seite.evaluate(() => window.__figur.MASSE);
 
   // --- the ball: on its seat in the throttle direction, lifted in the free one ----------
   await stelle("drossel", 3);
@@ -53,7 +67,7 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   const kugelAuf = mitte(await kasten('[data-g="kugel"]'));
   const federAuf = await kasten('[data-g="feder"]');
   const hub = abstand(kugelZu, kugelAuf);
-  V(`die Kugel liegt in Drosselrichtung auf dem Sitz und hebt in freier Richtung ab (${hub.toFixed(1)} px)`, hub >= 5);
+  V(`die Kugel hebt um kugelHubMm ab: ${hub.toFixed(1)} px gemessen, ${(MASSE.kugelHubMm * pxX).toFixed(1)} px erwartet`, Math.abs(hub - MASSE.kugelHubMm * pxX) <= 1);
   V("beim Abheben geht die Kugel nach links, weg vom Sitz", kugelAuf.x < kugelZu.x - 1);
   V("die Feder wird mit der Kugel zusammengedrückt (Breite)", (federAuf.r - federAuf.l) < (federZu.r - federZu.l) - 1);
   await stelle("drossel", 3);
@@ -68,8 +82,10 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   await stelle("drossel", 6);
   const nadel6 = await kasten('[data-g="schraube"]');
   const mutter6 = await kasten('[data-g="kontermutter"]');
-  V(`die Schraube fährt mit dem Regler nach oben (${(nadel0.t - nadel3.t).toFixed(1)} / ${(nadel3.t - nadel6.t).toFixed(1)} px je 3 Umdrehungen)`,
-    nadel0.t - nadel3.t > 4 && nadel3.t - nadel6.t > 4 && Math.abs((nadel0.t - nadel3.t) - (nadel3.t - nadel6.t)) < 2);
+  const erwartet = 3 * MASSE.steigung * pxZ;
+  V(`die Schraube fährt je 3 Umdrehungen um Umdrehungen × Steigung nach oben (${(nadel0.t - nadel3.t).toFixed(1)} / ${(nadel3.t - nadel6.t).toFixed(1)} px, erwartet ${erwartet.toFixed(1)})`,
+    Math.abs((nadel0.t - nadel3.t) - erwartet) <= 1 && Math.abs((nadel3.t - nadel6.t) - erwartet) <= 1);
+  V(`bei 0 Umdrehungen sitzt die Nadelspitze auf dem Sitz (Abstand ${(nadel0.b - obenMitte.y).toFixed(1)} px)`, Math.abs(nadel0.b - obenMitte.y) <= 1.5);
   V("die Kontermutter bleibt beim Einstellen stehen", Math.abs(mutter0.t - mutter6.t) < 0.5 && Math.abs(mutter0.l - mutter6.l) < 0.5);
 
   // --- readout: the model's numbers at the catalogue's conditions --------------------------
@@ -77,7 +93,7 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   for (const [r, u, soll] of faelle) {
     await stelle(r, u);
     const t = await text();
-    V(`Anzeige ${r === "frei" ? "2 → 1" : "1 → 2"}, ${u} Umdrehungen: ${soll} l/min`, new RegExp(`^Q ${soll} l/min`).test(t) && /6 bar, Δp 1 bar/.test(t));
+    V(`Anzeige ${r === "frei" ? "2 → 1" : "1 → 2"}, ${u} Umdrehungen: ${soll} l/min`, new RegExp(`^Q ${soll} l/min \\(`).test(t) && /\n(1 → 2|2 → 1) · 6 bar · Δp 1 bar$/.test(t));
   }
 
   // --- particles: which passages carry air ---------------------------------------------
@@ -113,6 +129,47 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   await stelle("drossel", 0);
   V("Schaltzeichen: Drossel zu, 1 → 2: kein Zweig gefärbt", !(await zweig("drossel")) && !(await zweig("rueckschlag")));
 
+  // --- no particle over solid material, and they run in the direction of the flow -----------
+  const ueberMaterial = () => seite.evaluate(() => {
+    const feste = ["verschraubung", "kugel", "feder", "verschluss", "schraube", "kontermutter"];
+    const treffer = [];
+    for (const c of document.querySelectorAll("[data-strom] circle")) {
+      if (Number(c.getAttribute("opacity")) < 0.3) continue;
+      const r = c.getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      for (const el of document.elementsFromPoint(x, y)) {
+        const g = el.closest("[data-piece]");
+        // a solid that comes BEFORE the dot in the drawing order lies under it: the dot is painted over the material
+        if (g && feste.includes(g.dataset.piece) && (c.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING)) {
+          treffer.push(`${c.closest("[data-strom]").dataset.strom} über ${g.dataset.piece}`); break;
+        }
+      }
+    }
+    return treffer;
+  });
+  for (const [r, u] of [["drossel", 3], ["frei", 3], ["frei", 6], ["drossel", 6]]) {
+    await stelle(r, u);
+    const treffer = await ueberMaterial();
+    V(`${r === "frei" ? "2 → 1" : "1 → 2"}, ${u} Umdrehungen: kein Teilchen liegt auf festem Material${treffer.length ? " — " + treffer.slice(0, 3).join(", ") : ""}`, treffer.length === 0);
+  }
+  // Direction: the first particle of a stream moves right in 1 → 2 (along the upper passage's second half)
+  // and left in 2 → 1. Two samples of one stream a moment apart; the stream wraps, so use a short gap.
+  const lauf = async (name) => {
+    const lies = () => seite.evaluate((n) => [...document.querySelectorAll(`[data-strom="${n}"] circle`)]
+      .map((c) => [Number(c.getAttribute("opacity")), Number(c.getAttribute("cx")), Number(c.getAttribute("cy"))]), name);
+    const a = await lies(); await seite.waitForTimeout(50); const b = await lies();
+    // along the upper passage both screen coordinates grow in the direction 1 → 2; a particle that wrapped round jumps, so it is left out
+    const d = a.map((p, i) => (p[0] > 0.3 && b[i][0] > 0.3 ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null)).filter((v) => v !== null && Math.abs(v) < 25).sort((x, y) => x - y);
+    return d.length ? d[Math.floor(d.length / 2)] : 0;
+  };
+  await seite.evaluate(() => window.__figur.stelle("drossel", 6)); await seite.evaluate(() => { window.__figur.weiter(); });
+  await seite.waitForTimeout(120);
+  const vor = await lauf("a2");
+  await seite.evaluate(() => { window.__figur.stelle("frei", 6); window.__figur.weiter(); });
+  await seite.waitForTimeout(120);
+  const zurueck = await lauf("a2");
+  V(`die Teilchen laufen in Strömungsrichtung (1 → 2: ${vor.toFixed(1)} px, 2 → 1: ${zurueck.toFixed(1)} px)`, vor > 0.3 && zurueck < -0.3);
+
   // --- the controls really switch -------------------------------------------------------
   await stelle("drossel", 3);
   await seite.click("#btn-richtung");
@@ -123,6 +180,25 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   await seite.waitForTimeout(700);
   V("der Drosselregler stellt die Nadel nach (Modell folgt dem Regler)", (await seite.evaluate(() => window.__figur.modell().nadel)) > 5.9);
   V("die Automatik ist nach einem Eingriff aus", (await seite.getAttribute("#btn-auto", "aria-pressed")) === "false");
+
+  // --- the automatic cycle turns the direction by itself within its takt (3 s) -------------------
+  await stelle("drossel", 3);
+  await seite.evaluate(() => { window.__figur.weiter(); });
+  await seite.click("#btn-auto");
+  const r0 = await seite.evaluate(() => window.__figur.richtung());
+  V("Automatik an", (await seite.getAttribute("#btn-auto", "aria-pressed")) === "true");
+  await seite.waitForFunction((r) => window.__figur.richtung() !== r, r0, { timeout: 5000 }).catch(() => {});
+  V("die Automatik wechselt die Richtung von selbst", (await seite.evaluate(() => window.__figur.richtung())) !== r0);
+  await seite.click("#btn-auto");
+
+  // --- the readout stays inside the card on a phone ----------------------------------------------
+  await stelle("frei", 6);
+  await seite.setViewportSize({ width: 390, height: 844 });
+  await seite.waitForTimeout(250);
+  const zeile = await seite.evaluate(() => { const r = document.querySelector("[data-readout]").getBoundingClientRect(); return { l: r.left, r: r.right, w: innerWidth }; });
+  V(`die Anzeige liegt bei 390 px im Fenster (${zeile.l.toFixed(0)}…${zeile.r.toFixed(0)})`, zeile.l >= 0 && zeile.r <= zeile.w);
+  await seite.setViewportSize({ width: 1280, height: 900 });
+  await seite.waitForTimeout(250);
 
   // --- taking apart: everything stands home, nothing flows ------------------------------
   await stelle("frei", 6);

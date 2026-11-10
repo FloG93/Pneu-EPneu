@@ -92,3 +92,12 @@ export function anzeige(z, masse, { richtung, dpBar }) {
     kugelOffen: z.kugel > 0.5,
   };
 }
+
+/**
+ * The readout in two lines: the flow with its two parts and the ball, then the conditions
+ * the numbers belong to (catalogue: 6 bar at the inlet, `dpBar` pressure drop).
+ */
+export function anzeigeZeile(a, richtung, dpBar, eingangBar = 6) {
+  return `Q ${a.gesamt} l/min (Drossel ${a.drossel} + Rückschlag ${a.rueckschlag}) · Kugel ${a.kugelOffen ? "offen" : "zu"}\n`
+    + `${richtung === FREIE_RICHTUNG ? "2 → 1" : "1 → 2"} · ${eingangBar} bar · Δp ${dpBar} bar`;
+}

@@ -26,11 +26,12 @@ import * as EX from "../../../figur/explode.mjs";
 import * as LEG from "../../../figur/legende.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
-import { GRA_1_4 as M, DROSSELRICHTUNG, FREIE_RICHTUNG, anzeige, neuerZustand, durchfluss } from "../../../figur/stromventil.mjs";
+import { GRA_1_4 as M, DROSSELRICHTUNG, FREIE_RICHTUNG, anzeige, anzeigeZeile, neuerZustand, durchfluss } from "../../../figur/stromventil.mjs";
 import { drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
+import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
 import { seite, knopf, schieber, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
 import { zeichner } from "../../../figur/zylinderteile.mjs";
-import { normteile, stummel, sechskant, federPruefen, SCHNITT_CSS } from "../../../figur/normteile.mjs";
+import { normteile, stummel, sechskant, federPruefen, SCHNITT_CSS, FEDER_LAUFZEIT } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-drossel.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -208,13 +209,16 @@ function gehaeuse() {
     // the air: every hollow belongs to the side of port 1 or port 2; the page paints the two sides
     ...RAUM_TEILE.map(([seite, [x0, x1, z0, z1]]) => `<path class="kammer" data-raum="${seite}" fill="none" d="${umriss(x0, x1, z0, z1)}"/>`),
     // what stands inside the hollows is cut material again: the seat ridge and the seat wall
-    ...stege.map(([x0, x1, z0, z1]) => NT.schnitt([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])),
+    ...stege.map(([x0, x1, z0, z1], i) => NT.schnitt([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]]).replace('<path ', i === 0 ? '<path data-sitz="" ' : '<path ')),
     L(stege.map((r) => umriss(...r)).join(""), { tone: "mid" }),
     L(ring3([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]), { tone: "mid" }),
     // the outer edges of the half block that are not part of a face's outline
     L(k.segment([LAENGE, 0, HOEHE], [LAENGE, -TIEFE, HOEHE], P) + k.segment([LAENGE, -TIEFE, HOEHE], [0, -TIEFE, HOEHE], P) + k.segment([0, -TIEFE, HOEHE], [0, 0, HOEHE], P)
       + k.segment([LAENGE, -TIEFE, HOEHE], [LAENGE, -TIEFE, 0], P) + k.segment([LAENGE, -TIEFE, 0], [LAENGE, 0, 0], P), { tone: "mid" }),
   ];
+  // The particles of the passages run in a layer of their own at the end of the housing's drawing: in front of
+  // the cut face, behind the ball, the spring, the needle and the fittings, which stand in front of the cut plane.
+  teile.push(`<g class="luft" data-luftlage-hinten=""></g>`);
   put([LAENGE / 2, -TIEFE / 2, HOEHE / 2], teile.join(""), materialKoerper(), { name: "gehaeuse.koerper" });
 }
 
@@ -263,7 +267,7 @@ function verschluss() {
 const Z_NUT_UNTEN = Z_KONTER[1] - 3.5;           // inside the nut: where the two drawn parts of the shaft meet
 function schraube() {
   const F = FZ(X_N);
-  const zNadel = [[ZT, 0.4], [ZT + 4.6, 2.7], [ZT + 4.6, 3.3], [Z_GEWINDE[0] - 2, 3.3], [Z_GEWINDE[0] - 2, R_GEWINDE], [Z_NUT_UNTEN, R_GEWINDE]];
+  const zNadel = [[ZT, 0.15], [ZT + 4.6, 2.7], [ZT + 4.6, 3.3], [Z_GEWINDE[0] - 2, 3.3], [Z_GEWINDE[0] - 2, R_GEWINDE], [Z_NUT_UNTEN, R_GEWINDE]];
   const gewinde = [];
   for (let s = Z_GEWINDE[0] + 0.6; s < Z_NUT_UNTEN - 0.3; s += 1.3) gewinde.push(G.arcOf(F, s, R_GEWINDE, P));
 
@@ -379,14 +383,18 @@ const VIEW1 = (([x, y, w, h]) => [x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12
 // Every route runs in the direction 1 → 2. Side 1 and side 2 are separate streams, because the
 // air on the two sides of the throttle (and of the ball's seat) has a different tone.
 const Z_STROM_OBEN = 45;            // between the seat's ridge (43.5) and the needle's tip
+const Z_STROM_UNTEN = 22.2;         // over the ball and its spring (their tops lie at 21.4)
 const X_K = [(X_KAMMER[0][0] + X_KAMMER[0][1]) / 2, (X_KAMMER[1][0] + X_KAMMER[1][1]) / 2];
+// The particles never lie over solid parts: the hose routes stop short of the fittings' rings, the passages' streams run in the housing's back layer, the
+// passages stay clear of the thread stubs and the lower one goes
+// over the ball and dips into the seat hole behind it.
 const ROUTEN = {
-  z1: [...WEGE[1].slice().reverse(), [0, 0, ZA], [X_K[0], 0, ZA]],
-  a1: [[X_K[0], 0, ZA], [X_K[0], 0, Z_STROM_OBEN], [X_N, 0, Z_STROM_OBEN]],
+  z1: G.cut(WEGE[1].slice().reverse(), 0, G.pathLength(WEGE[1]) - 9),
+  a1: [[16, 0, ZA], [X_K[0], 0, ZA], [X_K[0], 0, Z_STROM_OBEN], [X_N, 0, Z_STROM_OBEN]],
   a2: [[X_N, 0, Z_STROM_OBEN], [X_K[1], 0, Z_STROM_OBEN], [X_K[1], 0, ZA]],
-  b1: [[X_K[0], 0, ZA], [X_K[0], 0, Z_KUGEL], [WAND[0], 0, Z_KUGEL]],
-  b2: [[WAND[0], 0, Z_KUGEL], [X_K[1], 0, Z_KUGEL], [X_K[1], 0, ZA]],
-  z2: [[X_K[1], 0, ZA], [LAENGE, 0, ZA], ...WEGE[2]],
+  b1: [[16, 0, ZA], [X_K[0], 0, ZA], [X_K[0], 0, Z_STROM_UNTEN], [WAND[0] - 2, 0, Z_STROM_UNTEN], [WAND[0] + 1.5, 0, Z_KUGEL]],
+  b2: [[WAND[0] + 1.5, 0, Z_KUGEL], [X_K[1], 0, Z_KUGEL], [X_K[1], 0, ZA]],
+  z2: G.cut(WEGE[2], 9, G.pathLength(WEGE[2])),
 };
 const BAHNEN = Object.fromEntries(Object.entries(ROUTEN).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
 
@@ -408,9 +416,7 @@ const svg = k.figureSvg({
 const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
 const DP = 1;                                        // bar: the catalogue's pressure drop (6 bar in, 5 bar out)
 const START = { richtung: DROSSELRICHTUNG, umdrehungen: M.umdrehungen / 2 };
-const anzeigeText = (a, richtung) => `Q ${a.gesamt} l/min · Drossel ${a.drossel} · Rückschlag ${a.rueckschlag} · Kugel ${a.kugelOffen ? "offen" : "zu"}`
-  + ` (${richtung === FREIE_RICHTUNG ? "2 → 1" : "1 → 2"}, 6 bar, Δp ${DP} bar)`;
-const ANZEIGE = anzeigeText(anzeige(neuerZustand(M, START.umdrehungen), M, { richtung: START.richtung, dpBar: DP }), START.richtung);
+const ANZEIGE = anzeigeZeile(anzeige(neuerZustand(M, START.umdrehungen), M, { richtung: START.richtung, dpBar: DP }), START.richtung, DP);
 const Q = (richtung, u) => durchfluss(richtung, u, DP, M);
 
 const live = `
@@ -444,29 +450,24 @@ ${LEG.LAUFZEIT}
 ${EX.ABLAUF}
 ${LU.LAUFZEIT}
 ${DROSSEL_SYMBOL_LAUFZEIT}
+${FEDER_LAUFZEIT}
+${BEDIENUNG_LAUFZEIT}
 
 // --- the model drives everything -------------------------------------------
 let richtung = DROSSELRICHTUNG;
 let regler = U0;
 let angehalten = false;
-let auto = !still.matches;
-let autoZeit = 0;
 let hubAnteil = 1;                    // goes to 0 while the valve is taken apart: the moving parts stand home
 const zustand = neuerZustand(GRA_1_4, U0);
 
 const nadelTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const kugelTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
-// The ball spring is fixed at the post (x = a) and follows the ball (x = b): every piece of the
-// coil is shifted in proportion to its distance from the fixed end.
-const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
-  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
-  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
-});
 const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
 const luftLage = svg.querySelector("[data-luftlage]");
+const luftHinten = svg.querySelector("[data-luftlage-hinten]");
 const stroeme = {};
 const ANZAHL = { z1: 8, a1: 12, a2: 12, b1: 12, b2: 10, z2: 8 };
-for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[name], ANZAHL[name]);
+for (const name in BAHNEN) stroeme[name] = stromBauen(/^[ab]/.test(name) ? luftHinten : luftLage, name, BAHNEN[name], ANZAHL[name]);
 const symbole = Array.from(document.querySelectorAll(".beifigur-symbol svg"));
 
 const knopfRichtung = document.getElementById("btn-richtung");
@@ -474,6 +475,21 @@ const knopfAuto = document.getElementById("btn-auto");
 const reglerEl = document.getElementById("drossel");
 const reglerWert = document.getElementById("drossel-wert");
 const komma = (x) => String(x).replace(".", ",");
+
+// The automatic cycle is figur/bedienung.mjs: every AUTO_TAKT s of model time the direction flips.
+const bed = bedienungSignale({
+  namen: [],
+  impuls: 0,
+  autoTakt: AUTO_TAKT,
+  autoAn: !still.matches,
+  erster: "R",
+  haltenModus: () => false,
+  setzeSignal: () => {},
+  autoSchritt: () => { richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG; zeichneBedienung(); },
+  autoEnde: () => {},
+  autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
+  geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
+});
 
 let gezeichnet = "";
 function zeichneHub() {
@@ -486,11 +502,8 @@ function zeichneHub() {
   gezeichnet = marke;
   for (const el of nadelTeile) { if (tz) el.setAttribute("transform", tz); else el.removeAttribute("transform"); }
   for (const el of kugelTeile) { if (tk) el.setAttribute("transform", tk); else el.removeAttribute("transform"); }
-  for (const f of federTeile) {
-    const dx = (s * (f.x - f.a)) / (f.b - f.a);
-    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [-dx, 0, 0]));
-    else f.el.removeAttribute("transform");
-  }
+  // the ball spring stands at the post (end a) and follows the ball (end b)
+  federnVerschieben(s, "a");
 }
 
 // The side the air comes from is under pressure (strong tone); behind the throttle or the ball it is relaxed (pale).
@@ -527,9 +540,7 @@ function zeichneLuft(dt) {
 
 let letzteZeile = "";
 function zeichneAnzeige() {
-  const a = anzeige(zustand, GRA_1_4, { richtung, dpBar: DP });
-  const text = "Q " + a.gesamt + " l/min · Drossel " + a.drossel + " · Rückschlag " + a.rueckschlag + " · Kugel " + (a.kugelOffen ? "offen" : "zu")
-    + " (" + (richtung === FREIE_RICHTUNG ? "2 → 1" : "1 → 2") + ", 6 bar, Δp " + DP + " bar)";
+  const text = anzeigeZeile(anzeige(zustand, GRA_1_4, { richtung, dpBar: DP }), richtung, DP);
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
 }
 
@@ -545,13 +556,14 @@ function zeichneBedienung() {
   knopfRichtung.setAttribute("aria-pressed", String(frei));
   const text = frei ? "Richtung 2 → 1 (frei)" : "Richtung 1 → 2 (gedrosselt)";
   if (knopfRichtung.textContent !== text) knopfRichtung.textContent = text;
-  knopfAuto.setAttribute("aria-pressed", String(auto));
+  knopfAuto.setAttribute("aria-pressed", String(bed.auto));
   reglerWert.textContent = komma(regler) + " Umdr.";
 }
 
 // One frame (the loop itself is EX.ABLAUF).
 function bildZeichnen(dt, offen, bewegt) {
   luftLage.style.opacity = String(Math.max(0, 1 - offen * 3));
+  luftHinten.style.opacity = String(Math.max(0, 1 - offen * 3));
   for (const el of raeume) {
     if (offen > 0.001) el.style.opacity = (0.82 * Math.max(0, 1 - offen * 3)).toFixed(3);
     else el.style.removeProperty("opacity");
@@ -562,10 +574,7 @@ function bildZeichnen(dt, offen, bewegt) {
   if (offen < 0.01 && !bewegt) {
     const dm = angehalten ? 0 : dt;
     if (dm > 0) {
-      if (auto) {
-        autoZeit += dm;
-        if (autoZeit >= AUTO_TAKT) { autoZeit = 0; richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG; zeichneBedienung(); }
-      }
+      bed.takt(dm);
       schritt(zustand, GRA_1_4, dm, { richtung, umdrehungen: regler, dpBar: DP });
     }
     zeichneHub();
@@ -579,7 +588,7 @@ function bildZeichnen(dt, offen, bewegt) {
 }
 
 // --- controls -------------------------------------------------------------
-const stoppeAuto = () => { auto = false; autoZeit = 0; zeichneBedienung(); };
+const stoppeAuto = () => { bed.autoAus(); };
 knopfRichtung.addEventListener("click", () => {
   stoppeAuto();
   richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG;
@@ -588,8 +597,7 @@ knopfRichtung.addEventListener("click", () => {
   run();
 });
 knopfAuto.addEventListener("click", () => {
-  auto = !auto;
-  autoZeit = 0;
+  if (bed.auto) bed.autoAus(); else bed.autoStart("R");
   angehalten = false;
   zeichneBedienung();
   run();
@@ -636,6 +644,7 @@ window.__figur = {
     zeichneSymbol();
     run();
   },
+  weiter: () => { angehalten = false; run(); },
   spiele,
   waehle,
 };
@@ -655,13 +664,13 @@ const INFO = "Das Ventil hat zwei Wege nebeneinander: oben die Drossel, unten da
 const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
   + `<div class="beifigur-symbol">${drosselRueckschlagSymbol({ feld: 60 }).svg}</div>`
   + `<p class="beifigur-text">Oben die einstellbare Drossel (zwei Bögen, vom Schrägpfeil durchkreuzt), darunter parallel das Rückschlagventil mit Kugel und Feder. `
-  + `Die Kugel liegt auf dem Sitz rechts: Von 1 nach 2 sperrt sie, von 2 nach 1 gibt sie den Weg frei. Der Zweig, durch den gerade Luft strömt, färbt sich.</p>`;
+  + `Die Kugel liegt auf dem Sitz rechts: Von 1 nach 2 sperrt sie, von 2 nach 1 gibt sie den Weg frei. Der Zweig, durch den gerade Luft strömt, färbt sich. Für die Abluftdrosselung zeigt Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil.</p>`;
 
 const q = (richtung, u) => Q(richtung, u);
 const LESETEXT = `<div class="lesetext">
 <h2>Was man sieht</h2>
 <p>Das Ventil ist in der Ebene seiner beiden Kanäle aufgeschnitten. Links liegt der Anschluss <strong>1</strong>, rechts der Anschluss <strong>2</strong>;
-mehr Anschlüsse hat es nicht (die Buchstaben P, A und R der alten Bezeichnung gibt es hier nicht, sie gehören zu Wegeventilen).
+mehr Anschlüsse hat es nicht.
 Hinter jedem Anschluss liegt eine Kammer, und zwischen den beiden Kammern verlaufen <strong>zwei Wege nebeneinander</strong>:
 oben die <strong>Drossel</strong> mit der Drosselnadel, unten das <strong>Rückschlagventil</strong> mit Kugel und Feder.</p>
 
@@ -672,21 +681,24 @@ engen Spalt zwischen Drosselnadel und Sitz. Dort fällt der Druck ab: Vor der Dr
 <p>Strömt sie von <strong>2 nach 1</strong>, hebt der Druck die Kugel gegen die Feder vom Sitz ab (im Modell ab ${komma(M.oeffnungsdruck, 1)} bar Druckunterschied, hier
 um ${M.kugelHubMm} mm). Jetzt fließt die Luft durch <strong>beide</strong> Wege, und der untere nimmt den größeren Teil: Zu den ${q(DROSSELRICHTUNG, M.umdrehungen).drossel} l/min der
 offenen Drossel kommen ${q(FREIE_RICHTUNG, 0).rueckschlag} l/min durch den Rückschlagweg, zusammen ${q(FREIE_RICHTUNG, M.umdrehungen).gesamt} l/min. Auch bei ganz zugedrehter Drossel
-fließen in dieser Richtung noch ${q(FREIE_RICHTUNG, 0).gesamt} l/min. Die Drossel wirkt also nur in <strong>einer</strong> Richtung.</p>
+fließen in dieser Richtung im Modell noch ${q(FREIE_RICHTUNG, 0).gesamt} l/min (${M.qnFrei} − ${M.qnDrossel}, angenommen: die beiden Wege wirken unabhängig voneinander). Die Drossel wirkt also nur in <strong>einer</strong> Richtung.</p>
 
 <h2>Die Rändelschraube</h2>
 <p>Am Rändelkopf stellt man den Querschnitt ein. Die Drosselnadel ist kegelig und sitzt über einem Wulst im oberen Weg; je tiefer sie sitzt, desto enger ist der Spalt.
 In der Figur ändert eine Umdrehung die Höhe der Nadel um ${komma(M.steigung, 0)} mm (eine Annahme), ${M.umdrehungen} Umdrehungen gehen von ganz zu bis ganz offen, und der Durchfluss wächst im Modell
-im gleichen Maß: bei ${komma(M.umdrehungen / 2, 0)} Umdrehungen sind es ${q(DROSSELRICHTUNG, M.umdrehungen / 2).gesamt} l/min, bei 0 Umdrehungen fließt in Drosselrichtung keine Luft.
+im gleichen Maß: bei ${komma(M.umdrehungen / 2, 0)} Umdrehungen sind es ${q(DROSSELRICHTUNG, M.umdrehungen / 2).gesamt} l/min, bei 0 Umdrehungen fließt im Modell in Drosselrichtung keine Luft (angenommen ist ein dichter Nadelsitz).
 Die <strong>Kontermutter</strong> bleibt beim Einstellen stehen; sie wird nach dem Einstellen gegen das Gehäuse gespannt und sichert die Schraube.</p>
 
 <h2>Warum drosselt man die Abluft?</h2>
-<p>Man setzt das Ventil an den Anschluss eines Zylinders und stellt damit seine Geschwindigkeit in <strong>einer</strong> Richtung ein. Üblich ist die
-<strong>Abluftdrosselung</strong>: Die Zuluft strömt frei in den Zylinder (2 → 1, die Kugel hebt ab), nur die Abluft muss durch die Drossel (1 → 2).
-Dadurch ist der Kolben zwischen zwei Luftpolstern eingespannt: Hinter ihm steht der volle Druck, vor ihm ein einstellbarer Gegendruck. Das Gegenhalten macht die
-Bewegung gleichmäßig und ruhig und verhindert, dass der Kolben bei wechselnder Last ruckt oder ins Ziehen kommt.
-Bei der Zuluftdrosselung wäre es umgekehrt: Der Druck müsste sich erst langsam aufbauen, der Kolben bliebe haften und
-spränge dann los. Wie ein Zylinder aufgebaut ist, zeigt die Seite zum <a href="../Zylinder-Doppeltwirkend/">doppeltwirkenden Zylinder</a>.</p>
+<p>Man setzt das Ventil an den Anschluss eines Zylinders und stellt damit seine Geschwindigkeit in <strong>einer</strong> Richtung ein. Für die
+<strong>Abluftdrosselung</strong> zeigt dabei <strong>Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil</strong>. Die Zuluft strömt dann vom Wegeventil frei
+in den Zylinder (2 → 1, die Kugel hebt ab), nur die Abluft muss auf dem Rückweg durch die Drossel (1 → 2).</p>
+<p>Dadurch ist der Kolben zwischen zwei Luftpolstern eingespannt: Hinter ihm steht der volle Druck, vor ihm bleibt ein Gegendruck stehen, den die Drossel erzeugt.
+Das Gegenhalten macht die Bewegung gleichmäßig und ruhig. Der Kolben ruckt bei wechselnder Last nicht und wird auch von einer ziehenden Last nicht mitgerissen,
+weil sie gegen den Gegendruck arbeiten müsste; die Geschwindigkeit hängt so weniger von der Last ab.
+Bei der Zuluftdrosselung wäre es umgekehrt: Der Druck müsste sich erst langsam aufbauen, der Kolben bliebe haften und spränge dann los. Eine Ausnahme sind
+einfachwirkende und sehr kleine Zylinder: Ein einfachwirkender Zylinder hat nur eine Luftseite, und bei sehr kleinem Volumen lässt sich kaum ein Luftpolster aufbauen;
+dort wird meist die Zuluft gedrosselt. Wie ein Zylinder aufgebaut ist, zeigt die Seite zum <a href="../Zylinder-Doppeltwirkend/">doppeltwirkenden Zylinder</a>.</p>
 <p class="formel">
 Drossel ganz offen, 1 → 2: <strong>${q(DROSSELRICHTUNG, M.umdrehungen).gesamt} l/min</strong><br>
 Drossel halb offen, 1 → 2: <strong>${q(DROSSELRICHTUNG, M.umdrehungen / 2).gesamt} l/min</strong><br>
@@ -695,11 +707,12 @@ Drossel zu, 1 → 2: <strong>${q(DROSSELRICHTUNG, 0).gesamt} l/min</strong><br>
 2 → 1, Drossel zu: nur der Rückschlagweg, <strong>${q(FREIE_RICHTUNG, 0).gesamt} l/min</strong>
 </p>
 <p class="hinweis">Alle Zahlen stehen im Modell, das auch die Nadel und die Kugel bewegt. Sie gelten bei den Bedingungen des Datenblatts: 6 bar am Eingang und 1 bar Druckunterschied
-(die Anzeige nennt sie). Die Normdurchflüsse 420 und 780 l/min sind Katalogwerte; alles andere sind Annahmen, die in der Anleitung zur Figur stehen.</p>
+(die Anzeige nennt sie). Nur die Normdurchflüsse 420 und 780 l/min sind Katalogwerte; die 360 l/min, die Umdrehungen, der Öffnungsdruck und das Innenleben sind Annahmen oder ein Lehrbuchbild und stehen in der Anleitung zur Figur.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 
-const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}`;
+// the readout has two lines and wraps on a phone instead of running out of the card
+const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n[data-readout] { white-space: pre-line; text-align: left }`;
 const ZIEL = join(HIER, "..", "..", "index.html");
 mkdirSync(dirname(ZIEL), { recursive: true });
 const html = seite({

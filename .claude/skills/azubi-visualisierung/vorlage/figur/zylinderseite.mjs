@@ -21,7 +21,7 @@
 // It defines:
 //   hubTeile, schieberTeile     the elements with data-hub (ride with the piston)
 //                               and data-schieber (the valve spool)
-//   federTeile                  the pieces of a return spring (data-federx) that is compressed
+//   (federTeile, federnVerschieben: figur/normteile.mjs FEDER_LAUFZEIT) the pieces of a return spring that is compressed
 //                               with the stroke: the piston end follows, the head end stands
 //   teileVerschieben(weg, schieber, schieberWeg)
 //                               move both groups (and compress a spring): weg in mm along the axis; the
@@ -44,27 +44,18 @@ import * as EX from "./explode.mjs";
 import * as LEG from "./legende.mjs";
 import * as LU from "./luft.mjs";
 import { VENTIL_STANDARD } from "./zylinderteile.mjs";
+import { FEDER_LAUFZEIT } from "./normteile.mjs";
 
-export const LAUFZEIT = String.raw`
+export const LAUFZEIT = `${FEDER_LAUFZEIT}\n` + String.raw`
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
 
-// A return spring between the piston and the head: every piece of the coil
-// carries the x of its middle, the group the x range [a, b] of the coil. The
-// piston end follows the piston, the head end stands still.
-const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
-  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
-  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
-});
-
+// The return spring between the piston and the head is compressed by federnVerschieben
+// (figur/normteile.mjs): the piston end follows the piston, the head end stands still.
 function teileVerschieben(weg, schieber, schieberWeg) {
   const t = translateAlong(P, [weg, 0, 0]);
   for (const el of hubTeile) el.setAttribute("transform", t);
-  for (const f of federTeile) {
-    const dx = (weg * (f.b - f.x)) / (f.b - f.a);
-    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
-    else f.el.removeAttribute("transform");
-  }
+  federnVerschieben(weg, "b");
   const ts = translateAlong(P, [(schieber - 0.5) * 2 * schieberWeg, 0, 0]);
   for (const el of schieberTeile) el.setAttribute("transform", ts);
 }

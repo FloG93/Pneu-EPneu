@@ -1816,16 +1816,26 @@ function bedienungSignale(opt) {
 }
 
 
+const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
+  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
+  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
+});
+
+function federnVerschieben(s, festesEnde) {
+  for (const f of federTeile) {
+    const dx = festesEnde === "a" ? (s * (f.x - f.a)) / (f.b - f.a) : (s * (f.b - f.x)) / (f.b - f.a);
+    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [festesEnde === "a" ? -dx : dx, 0, 0]));
+    else f.el.removeAttribute("transform");
+  }
+}
+
+
 const komma = (x) => x.toFixed(1).replace(".", ",");
 let druck = 6;
 let zeitlupe = 1;
 let angehalten = false;
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
-  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
-  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
-});
 
 // The spool with its rings and pistons slides; the spring is compressed piece
 // by piece, each in proportion to its distance from the fixed end wall.
@@ -1839,11 +1849,7 @@ function zeichneHub() {
     if (t) el.setAttribute("transform", t);
     else el.removeAttribute("transform");
   }
-  for (const f of federTeile) {
-    const dx = (s * (f.b - f.x)) / (f.b - f.a);
-    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
-    else f.el.removeAttribute("transform");
-  }
+  federnVerschieben(s, "b");
   zeichneKammern(s);
 }
 

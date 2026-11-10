@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  GRA_1_4, drosselAnteil, kugelHub, durchfluss, neuerZustand, schritt, anzeige,
+  GRA_1_4, anzeigeZeile, drosselAnteil, kugelHub, durchfluss, neuerZustand, schritt, anzeige,
   DROSSELRICHTUNG as D, FREIE_RICHTUNG as F,
 } from "../stromventil.mjs";
 
@@ -76,4 +76,11 @@ test("anzeige rundet auf ganze l/min", () => {
 test("anzeige: freie Richtung bei offener Drossel zeigt 780 und Kugel offen", () => {
   const z = { nadel: U, kugel: 1 };
   assert.deepEqual(anzeige(z, GRA_1_4, { richtung: F, dpBar: 1 }), { gesamt: 780, drossel: 420, rueckschlag: 360, kugelOffen: true });
+});
+test("anzeigeZeile: Durchfluss mit beiden Teilen in der ersten, die Bedingungen in der zweiten Zeile", () => {
+  const z = { nadel: 6, kugel: 1 };
+  assert.equal(anzeigeZeile(anzeige(z, GRA_1_4, { richtung: F, dpBar: 1 }), F, 1),
+    "Q 780 l/min (Drossel 420 + Rückschlag 360) · Kugel offen\n2 → 1 · 6 bar · Δp 1 bar");
+  assert.equal(anzeigeZeile(anzeige({ nadel: 3, kugel: 0 }, GRA_1_4, { richtung: D, dpBar: 1 }), D, 1),
+    "Q 210 l/min (Drossel 210 + Rückschlag 0) · Kugel zu\n1 → 2 · 6 bar · Δp 1 bar");
 });

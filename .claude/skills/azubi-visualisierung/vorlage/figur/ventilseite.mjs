@@ -33,7 +33,7 @@
 
 import { schieber } from "./seite.mjs";
 import { CSS as LUFT_CSS, FARBEN } from "./luft.mjs";
-import { SCHNITT_CSS } from "./normteile.mjs";
+import { SCHNITT_CSS, FEDER_LAUFZEIT } from "./normteile.mjs";
 import { SYMBOL_CSS } from "./schaltzeichen.mjs";
 
 /** The three sliders as one unit each, so a bar that wraps on a phone keeps label, slider and value together. */
@@ -59,17 +59,13 @@ export const CSS = `${LUFT_CSS}${SCHNITT_CSS}${SYMBOL_CSS}
 .playbtn:disabled { cursor: not-allowed; color: var(--anatomy-text); border-style: dashed; box-shadow: none }
 `;
 
-export const LAUFZEIT = String.raw`
+export const LAUFZEIT = `${FEDER_LAUFZEIT}\n` + String.raw`
 const komma = (x) => x.toFixed(1).replace(".", ",");
 let druck = 6;
 let zeitlupe = 1;
 let angehalten = false;
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
-  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
-  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
-});
 
 // The spool with its rings and pistons slides; the spring is compressed piece
 // by piece, each in proportion to its distance from the fixed end wall.
@@ -83,11 +79,7 @@ function zeichneHub() {
     if (t) el.setAttribute("transform", t);
     else el.removeAttribute("transform");
   }
-  for (const f of federTeile) {
-    const dx = (s * (f.b - f.x)) / (f.b - f.a);
-    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
-    else f.el.removeAttribute("transform");
-  }
+  federnVerschieben(s, "b");
   zeichneKammern(s);
 }
 
