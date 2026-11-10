@@ -18,8 +18,9 @@
 //     put      put(pos, svg, shapes, extra) of the build script
 //     gruppe   gruppe(name) sets the drawing group the next put belongs to
 //     MOVE     escape path of each assembly (the hoses' route takes it)
-//   ZT.grundplatte({ fuss, fussZ, schiene })
-//        the feet (x of each, height fussZ) and the rail; group "grund"
+//   ZT.grundplatte({ fuss, fussZ, schiene, fussGruppe })
+//        the feet (x of each, height fussZ) in group fussGruppe (default
+//        "grund") and the rail in group "grund"
 //   ZT.lastschlitten({ x, hw, d, h, F, rStange })
 //        the load carriage at stroke 0 (it rides with the rod: data-hub);
 //        x is the rod tip, hw/d/h half width, depth and height, F the frame on
@@ -67,8 +68,8 @@ export function zylinderTeile({ P, R, put, gruppe, MOVE }) {
   const D = (points, style) => k.dotsSvg(points, style);
 
   // --- Feet and rail: the machine stands on its own mounts ---------------
-  function grundplatte({ fuss, fussZ, schiene }) {
-    gruppe("grund");
+  function grundplatte({ fuss, fussZ, schiene, fussGruppe = "grund" }) {
+    gruppe(fussGruppe);
     for (const x of fuss) {
       const bett = { x: x - 17, y: -50, w: 34, d: 100, r: 3 };
       const steg = { x: x - 12, y: -42, w: 24, d: 84, r: 2 };
@@ -86,6 +87,7 @@ export function zylinderTeile({ P, R, put, gruppe, MOVE }) {
       ], { name: "grund.fuss", bias: -500 });
     }
 
+    gruppe("grund");
     const bett = { x: schiene.x - 8, y: schiene.y - 10, w: schiene.w + 16, d: schiene.d + 20, r: 4 };
     put([schiene.x + schiene.w / 2, 0, 5], [
       `<path class="iso-halo" d="${k.haloOf(bett, 0, 8, P)}"/>`,

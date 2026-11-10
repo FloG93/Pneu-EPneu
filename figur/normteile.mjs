@@ -29,7 +29,9 @@
 //        silencer D = { gewinde, sechskant, rS, hals, rH, sinter, rD, kuppe }
 //   NT.druckfeder(F, fa, fb, feder)      coil of a compression spring as one
 //        <g data-federx> per tube piece, back to front; feder = { draht,
-//        windungen, rWindung }
+//        windungen, rWindung }; with { teilen: true } it returns { hinten, vorn }:
+//        the pieces behind the spring's axis and the pieces in front of it, for a
+//        spring around a rod that has to be drawn between the two halves
 
 import * as k from "../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../.claude/skills/anatomy/kit/lathe.mjs";
@@ -182,7 +184,7 @@ export function normteile({ P, rec, put, gruppe }) {
    * world x of its middle (the spring axis has to run along x): the page compresses the coil by shifting every piece in
    * proportion to its distance from the end wall.
    */
-  function druckfeder(F, fa, fb, feder) {
+  function druckfeder(F, fa, fb, feder, { teilen = false } = {}) {
     const R_DRAHT = feder.draht / 2, R_WINDUNG = feder.rWindung, WINDUNGEN = feder.windungen;
     const wendel = Array.from({ length: 221 }, (_, i) => {
       const t = i / 220;
@@ -195,7 +197,11 @@ export function normteile({ P, rec, put, gruppe }) {
     });
     const draht = tubePieces(wendel, R_DRAHT, P, { maxLength: 4, caps: true })
       .sort((p1, p2) => G.dot3(p1.mid, V) - G.dot3(p2.mid, V));
-    return draht.map((teil) => `<g data-federx="${teil.mid[0].toFixed(2)}">${tubeSvg(teil, { tone: "hi" })}</g>`);
+    const stueck = (teil) => `<g data-federx="${teil.mid[0].toFixed(2)}">${tubeSvg(teil, { tone: "hi" })}</g>`;
+    if (!teilen) return draht.map(stueck);
+    // Behind or in front of the axis, seen from the camera.
+    const vorn = (teil) => G.dot3(teil.mid.map((v, j) => v - G.pointOf(F, teil.mid[0] - F.o[0], 0, 0)[j]), V) > 0;
+    return { hinten: draht.filter((t) => !vorn(t)).map(stueck), vorn: draht.filter(vorn).map(stueck) };
   }
 
   return { flach, schnitt, schraubenkopf, gewinde, verschraubung, schalldaempfer, druckfeder };

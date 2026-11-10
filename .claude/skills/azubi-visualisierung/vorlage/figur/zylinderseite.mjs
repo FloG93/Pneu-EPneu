@@ -16,8 +16,10 @@
 // It defines:
 //   hubTeile, schieberTeile     the elements with data-hub (ride with the piston)
 //                               and data-schieber (the valve spool)
+//   federTeile                  the pieces of a return spring (data-federx) that is compressed
+//                               with the stroke: the piston end follows, the head end stands
 //   teileVerschieben(weg, schieber, schieberWeg)
-//                               move both groups: weg in mm along the axis; the
+//                               move both groups (and compress a spring): weg in mm along the axis; the
 //                               spool by (schieber - 0.5) * 2 * schieberWeg
 //   druckAnteil(p, druck)       0…1, how far above ambient chamber pressure p is
 //   kammerFuellen(el, p, druck, F)   colour a chamber path between exhaust and pressure blue
@@ -35,9 +37,22 @@ export const LAUFZEIT = String.raw`
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
 
+// A return spring between the piston and the head: every piece of the coil
+// carries the x of its middle, the group the x range [a, b] of the coil. The
+// piston end follows the piston, the head end stands still.
+const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
+  const ende = el.closest("[data-feder]").dataset.feder.split(" ").map(Number);
+  return { el, x: Number(el.dataset.federx), a: ende[0], b: ende[1] };
+});
+
 function teileVerschieben(weg, schieber, schieberWeg) {
   const t = translateAlong(P, [weg, 0, 0]);
   for (const el of hubTeile) el.setAttribute("transform", t);
+  for (const f of federTeile) {
+    const dx = (weg * (f.b - f.x)) / (f.b - f.a);
+    if (dx > 1e-4) f.el.setAttribute("transform", translateAlong(P, [dx, 0, 0]));
+    else f.el.removeAttribute("transform");
+  }
   const ts = translateAlong(P, [(schieber - 0.5) * 2 * schieberWeg, 0, 0]);
   for (const el of schieberTeile) el.setAttribute("transform", ts);
 }

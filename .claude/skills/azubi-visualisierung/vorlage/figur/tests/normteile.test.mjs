@@ -83,3 +83,15 @@ test("Bedienung: Halten setzt das Signal, Loslassen nimmt es zurück, Impuls lä
   bed.autoAus();
   assert.equal(signal["14"], false, "autoEnde lässt los");
 });
+
+test("Druckfeder mit teilen: hinten und vorn zusammen sind genau die ganze Wendel, beide nicht leer", () => {
+  const P2 = k.fitProjection([[0, -40, 0], [100, 40, 80]], 900, 800, { pad: 40, azimuth: 38, elevation: 34 });
+  const NT = normteile({ P: P2, rec: (s) => s, put: () => {}, gruppe: () => {} });
+  const F = { o: [0, 0, 40], a: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1] };
+  const feder = { draht: 3, windungen: 6, rWindung: 12 };
+  const ganz = NT.druckfeder(F, 10, 70, feder);
+  const { hinten, vorn } = NT.druckfeder(F, 10, 70, feder, { teilen: true });
+  assert.equal(hinten.length + vorn.length, ganz.length);
+  assert.ok(hinten.length > 10 && vorn.length > 10, `hinten ${hinten.length}, vorn ${vorn.length}`);
+  assert.ok([...hinten, ...vorn].every((s) => s.startsWith("<g data-federx=")));
+});
