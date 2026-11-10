@@ -20,6 +20,9 @@ import * as LEG from "../../../figur/legende.mjs";
 import { normteile, federPruefen } from "../../../figur/normteile.mjs";
 import { zylinderTeile, schlauch } from "../../../figur/zylinderteile.mjs";
 import * as ZS from "../../../figur/zylinderseite.mjs";
+import * as VS from "../../../figur/ventilseite.mjs";
+import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
+import { wegeventilSymbol, zylinderSymbol, VENTIL_3_2_NC, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
 import { seite, knopf, schieber, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
 import { LEGENDE } from "./legende-zylinder-ew.mjs";
 
@@ -123,7 +126,7 @@ const MOVE = {
   kolben: [0, 150, 90],
   feder: [60, 110, 150],
   stange: [110, 190, 70],
-  kopf: [140, 20, 110],
+  kopf: [90, 110, 120],
   fuss: [0, -120, 0],
   gehaeuse: [0, 190, -12],
   schieber: [-120, 150, 66],
@@ -340,6 +343,15 @@ for (const [name, nr] of [["E3", 3]]) {
   );
 }
 
+// The vent of the spring chamber: from the chamber through the head's drilling out
+// to the filter. Particles run along it outwards while the piston extends.
+{
+  const xf = X_KOPF[0] + DECKEL / 2;
+  BAHNEN.F = LU.bahn(
+    [[X_KOPF[0] - 9, 19, ZC], [xf, 19, ZC], [xf, DR + 4, ZC], [xf, DR + 24, ZC]], P, k.iso,
+  );
+}
+
 const svg = k.figureSvg({
   width: W,
   height: H,
@@ -356,6 +368,9 @@ const svg = k.figureSvg({
 });
 
 // --- The page ------------------------------------------------------------
+
+const AUTO_TAKT = 0.5;              // s of model time between two automatic signals
+const ZEITLUPE0 = 10;              // the page starts in slow motion: the stroke takes 0,06 s
 
 const live = `
 const MASSE = ${JSON.stringify(Z)};
@@ -375,7 +390,9 @@ const BAHNEN = ${JSON.stringify(BAHNEN)};
 const RB = ${RB}, RS = ${RS}, ZC = ${ZC}, HUB = ${HUB};
 const KOLBEN0 = ${KOLBEN0}, KB = ${KB};
 const X_ROHR = ${JSON.stringify(X_ROHR)}, X_KOPF = ${JSON.stringify(X_KOPF)};
-const WEG0 = ${WEG0};
+const AUTO_TAKT = ${AUTO_TAKT};     // s of model time between two automatic signals
+const ZEITLUPE0 = ${ZEITLUPE0};
+const SCHIEBER_WEG = ${SCHIEBER_WEG};
 
 const stage = document.querySelector(".iso-stage");
 const svg = stage.querySelector("svg");
@@ -389,20 +406,26 @@ ${EX.LAUFZEIT}
 ${LEG.LAUFZEIT}
 ${EX.ABLAUF}
 ${LU.LAUFZEIT}
+${SYMBOL_LAUFZEIT}
+${BEDIENUNG_LAUFZEIT}
 ${ZS.LAUFZEIT}
 
 // --- the model drives everything -----------------------------------------
-const zustand = neuerZustand(MASSE, { weg: WEG0, stellung: "ausfahren" });
+// At rest: no signal, the spring has the piston home, chamber A is at ambient.
+const zustand = neuerZustand(MASSE, { weg: 0, stellung: "einfahren" });
 let druck = 6;
-let auto = true;
+let zeitlupe = ZEITLUPE0;
 let angehalten = false;
 
-const SCHIEBER_WEG = ${SCHIEBER_WEG};
 const kammerA = svg.querySelector('[data-kammer="a"]');
 const kammerB = svg.querySelector('[data-kammer="b"]');
 const luftLage = svg.querySelector("[data-luftlage]");
 const stroeme = {};
 for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[name], name === "V" ? 5 : 9);
+const RING = flaechen(MASSE).ring;
+// The exhaust path is about 30 times wider than the supply path; drawn as it is it would sit at
+// full strength for the whole stroke, so its flow is scaled down to the supply's range.
+const AB_SKALA = MASSE.leitwertZu / MASSE.leitwertAb;
 
 // While the machine comes apart the stroke runs back to zero: the parts in the
 // bore would otherwise carry it on top of their escape path.
@@ -418,63 +441,99 @@ function zeichneHub() {
 function zeichneLuft(dt) {
   const F = luftFarben();
   const { qA } = kammerFluesse(zustand, druck);
+  // Chamber A takes the pressure tone, the spring chamber stays at ambient: always pale.
   kammerFuellen(kammerA, zustand.pA, druck, F);
   kammerFuellen(kammerB, zustand.pB, druck, F);
-  const rein = Math.max(0, qA), raus = Math.max(0, -qA);
-  stromSchritt(stroeme.A, dt, stromTempo(-qA), stromKraft(qA), qA > 0 ? F.druck : F.abluft);
+  const q = qA > 0 ? qA : qA * AB_SKALA;
+  const rein = Math.max(0, q), raus = Math.max(0, -q);
+  stromSchritt(stroeme.A, dt, stromTempo(-q), stromKraft(q), qA > 0 ? F.druck : F.abluft);
   stromSchritt(stroeme.V, dt, stromTempo(-rein), stromKraft(rein), F.druck);
   stromSchritt(stroeme.E3, dt, stromTempo(raus), stromKraft(raus), F.abluft);
+  // The vent filter: what the piston pushes out of (or draws into) the spring chamber.
+  const qF = zustand.v * RING;
+  stromSchritt(stroeme.F, dt, stromTempo(qF), stromKraft(qF), F.abluft);
 }
 
 let letzteZeile = "";
 function zeichneAnzeige() {
   const a = anzeige(zustand, MASSE, druck);
-  const text = a.weg + " von " + HUB + " mm · " + a.kraftAus + " N aus · Feder " + a.federJetzt + " N";
+  const text = "F aus " + a.kraftAus + " N = p · A − Feder · Feder jetzt " + a.federJetzt + " N · Hub " + a.weg + " mm";
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+
+const symbole = Array.from(document.querySelectorAll(".beifigur-symbol svg[data-feldbreite]"));
+function zeichneSymbol() {
+  const o = oeffnung(zustand, MASSE);
+  for (const sym of symbole) symbolStellen(sym, zustand.schieber, o);
 }
 
 // --- one frame (the loop itself is EX.ABLAUF) -----------------------------
 function bildZeichnen(dt, offen, bewegt) {
-  const ruhig = still.matches;
   const willHub = Math.max(0, 1 - offen * 2);
   if (Math.abs(willHub - hubAnteil) > 1e-4) { hubAnteil = willHub; zeichneHub(); }
   luftLage.style.opacity = String(Math.max(0, 1 - offen * 3));
   for (const el of [kammerA, kammerB]) el.style.opacity = String(Math.max(0, 1 - offen * 3));
   // The machine stops while it is being taken apart and carries on afterwards.
   if (offen < 0.01 && !bewegt) {
-    if (auto) automatikTakt(zustand, dt, druck);
-    if (!angehalten) schritt(zustand, MASSE, ruhig ? dt * 0.4 : dt, druck);
+    const dm = angehalten ? 0 : dt / zeitlupe;
+    if (dm > 0) {
+      bed.takt(dm);
+      schritt(zustand, MASSE, dm, druck);
+    }
     zeichneHub();
-    zeichneLuft(dt);
+    zeichneLuft(dm);
     zeichneAnzeige();
+    zeichneBedienung();
   } else {
     for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
   }
+  zeichneSymbol();
 }
-function vorDemZerlegen() {}
 
 // --- controls -------------------------------------------------------------
-const knopfVentil = document.getElementById("btn-ventil");
+const knopfSignal = document.getElementById("btn-signal");
 const knopfAuto = document.getElementById("btn-auto");
 const druckRegler = document.getElementById("druck");
 const druckWert = document.getElementById("druck-wert");
+const lupeRegler = document.getElementById("zeitlupe");
+const lupeWert = document.getElementById("zeitlupe-wert");
 
-knopfVentil.addEventListener("click", () => {
-  auto = false;
-  knopfAuto.setAttribute("aria-pressed", "false");
-  angehalten = false;
-  zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren";
-  takteNeu();
-  run();
+function zeichneBedienung() {
+  const an = zustand.stellung === "ausfahren";
+  if (knopfSignal.getAttribute("aria-pressed") !== String(an)) knopfSignal.setAttribute("aria-pressed", String(an));
+}
+
+// The button is figur/bedienung.mjs: the signal lasts as long as it is held, the
+// automatic cycle presses on its own. What the signal does is this page's business:
+// held, the valve fills chamber A; released, the spring-loaded valve vents it.
+const bed = bedienungSignale({
+  namen: ["T"],
+  impuls: 0.15,
+  autoTakt: AUTO_TAKT,
+  autoAn: !still.matches,
+  erster: "T",
+  haltenModus: () => true,
+  setzeSignal: (n, an) => { zustand.stellung = an ? "ausfahren" : "einfahren"; },
+  autoSchritt: () => { zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren"; },
+  autoEnde: (b) => { if (!b.gehalten.T) zustand.stellung = "einfahren"; },
+  autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
+  geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
 });
+bed.knopf(knopfSignal, "T");
+const stoppeAuto = () => bed.autoAus();
+
 knopfAuto.addEventListener("click", () => {
-  auto = !auto;
+  if (bed.auto) stoppeAuto();
+  else bed.autoStart("T");
   angehalten = false;
-  knopfAuto.setAttribute("aria-pressed", String(auto));
-  takteNeu();
   run();
 });
-knopfAuto.setAttribute("aria-pressed", "true");
+knopfAuto.setAttribute("aria-pressed", String(bed.auto));
+
+lupeRegler.addEventListener("input", () => {
+  zeitlupe = lupeRegler.valueAsNumber;
+  lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
+});
 druckRegler.addEventListener("input", () => {
   druck = druckRegler.valueAsNumber;
   angehalten = false;
@@ -483,56 +542,124 @@ druckRegler.addEventListener("input", () => {
   run();
 });
 
+// Before taking it apart: no signal, no automatic, everything at rest. Whoever
+// held the button ends the signal; after reassembly the piston stands home.
+function vorDemZerlegen() {
+  stoppeAuto();
+  bed.zuruecksetzen();
+  Object.assign(zustand, neuerZustand(MASSE, { weg: 0, stellung: "einfahren" }));
+  zeichneBedienung();
+}
+
+lupeRegler.value = String(zeitlupe);
+lupeWert.textContent = "1/" + zeitlupe;
 zeichneHub();
 zeichneAnzeige();
+zeichneBedienung();
+zeichneSymbol();
 poseExplode();
 
+// A handle for the browser test and for screenshots: it puts the figure into
+// a known state instead of waiting and hoping to catch the right moment.
 window.__figur = figurGrundstock({
+  modell: () => zustand,
+  taster: () => bed.gehalten.T,
+  automatik: () => bed.auto,
+  // The piston at weg mm and the valve in the given position, everything settled.
   stelle(weg, stellung) {
-    auto = false;
+    stoppeAuto();
     angehalten = true;
-    knopfAuto.setAttribute("aria-pressed", "false");
     zustandSetzen(zustand, weg, stellung, druck);
     zeichneHub();
-    zeichneLuft(0.016);
+    zeichneLuft(0);
     zeichneAnzeige();
+    zeichneBedienung();
+    zeichneSymbol();
+  },
+  // The button as a hand holds it.
+  signal(an) {
+    stoppeAuto();
+    angehalten = false;
+    bed.halte("T", an);
+    run();
   },
 });
 `;
 
 const INFO =
-  "Der Taster am Ventil füllt die Kammer, die Automatik lässt den Zyklus laufen. "
-  + "Das kräftige Blau ist Druckluft, das blasse ist Abluft oder Umgebungsluft. "
-  + "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
+  "Halte den Taster am Ventil gedrückt: Die Luft füllt die Kammer hinter dem Kolben und schiebt ihn gegen die Feder hinaus. "
+  + "Lass los: Die Kammer entlüftet, die Feder bringt den Kolben zurück. "
+  + "Das kräftige Blau ist Druckluft, das blasse ist Abluft oder Umgebungsluft. Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
 
 const LEISTE =
-  knopf("btn-ventil", "Ventil schalten", { titel: "Den Steuerschieber in die andere Stellung schieben" })
+  knopf("btn-signal", "Taster halten", { titel: "Gedrückt halten: Das Ventil verbindet 1 mit 2 und füllt die Kammer. Loslassen: Die Feder stellt zurück." })
   + knopf("btn-auto", "Automatik", { gedrueckt: true })
   + knopf("btn-explode", "Zerlegen und zusammenbauen")
   + `<span class="luecke"></span>`
+  + schieber("zeitlupe", "Zeitlupe", { min: 1, max: 50, step: 1, wert: ZEITLUPE0, einheit: "×", beschreibung: "Zeitlupe: Modellzeit geteilt durch diesen Wert" })
+    .replace(`>${ZEITLUPE0}×</output>`, `>1/${ZEITLUPE0}</output>`)
   + schieber("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Betriebsdruck in bar" })
+    .replace(">6 bar</output>", ">6,0 bar</output>")
   + hausBedienung();
 
+// The symbols beside the card: the cylinder and the valve that switches it.
+const SYM_FELD = 60;
+const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
+  + `<div class="beifigur-symbol">${zylinderSymbol({ feld: SYM_FELD }).svg}</div>`
+  + `<div class="beifigur-symbol">${wegeventilSymbol(VENTIL_3_2_NC, { links: "taster", rechts: "feder", feld: SYM_FELD }).svg}</div>`
+  + `<p class="beifigur-text">Oben der einfachwirkende Zylinder mit Federrückstellung: ein Luftanschluss auf der Kolbenseite, auf der Stangenseite Feder und Entlüftung. `
+  + `Darunter das 3/2-Wegeventil in Ruhestellung gesperrt (NC), mit Taster und Rückstellfeder. Die Kästchen gleiten wie der Schieber in der Zeichnung.</p>`;
+
 const f = PN.flaechen(Z);
+const kraft = (bar) => Math.round(PN.kraftAus(bar, Z));
+const F0 = Math.round(PN.federKraft({ weg: 0 }, Z));
+const F1 = Math.round(PN.federKraft({ weg: HUB }, Z));
 const LESETEXT = `<div class="lesetext">
 <h2>Wer bringt den Kolben zurück?</h2>
-<p>Ein <strong>einfachwirkender</strong> Zylinder bekommt nur an einer Seite Luft. Zurück schiebt ihn eine Feder.
-Das reicht, solange der Rückweg kraftlos sein darf. Die Luft wird nur zum Ausfahren gebraucht.</p>
+<p>Ein <strong>einfachwirkender</strong> Zylinder bekommt nur an einer Seite Luft, hier hinter dem Kolben. Zurück schiebt ihn eine <strong>Feder</strong>:
+Sie drückt auf der Stangenseite gegen den Kolben und wird beim Ausfahren zusammengedrückt. Das reicht, solange der Rückweg kraftlos sein darf
+– beim Spannen, Auswerfen oder Prägen. Dafür braucht man nur einen Schlauch und ein einfaches
+<a href="../Wegeventil-3-2/">3/2-Wegeventil</a>, und fällt der Druck aus, fährt der Zylinder von selbst ein.</p>
+<p>Das Ventil: Anschluss 1 bekommt die Druckluft, 2 geht zum Zylinder, 3 ist die Abluft (früher P, A und R). In Ruhe ist es gesperrt (NC): 2 ist mit 3
+verbunden, die Kammer ist entlüftet. Solange man den Taster hält, verbindet es 1 mit 2 – die Kammer füllt sich im <strong>kräftigen Blau</strong>.
+Lässt man los, stellt die Feder des Ventils um und die Luft entweicht im <strong>blassen Blau</strong> durch den Anschluss 3.</p>
+
+<h2>Warum bleibt die Federkammer blass?</h2>
+<p>Die Kammer mit der Feder ist über einen Filter offen zur Umgebung. Beim Ausfahren schiebt der Kolben ihre Luft durch den Filter hinaus, beim
+Einfahren saugt er Luft wieder an. Dort entsteht nie Druck, darum ist sie immer im blassen Blau. Der Filter hält Staub und Späne draußen.
+Mehr zum Aufbau mit zwei Anschlüssen steht beim <a href="../Zylinder-Doppeltwirkend/">doppeltwirkenden Zylinder</a>.</p>
+
+<h2>Warum ist die Ausfahrkraft kleiner als p · A?</h2>
+<p>Die Feder drückt dem Kolben entgegen, und zwar um so stärker, je weiter er ausgefahren ist: ${F0} N eingefahren, ${F1} N bei vollem Hub.</p>
 <p class="formel">
-A<sub>Kolben</sub> = π/4 · 50² = <strong>${f.kolben.toFixed(1)} mm²</strong><br>
-bei 6 bar: F<sub>aus</sub> = 0,6 N/mm² · ${f.kolben.toFixed(1)} mm² − ${Math.round(PN.federKraft({ weg: HUB }, Z))} N Feder = <strong>${Math.round(PN.kraftAus(6, Z))} N</strong>
+A<sub>Kolben</sub> = π/4 · D² = π/4 · 50² = <strong>${f.kolben.toFixed(1)} mm²</strong><br>
+bei 6 bar: p · A = 0,6 N/mm² · ${f.kolben.toFixed(1)} mm² = ${Math.round(0.6 * f.kolben)} N<br>
+F<sub>aus</sub> = ${Math.round(0.6 * f.kolben)} N − ${F1} N Feder = <strong>${kraft(6)} N</strong><br>
+bei 3 bar: F<sub>aus</sub> = 0,3 N/mm² · ${f.kolben.toFixed(1)} mm² − ${F1} N = <strong>${kraft(3)} N</strong><br>
+Zurück: nur die Feder, <strong>${F0} N</strong> eingefahren
 </p>
-<p class="hinweis">Das sind theoretische Werte. Die Reibung der Dichtungen zieht in der Praxis noch einmal
-3 bis 10 Prozent ab.</p>
+<p class="hinweis">Das sind theoretische Werte. Die Reibung der Dichtungen zieht in der Praxis noch einmal 3 bis 10 Prozent ab.
+Bei sehr kleinem Druck (unter etwa 0,6 bar) reicht die Kraft nicht, um Feder und Reibung zu überwinden: Der Kolben bleibt stehen.</p>
+
+<h2>Warum fährt er zurück langsamer aus als er ausfährt?</h2>
+<p>Beim Ausfahren drückt die Druckluft mit rund tausend Newton, beim Einfahren nur die Feder mit einigen zehn Newton. Außerdem muss erst die ganze Kammer
+samt Schlauch entlüften, bevor die Feder gewinnt. Die Zeitlupe (am Anfang 1/10) macht beides sichtbar.</p>
+
+<p class="hinweis">Jede Zahl auf dieser Seite wird aus demselben Modell gerechnet, das auch den Kolben bewegt. Welche Maße aus dem Katalog stammen
+und welche angenommen sind, steht in der Anleitung zur Figur.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
+
+const EIGENES_CSS = `${VS.CSS}
+#btn-signal { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none }
+`;
 
 writeFileSync(ZIEL, seite({
   titel: "Einfachwirkender Zylinder – Pneumatik",
   fig: "Bild 1",
   kartenTitel: "Einfachwirkender Zylinder mit 3/2-Wegeventil",
-  hinweis: "Ventil schalten, Druck einstellen, zerlegen",
-  anzeige: `${WEG0} von ${HUB} mm · ${Math.round(PN.kraftAus(6, Z))} N aus · Feder ${Math.round(PN.federKraft({ weg: WEG0 }, Z))} N`,
+  hinweis: "Taster halten, Zeitlupe, zerlegen",
+  anzeige: `F aus ${kraft(6)} N = p · A − Feder · Feder jetzt ${F0} N · Hub 0 mm`,
   schluessel: [
     { mark: "blue", label: "Kräftiges Blau: Druckluft auf dem Weg in die Kammer" },
     { mark: "dotted", label: "Blasses Blau: Abluft und Umgebungsluft" },
@@ -540,17 +667,19 @@ writeFileSync(ZIEL, seite({
     { mark: "dim", label: "Das Zylinderrohr ist aufgeschnitten, das Ventil an der Schieberebene" },
   ],
   caption:
-    "Rundzylinder Ø 50 mm, Hub 25 mm, einfachwirkend mit Rückstellfeder, am 3/2-Wegeventil. Die Luft schiebt den Kolben "
-    + "gegen die Feder hinaus; ist die Kammer entlüftet, bringt die Feder ihn zurück.",
+    "Rundzylinder Ø 50 mm, Hub 25 mm, einfachwirkend mit Rückstellfeder (Vorbild Festo ESNU-50-25-P-A), am 3/2-Wegeventil. "
+    + "Die Luft schiebt den Kolben gegen die Feder hinaus; ist die Kammer entlüftet, bringt die Feder ihn zurück.",
   svg,
   leiste: LEISTE,
   legende: LEG.knoepfe(LEGENDE),
   infoText: INFO,
   lesetext: LESETEXT,
   laufzeit: live,
-  breite: 1220,
+  breite: 1240,
   buehneLabel: "Einfachwirkender Zylinder mit 3/2-Wegeventil: Luftweg, Kolben und Baugruppen",
-}).replace("</style>", `${LU.CSS}</style>`));
+  beiFigur: BEIFIGUR,
+  beiFigurLabel: "Schaltzeichen",
+}).replace("</style>", `${EIGENES_CSS}</style>`));
 
 console.log(`geschrieben: ${ZIEL}`);
 console.log(FEDER_TEXT);

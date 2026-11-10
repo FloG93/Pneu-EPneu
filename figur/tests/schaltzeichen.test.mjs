@@ -2,7 +2,7 @@
 // each, the fixed ports under one field, and a runtime that slides the fields.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT } from "../schaltzeichen.mjs";
+import { VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, zylinderSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT } from "../schaltzeichen.mjs";
 
 test("5/2 hat zwei Felder mit je zwei Wegen", () => {
   const { svg } = wegeventilSymbol(VENTIL_5_2);
@@ -169,4 +169,23 @@ test("steuer der Beschreibungen", () => {
   assert.deepEqual(VENTIL_5_2.steuer, [14, 12]);
   assert.deepEqual(VENTIL_3_2_NC.steuer, [12, null]);
   assert.deepEqual(VENTIL_3_2_NO.steuer, [10, null]);
+});
+
+test("Zylinder einfachwirkend: Gehäuse, Kolben, Stange, Feder, ein Luftanschluss und die Entlüftung", () => {
+  const { svg, breite, hoehe } = zylinderSymbol();
+  for (const klasse of ["sz-rahmen", "sz-kolben", "sz-stange", "sz-feder", "sz-anschluss", "sz-entlueftung"]) {
+    assert.equal((svg.match(new RegExp(`class="${klasse}"`, "g")) || []).length, 1, `${klasse} fehlt oder doppelt`);
+  }
+  assert.ok(!svg.includes("NaN"));
+  assert.match(svg, new RegExp(`viewBox="0 0 ${breite} ${hoehe}"`));
+  assert.match(svg, /aria-label="Schaltzeichen einfachwirkender Zylinder mit Federrückstellung/);
+  // the spring is a zigzag: nine peaks between the piston and the end wall
+  assert.equal((svg.match(/class="sz-feder" d="([^"]+)"/)[1].match(/L/g) || []).length, 10);
+});
+
+test("Drucktaster als Betätigung: Stummel mit Querstrich, in der Beschreibung genannt", () => {
+  const { svg } = wegeventilSymbol(VENTIL_3_2_NC, { links: "taster", rechts: "feder" });
+  assert.match(svg, /data-seite="links" data-art="taster"/);
+  assert.match(svg, /links Drucktaster, rechts Feder/);
+  assert.ok(!svg.includes("NaN"));
 });

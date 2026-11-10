@@ -1400,8 +1400,9 @@ const ESNU_50_25 = {
   // slower than the advance: at 6 bar about 0.06 s out, 0.12 s back. The exhaust path is the
   // wide one (a valve's Qn of several hundred l/min is some 1e7 mm³/s per bar) because the whole
   // stroke volume plus the hose has to leave through it before the spring can win. The way back
-  // is slower anyway: the spring (65 N net of friction) pushes, not 1000 N of air, and the
-  // spool, the pressure decay in chamber A and the stroke all come first.
+  // is slower anyway: the spring pushes with only 42–65 N net of friction (82 − 40 N in, 105 − 40 N
+  // out), not with 1000 N of air, so `viskos` (drag grows with speed) sets the return speed, and
+  // the spool, the pressure decay in chamber A and the stroke all come first.
   leitwertZu: 3.5e5,    // mm³/s per bar, supply path         – Annahme, auf Hubzeit gestellt
   leitwertAb: 1.0e7,    // mm³/s per bar, exhaust path        – Annahme, auf Rückhubzeit gestellt
   leitwertDrossel: 1.0e7, // mm³/s per bar, unused here (no cushioning screw)
@@ -2005,6 +2006,11 @@ function kammerFluesse(z, druck) {
     qB: l.bZu * (q - z.pB) + l.bAb * (UMGEBUNG - z.pB),
   };
 }
+// Particle speed and strength for a flow q, tuned for conductances near 3.2e5 mm³/s per bar
+// (the 5/2 page's cylinder). A path that is far wider, like the ESNU's exhaust (1e7), would
+// sit at the clamp for the whole stroke: such a page scales q down itself and must not reuse
+// these constants as they are. Streams that do not come from a conductance (the vent filter
+// of a single-acting cylinder) take their flow from the piston: z.v · annulus area.
 const stromTempo = (x) => Math.max(-260, Math.min(260, x * 2.4e-4));
 const stromKraft = (x) => Math.max(0, Math.min(1, Math.abs(x) / 2.2e5));
 

@@ -10,9 +10,14 @@
 // LAUFZEIT is inlined as source after the models (figur/ventil.mjs,
 // figur/pneumatik.mjs) and the runtimes of figur/explode.mjs, figur/legende.mjs
 // and figur/luft.mjs, and before the page's own script. It expects, defined
-// before it: `P` (projection), `MASSE` (cylinder description), `svg`, and from
-// the page the lets `zustand`, `druck`, `angehalten` where the functions below
-// read them (only `zustandSetzen` and `figurGrundstock` do).
+// before it:
+//   `P` (projection), `MASSE` (cylinder description), `svg`
+//   from the model (figur/pneumatik.mjs, figur/ventil.mjs): `UMGEBUNG`, `leitwerte`, `ruht`
+//   from figur/luft.mjs: `mische`
+//   from figur/explode.mjs: `translateAlong`, `offenAnteil`, `zerlegt`, `spiele`
+//   from figur/legende.mjs: `waehle`
+//   from the page: the lets `zustand`, `druck`, `angehalten` (read by `zustandSetzen` and
+//   `figurGrundstock` only; they are called after the page has defined them)
 // It defines:
 //   hubTeile, schieberTeile     the elements with data-hub (ride with the piston)
 //                               and data-schieber (the valve spool)
@@ -70,6 +75,11 @@ function kammerFluesse(z, druck) {
     qB: l.bZu * (q - z.pB) + l.bAb * (UMGEBUNG - z.pB),
   };
 }
+// Particle speed and strength for a flow q, tuned for conductances near 3.2e5 mm³/s per bar
+// (the 5/2 page's cylinder). A path that is far wider, like the ESNU's exhaust (1e7), would
+// sit at the clamp for the whole stroke: such a page scales q down itself and must not reuse
+// these constants as they are. Streams that do not come from a conductance (the vent filter
+// of a single-acting cylinder) take their flow from the piston: z.v · annulus area.
 const stromTempo = (x) => Math.max(-260, Math.min(260, x * 2.4e-4));
 const stromKraft = (x) => Math.max(0, Math.min(1, Math.abs(x) / 2.2e5));
 

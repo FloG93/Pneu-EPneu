@@ -91,6 +91,13 @@ function betaetigung(seite, art, xKante, yMitte, f, nummer) {
     d += `L${zahl(xKante + r * (lang - stub))} ${zahl(yMitte)}L${zahl(xKante + r * lang)} ${zahl(yMitte)}`;
     return `<g ${attr}><path d="${d}" fill="none" stroke="currentColor" stroke-width="${STRICH}" stroke-linejoin="round"/></g>`;
   }
+  if (art === "taster") {
+    // Push button: a short stub out of the field, a bar across its end.
+    const stub = lang * 0.55, balken = f * 0.22;
+    const xe = xKante + r * stub;
+    const d = `M${zahl(xKante)} ${zahl(yMitte)}L${zahl(xe)} ${zahl(yMitte)}M${zahl(xe)} ${zahl(yMitte - balken)}L${zahl(xe)} ${zahl(yMitte + balken)}`;
+    return `<g ${attr}><path d="${d}" fill="none" stroke="currentColor" stroke-width="${STRICH}" stroke-linecap="butt"/></g>`;
+  }
   // Pneumatic: a filled triangle pointing at the field, a dashed pilot line out.
   const tl = f * 0.2, tb = f * 0.1;
   const tri = `M${zahl(xKante)} ${zahl(yMitte)}L${zahl(xKante + r * tl)} ${zahl(yMitte - tb)}L${zahl(xKante + r * tl)} ${zahl(yMitte + tb)}Z`;
@@ -151,12 +158,44 @@ export function wegeventilSymbol(art, { links = "pneumatisch", rechts = "feder",
       + `<text class="sz-text" x="${zahl(x)}" y="${zahl(ty)}" text-anchor="middle" font-size="${zahl(tH)}" fill="currentColor">${nr}</text></g>`;
   }).join("");
 
-  const text = (a) => (a === "feder" ? "Feder" : "pneumatisch");
+  const text = (a) => (a === "feder" ? "Feder" : a === "taster" ? "Drucktaster" : "pneumatisch");
   const beschr = `Schaltzeichen ${alle.length}/${n}-Wegeventil, links ${text(links)}${links === "pneumatisch" && nummer[0] != null ? ` (${nummer[0]})` : ""}, rechts ${text(rechts)}${rechts === "pneumatisch" && nummer[1] != null ? ` (${nummer[1]})` : ""}`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" data-feldbreite="${f}" color="currentColor">`
     + `<g data-felder>${feldTeile.join("")}${seitlich}</g><!--felder-->`
     + feste(art.unten, true) + feste(art.oben, false)
     + "</svg>";
+  return { svg, breite, hoehe };
+}
+
+/**
+ * The symbol of a single-acting cylinder with spring return: the housing, the
+ * piston, the rod through the spring side, the one air port on the piston side
+ * and the vent on the spring side. `feld` is the height of the housing in px.
+ * Static; the viewBox holds all of it.
+ */
+export function zylinderSymbol({ feld = 60 } = {}) {
+  const f = feld;
+  const rand = 4, hoeheKasten = f * 0.7, laenge = f * 2.3;
+  const x0 = rand + f * 0.35;                 // housing's left edge, the port stub stands left of it
+  const y0 = rand + f * 0.2, ym = y0 + hoeheKasten / 2;
+  const xKolben = x0 + laenge * 0.28, xEnde = x0 + laenge, xStange = xEnde + f * 0.55;
+  const zick = 9, h = hoeheKasten * 0.2;
+  let feder = `M${zahl(xKolben)} ${zahl(ym)}`;
+  const a = xKolben + 3, b = xEnde - 3;
+  for (let i = 0; i < zick; i += 1) feder += `L${zahl(a + ((b - a) * (i + 0.5)) / zick)} ${zahl(ym + (i % 2 === 0 ? -h : h))}`;
+  feder += `L${zahl(xEnde)} ${zahl(ym)}`;
+  const yAnschluss = y0 + hoeheKasten * 0.5, yEntl = y0 + hoeheKasten * 0.18;
+  const breite = Math.ceil(xStange + rand), hoehe = Math.ceil(y0 + hoeheKasten + rand + 2);
+  const strich = `fill="none" stroke="currentColor" stroke-width="${STRICH}"`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" `
+    + `aria-label="Schaltzeichen einfachwirkender Zylinder mit Federrückstellung: ein Luftanschluss auf der Kolbenseite, Feder und Entlüftung auf der Stangenseite" color="currentColor">`
+    + `<rect class="sz-rahmen" x="${zahl(x0)}" y="${zahl(y0)}" width="${zahl(laenge)}" height="${zahl(hoeheKasten)}" ${strich}/>`
+    + `<path class="sz-kolben" d="M${zahl(xKolben)} ${zahl(y0)}L${zahl(xKolben)} ${zahl(y0 + hoeheKasten)}" ${strich} stroke-width="${STRICH * 1.6}"/>`
+    + `<path class="sz-stange" d="M${zahl(xKolben)} ${zahl(ym)}L${zahl(xStange)} ${zahl(ym)}" ${strich}/>`
+    + `<path class="sz-feder" d="${feder}" ${strich} stroke-linejoin="round"/>`
+    + `<path class="sz-anschluss" d="M${zahl(rand)} ${zahl(yAnschluss)}L${zahl(x0)} ${zahl(yAnschluss)}" ${strich}/>`
+    + `<path class="sz-entlueftung" d="M${zahl(xEnde)} ${zahl(yEntl)}L${zahl(xEnde + f * 0.16)} ${zahl(yEntl)}" ${strich}/>`
+    + `</svg>`;
   return { svg, breite, hoehe };
 }
 
