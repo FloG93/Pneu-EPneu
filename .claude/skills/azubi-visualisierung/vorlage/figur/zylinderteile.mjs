@@ -11,13 +11,22 @@
 //   schlauch(p0, aus, p1, ein, k0, k1)   hose path between two ports: a short
 //        straight piece along each port axis, a smooth curve between them
 //
+// Also here, because every cylinder page needs it identically:
+//   VENTIL_STANDARD               the valve's common dimensions (spool plane, axis height, width, bore ...)
+//   zylinderMasse(Z, {deckel, rohrEnde, ragt})   the cylinder's common dimensions and frames
+//   zeichner({ P, PIECE_OF, MOVE })              the recorder, `put` and `gruppe` of a build script
+// And the end of every build script, through the factory below: `rohr`, `stange` (the window tube
+// and the rod), `abschluss` (depth order, the air layer, view, air routes), `figur` (the drawing
+// as SVG) and `ende` (report, --apart and --audit).
+//
 // Everything that draws needs the projection and the recorder, so it comes
 // from a factory without global state:
-//   const ZT = zylinderTeile({ P, R, put, gruppe, MOVE });
+//   const ZT = zylinderTeile({ P, MOVE, M });
 //     P        projection of the figure; R the recorder (audit kit)
 //     put      put(pos, svg, shapes, extra) of the build script
 //     gruppe   gruppe(name) sets the drawing group the next put belongs to
 //     MOVE     escape path of each assembly (the hoses' route takes it)
+//     M        zylinderMasse(...) of this page
 //   ZT.grundplatte({ fuss, fussZ, schiene, fussGruppe })
 //        the feet (x of each, height fussZ) in group fussGruppe (default
 //        "grund") and the rail in group "grund"
@@ -40,11 +49,15 @@
 //        "leitung"; the end of wege[versorgung] gets a coupling on a post.
 //        Returns the points by name for the air routes.
 
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as k from "../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../.claude/skills/anatomy/kit/lathe.mjs";
 import * as A from "../.claude/skills/anatomy/kit/audit.mjs";
 import * as SCH from "./schnitt.mjs";
 import { tubePieces, tubeSvg } from "../.claude/skills/anatomy/kit/tube.mjs";
+import * as EX from "./explode.mjs";
+import * as LU from "./luft.mjs";
 import { hermite } from "./normteile.mjs";
 
 /**
@@ -60,7 +73,98 @@ export function schlauch(p0, aus, p1, ein, k0, k1) {
   return [p0, ...kurve, p1];
 }
 
-export function zylinderTeile({ P, R, put, gruppe, MOVE }) {
+/** Where a build script's page goes and where the repository's root is, from its `import.meta.url`. */
+export function ort(url) {
+  const hier = dirname(fileURLToPath(url));
+  return { ZIEL: join(hier, "..", "..", "index.html"), WURZEL: join(hier, "..", "..", "..") };
+}
+
+/** The canvas every cylinder figure is drawn on. */
+export const LEINWAND = { W: 1160, H: 660 };
+
+/** Hose directions: up out of a boss, out of a cylinder's port towards the viewer. */
+export const AUF = [0, 0, 1];
+export const VOR = [0, 1, 0];
+
+/** What the valve on its sub-base has the same on every cylinder page. */
+export const VENTIL_STANDARD = {
+  y: 112,               // spool plane — measured: closer and no hose can turn between valve and cylinder
+  z: 34,                // spool axis height
+  halbbreite: 26,
+  rBohrung: 8,
+  rSchieber: 4.6,
+  sockelH: 17,          // the sub-base carries the exhaust way(s)
+  schieberWeg: 14,      // spool travel between the two positions
+  rSchlauch: 4.2,
+};
+
+/** The cylinder's dimensions and frames; `Z` is the model's description (figur/pneumatik.mjs). */
+export function zylinderMasse(Z, { deckel, rohrEnde, ragt, zc = 62 }) {
+  const RB = Z.bohrung / 2;                  // bore
+  const RS = Z.stange / 2;                   // rod
+  const RA = RB + 3;                         // tube outside (wall 3, assumption)
+  const X_BODEN = [0, deckel];
+  const X_ROHR = [deckel, rohrEnde];
+  const X_KOPF = [rohrEnde, rohrEnde + deckel];
+  return {
+    Z, RB, RS, RA, ZC: zc, HUB: Z.hub, TOT: Z.totraum, DECKEL: deckel, X_BODEN, X_ROHR, X_KOPF,
+    KOLBEN0: X_ROHR[0] + Z.totraum,          // piston rear face at stroke 0
+    SPITZE0: X_KOPF[1] + ragt,               // rod tip at stroke 0
+    FZ: G.frameOf([0, 0, zc], [1, 0, 0], [0, 1, 0], [0, 0, 1]),
+    quer: (x, z) => G.frameOf([x, 0, z], [0, 1, 0], [1, 0, 0], [0, 0, 1]),
+  };
+}
+
+/** The two assemblies that never move. */
+export const MOVE_BASIS = { grund: [0, 0, 0], luft: [0, 0, 0] };
+
+/**
+ * The recorder of a build script with its `put` (the group set last owns the next part) and `gruppe`.
+ * A group belongs to the assembly of the same name unless `PIECE_OF` says another.
+ */
+export function zeichner({ P, PIECE_OF = {}, MOVE, fensterId = "fenster-rohr" }) {
+  const R = A.recorder(P);
+  let GRUPPE = "grund";
+  const gruppe = (g) => { GRUPPE = g; };
+  function put(pos, svg, shapes = [], extra = {}) {
+    const { bias = 0, gruppe: gr = GRUPPE, name = gr, clip = false, hub = false, schieber: istSchieber = false, ...rest } = extra;
+    const piece = PIECE_OF[gr] ?? gr;
+    let inhalt = svg;
+    if (hub) inhalt = `<g data-hub>${inhalt}</g>`;
+    if (istSchieber) inhalt = `<g data-schieber>${inhalt}</g>`;
+    if (clip) inhalt = `<g data-clip="1" clip-path="url(#${clip === true ? fensterId : clip})">${inhalt}</g>`;
+    R.put({
+      name: R.nameFor(name), piece, label: piece, move: MOVE[piece],
+      at: pos, pos, bias, gruppe: gr, clip, svg: inhalt, shapes, ...rest,
+    });
+  }
+  return { R, rec: R.solid, put, gruppe };
+}
+
+/** What every cylinder page leaves unexplained on purpose in the audit. */
+export const AUDIT_BASIS = {
+  allow: [
+    ["rohr.wand", "kolben.scheibe"],
+    ["rohr.wand", "stange.innen"],
+    ["rohr.wand", "luft.kammern"],
+    // Coaxial parts that genuinely interlock: a rod through a gland, a spool in its bore.
+    // No drawing order is "right" for these; they are cut, not biased.
+    ["kopf.deckel", "stange.aussen"],
+    ["stange.aussen", "grund.last"],
+    ["gehaeuse.koerper", "schieber.kolben"],
+    ["boden.anschluss", "leitung.A*"],
+    // A hose plugged into a fitting is a joint, and the fitting sits on the body.
+    ["gehaeuse.koerper", "leitung.*"],
+  ],
+  // Where a hose ends IS a joint — it plugs into the fitting on the body.
+  crowd: [["leitung.A", "gehaeuse.oben"], ["leitung.A", "leitung.V"]],
+  // Both rod drawings are clipped to what is actually visible — the markup box is the
+  // whole rod, the recorded shape only the part on screen.
+  cover: ["stange.aussen", "stange.innen"],
+};
+
+export function zylinderTeile({ P, MOVE, M, PIECE_OF, ...eigener }) {
+  const { R, put, gruppe } = eigener.R ? eigener : zeichner({ P, PIECE_OF, MOVE });
   const rec = R.solid;
   const at = (p) => k.iso(p, P);
   const SV = (paths, style) => k.solidSvg(paths, style);
@@ -125,6 +229,7 @@ export function zylinderTeile({ P, R, put, gruppe, MOVE }) {
   // the spool and its sealing discs sit on the cut face where they can be seen.
   function ventil({ x: VX, y: VY, z: VZ, halbbreite: V_HW, rBohrung: R_BOHRUNG, rSchieber: R_SCHIEBER,
     port: PORT, oben: ARBEIT, unten: ABLUFT, winkel: WINKEL, sockelH: SOCKEL_H, scheiben: mitten }) {
+    ventilLage = { y: VY, z: VZ, halbbreite: V_HW, port: PORT };
     const FV = G.frameOf([0, VY, VZ], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
     const hoch = (x, y) => G.frameOf([x, y, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
     gruppe("gehaeuse");
@@ -265,5 +370,180 @@ export function zylinderTeile({ P, R, put, gruppe, MOVE }) {
     return bahnen;
   }
 
-  return { grundplatte, lastschlitten, ventil, schlaeuche };
+  // --- Window tube, rod, end of the build ---------------------------------
+  const NAH = M ? SCH.naechsterWinkel(M.FZ, P) : 0;
+  const FENSTER = [NAH - 1.52, NAH + 1.10];
+  let ventilLage = null;
+  let STANGEN_CLIP = "";
+
+  /** The tube, cut open over a window: the window's clip, edges and the bore as seen through it. */
+  function rohr() {
+    gruppe("rohr");
+    const { FZ, X_ROHR, RA, RB, ZC } = M;
+    const f = SCH.fenster(FZ, X_ROHR[0], X_ROHR[1], RA, RB, FENSTER[0], FENSTER[1], P, { name: "rohr" });
+    const profil = [[X_ROHR[0], RB], [X_ROHR[0], RA], [X_ROHR[1], RA], [X_ROHR[1], RB]];
+    put([(X_ROHR[0] + X_ROHR[1]) / 2, 0, ZC], [
+      SV(G.lathe(profil, FZ, P, { rims: "all" }), { tone: "mid" }),
+      `<g clip-path="url(#${f.id})">${f.bohrung}</g>`,
+      f.kanten,
+      f.saum,
+    ].join(""), [rec(A.ring(FZ, X_ROHR[0], X_ROHR[1], RB, RA, { name: "rohr.wand" }))],
+      { name: "rohr.wand" });
+    return f;
+  }
+
+  /**
+   * The rod: one body, seen inside the tube through the window, free outside the head,
+   * and the load carriage on its tip. `ab` is where the rod starts (the piston's front face).
+   */
+  function stange({ ab, last }) {
+    const { FZ, X_ROHR, X_KOPF, RS, ZC, HUB, SPITZE0 } = M;
+    gruppe("stange");
+    put([(ab + X_ROHR[1]) / 2, 0, ZC],
+      SV(G.disc(ab, X_ROHR[1] + HUB, RS, FZ, P), { tone: "hi" }),
+      [rec(A.disc(FZ, ab, X_ROHR[1], RS, { name: "stange.innen" }))],
+      { name: "stange.innen", clip: true, hub: true });
+    const stab = G.rodOut(FZ, X_KOPF[1], SPITZE0, RS, P, { stroke: HUB });
+    STANGEN_CLIP = `<clipPath id="stange-clip"><path d="${stab.clip}"/></clipPath>`;
+    put([(X_KOPF[1] + SPITZE0) / 2, 0, ZC], [
+      SV(stab.paths, { tone: "hi" }),
+      L(G.arcOf(FZ, SPITZE0 - 24, RS, P), { tone: "faint" }),
+    ].join(""), [rec(A.disc(FZ, X_KOPF[1], SPITZE0, RS, { name: "stange.aussen" }))],
+      { name: "stange.aussen", bias: 30, hub: true, clip: "stange-clip" });
+    if (last) lastschlitten({ x: SPITZE0, hw: last.hw, d: last.d, h: last.h, F: FZ, rStange: RS });
+  }
+
+  /**
+   * Depth order, the air layer, the exploded view and the air routes. `FINFO` is the window
+   * (from `rohr`), `bahnen` the hoses' points (from `schlaeuche`), `nachSettle` what a page
+   * has to put right after the depth solver has run, `abluft` the numbers of the ports that
+   * leave through the sub-base.
+   */
+  function abschluss({ FINFO, bahnen, abluft, W, H, nachSettle = () => {} }) {
+    A.settle(R, P);
+    nachSettle();
+
+    // A cutaway the depth solver cannot know about: the tube's near wall really is
+    // in front of the piston, so `settle` paints it over everything inside — right
+    // for an uncut tube, wrong here, because that wall is what the window removes.
+    // The tube is therefore pushed behind every item clipped to the window; outside
+    // the window those items are clipped away, so the wall still covers what it should.
+    {
+      const innen = R.items.filter((it) => it.clip);
+      const rohrItem = R.items.find((it) => it.name === "rohr.wand");
+      if (rohrItem && innen.length) rohrItem.key = Math.min(rohrItem.key, ...innen.map((it) => it.key)) - 0.5;
+    }
+
+    // The air sits in the bore: in front of the tube's far wall, behind the piston
+    // and the rod. Its key is set from those, not from the tube's.
+    const LUFT_KEY = Math.min(...R.items.filter((it) => it.clip).map((it) => it.key)) - 0.2;
+    R.items.push({
+      key: LUFT_KEY, piece: "luft", gruppe: "luft", label: "luft", name: "luft.kammern", pos: null,
+      svg: `<g data-clip="1" clip-path="url(#${FINFO.id})">`
+        + `<path class="kammer" data-kammer="a" d=""/><path class="kammer" data-kammer="b" d=""/></g>`,
+    });
+
+    R.items.sort((a, b) => a.key - b.key);
+
+    const ansicht = EX.vorbereiten(R, P, MOVE, W, H);
+
+    // The air routes, projected once: the page places particles along them.
+    const BAHNEN = Object.fromEntries(
+      Object.entries(bahnen).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]),
+    );
+    // Short routes from the valve body out through the sub-base.
+    const { y: VY, z: VZ, halbbreite: V_HW, port: PORT } = ventilLage;
+    const SOCKEL_VORN = VY - V_HW - 3 + V_HW + 25;
+    for (const nr of abluft) {
+      const x = PORT[nr];
+      BAHNEN[`E${nr}`] = LU.bahn(
+        [[x, VY, VZ], [x, VY, 9], [x, SOCKEL_VORN - 6, 9], [x, SOCKEL_VORN + 24, 9]], P, k.iso,
+      );
+    }
+    return { ...ansicht, BAHNEN, P, MOVE, M };
+  }
+
+  /** The drawing: every item in its group, the window's and the rod's clip in the defs. */
+  function figur({ W, H, label, FINFO }) {
+    return k.figureSvg({
+      width: W,
+      height: H,
+      label,
+      body: [
+        `<defs>${FINFO.defs}${STANGEN_CLIP}</defs>`,
+        R.items.map((it) => `<g data-g="${it.gruppe}" data-piece="${it.piece}"${it.feder ? ` data-feder="${it.feder.join(" ")}"` : ""}>${it.svg}</g>`).join(""),
+        `<g class="luft" data-luftlage></g>`,
+      ],
+    });
+  }
+
+  /** The report and the two checks: --apart (everything at the end of its way) and --audit. */
+  function ende({ ziel, zusatz = [], allow = [], crowd = [], cover = [] }) {
+    console.log(`geschrieben: ${ziel}`);
+    for (const zeile of zusatz) console.log(zeile);
+    console.log(`Teile: ${R.items.length}, Körper: ${R.solids.length}, Rohre: ${R.tubes.length}`);
+    console.log(`Fenster ${(FENSTER[0] * 57.3).toFixed(0)}°…${(FENSTER[1] * 57.3).toFixed(0)}° (nächster Winkel ${(NAH * 57.3).toFixed(0)}°)`);
+
+    if (process.argv.includes("--apart")) {
+      // Everything at the end of its escape path: do the assemblies pass through
+      // one another on the way out? The explode is not handed to the depth solver
+      // (it cannot order a body this dense), so this is checked on its own.
+      for (const shape of R.solids) shape.move = MOVE[shape.piece] ?? [0, 0, 0];
+      const probleme = A.solidClearances(R.solids, { state: 1 });
+      for (const p of probleme.slice(0, 20)) {
+        console.log(`  ${p.a ?? p.one ?? ""} × ${p.b ?? p.two ?? ""}  ${JSON.stringify(p).slice(0, 150)}`);
+      }
+      console.log(probleme.length ? `auseinandergefahren: ${probleme.length} Durchdringungen` : "auseinandergefahren: sauber");
+      if (probleme.length) process.exit(1);
+    }
+
+    if (process.argv.includes("--audit")) {
+      A.auditOrExit(R, P, {
+        allow: [...AUDIT_BASIS.allow, ...allow],
+        crowd: [...AUDIT_BASIS.crowd, ...crowd],
+        cover: [...AUDIT_BASIS.cover, ...cover],
+      });
+    }
+  }
+
+  /** The supply hose: from the valve's port 1 up, over to a coupling in front of the valve. */
+  function versorgung(PORT) {
+    const { y: VY, z: VZ, halbbreite: V_HW } = VENTIL_STANDARD;
+    return schlauch([PORT[1], VY - V_HW / 2, VZ + 42], AUF, [PORT[1] - 96, VY + 86, 34], AUF, 190, 170);
+  }
+
+  /**
+   * The rod's gland in the head: a bush of radius 17 and 9 mm that the rod goes through. Returns
+   * the lines to put into the head's `put` (`svg`) and a function that records its body (`koerper`).
+   */
+  function buchse() {
+    const { FZ, X_KOPF, RS } = M;
+    return {
+      svg: [
+        SV(G.disc(X_KOPF[1], X_KOPF[1] + 9, 17, FZ, P), { tone: "mid" }),
+        L(G.circleOf(FZ, X_KOPF[1] + 9, RS + 1.4, P), { tone: "faint" }),
+        L(G.circleOf(FZ, X_KOPF[1] + 9, 13, P), { tone: "faint" }),
+      ],
+      // recorded when called, so the bodies keep the order the build script lists them in
+      koerper: () => [rec(A.ring(FZ, X_KOPF[1], X_KOPF[1] + 9, RS, 17, { name: "kopf.buchse" }))],
+    };
+  }
+
+  /**
+   * An air port on a cap: the boss out of the cap's rim (radius `rand`) along y at x, where the hose
+   * plugs in. The current group owns it; `name` is the body's name for the audit.
+   */
+  function anschluss(x, rand, name) {
+    const F = M.quer(x, M.ZC);
+    put([x, rand + 8, M.ZC], [
+      SV(G.disc(rand, rand + 8, 8, F, P), { tone: "mid" }),
+      SV(G.disc(rand + 8, rand + 15, 6.5, F, P, { steps: 6 }), { tone: "mid" }),
+      L(G.arcOf(F, rand + 4, 8, P), { tone: "faint" }),
+      L(G.circleOf(F, rand + 15, 4.4, P), { tone: "faint" }),
+    ].join(""), [
+      rec(A.disc(F, rand, rand + 15, 8, { name })),
+    ], { name });
+  }
+
+  return { R, rec, put, gruppe, grundplatte, lastschlitten, ventil, schlaeuche, rohr, stange, abschluss, figur, ende, versorgung, buchse, anschluss, NAH, FENSTER, SV, L };
 }

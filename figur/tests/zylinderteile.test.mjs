@@ -1,8 +1,8 @@
 // The parts every cylinder page shares: the properties they rely on, without a browser.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { zylinderTeile, schlauch } from "../zylinderteile.mjs";
-import { LAUFZEIT } from "../zylinderseite.mjs";
+import { zylinderTeile, zylinderMasse, schlauch, VENTIL_STANDARD, MOVE_BASIS } from "../zylinderteile.mjs";
+import { LAUFZEIT, RAHMEN } from "../zylinderseite.mjs";
 import * as k from "../../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as A from "../../.claude/skills/anatomy/kit/audit.mjs";
 
@@ -86,4 +86,31 @@ test("zustandSetzen: beim einfachwirkenden bleibt der Federraum auf Umgebung", (
   const [dw1, dw2] = rahmen({}, 1);
   assert.equal(dw1.pB, 1);
   assert.equal(dw2.pB, 7, "doppeltwirkend: eingefahren steht Kammer B unter Druck");
+});
+
+test("Der Rahmen der Seite ist ein gültiges Skript und nennt seine Haken", () => {
+  assert.ok(!RAHMEN.includes("`"), "ein Backtick im Rahmentext");
+  for (const name of ["function zeichneHub", "function zeichneAnzeige", "function zeichneKammern", "function bildZeichnen", "function stelleZustand", "function seitenStart", "modellSchritt(dt)", "anzeigeText("]) {
+    assert.ok(RAHMEN.includes(name), `${name} fehlt`);
+  }
+  assert.doesNotThrow(() => new Function(RAHMEN), "kein gültiges Skript");
+});
+
+test("Die Maße des Zylinders stehen in zylinderMasse: Rohr, Kopf, Kolben, Stangenspitze", () => {
+  const M = zylinderMasse({ bohrung: 50, stange: 20, hub: 25, totraum: 6 }, { deckel: 14, rohrEnde: 115, ragt: 44 });
+  assert.deepEqual(M.X_ROHR, [14, 115]);
+  assert.deepEqual(M.X_KOPF, [115, 129]);
+  assert.equal(M.KOLBEN0, 20);
+  assert.equal(M.SPITZE0, 173);
+  assert.equal(M.RA, 28);
+  assert.ok(VENTIL_STANDARD.schieberWeg > 0 && MOVE_BASIS.grund.every((v) => v === 0));
+});
+
+test("Ein Anschluss an der Kappe wird als Körper für die Prüfung aufgenommen", () => {
+  const M = zylinderMasse({ bohrung: 50, stange: 20, hub: 25, totraum: 6 }, { deckel: 14, rohrEnde: 115, ragt: 44 });
+  const aufgenommen = [];
+  const R = { solid: (s) => { aufgenommen.push(s.name); return s; }, put: () => {}, nameFor: (n) => n };
+  const ZT = zylinderTeile({ P, R, put: () => {}, gruppe: () => {}, MOVE: {}, M });
+  ZT.anschluss(7, 31, "boden.anschluss");
+  assert.deepEqual(aufgenommen, ["boden.anschluss"]);
 });

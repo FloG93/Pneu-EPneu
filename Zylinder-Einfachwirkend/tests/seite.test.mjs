@@ -52,18 +52,27 @@ test("Beide Fußblöcke gehören zur Baugruppe fuss", () => {
   assert.equal(gruppen.length, 2, "die beiden Füße sind nicht dieselbe Baugruppe");
 });
 
-test("Die Zahlen der Seite kommen aus dem Modell: 1073 N, 82 N, 105 N", () => {
-  // Catalogue: 1072,8 N at 6 bar; spring 82 N in, 105,3 N out; 0,3 · 1963,5 − 105,3 = 484 N at 3 bar.
+test("Die Zahlen der Seite kommen aus dem Modell: 1096 N zu Beginn, 1073 N am Hubende, 82 N, 105 N", () => {
+  // Catalogue: 1072,8 N at 6 bar and full stroke; spring 82 N in, 105,3 N out;
+  // 0,6 · 1963,5 − 82 = 1096 N at stroke 0; 0,3 · 1963,5 − 105,3 = 484 N at 3 bar and full stroke.
   assert.ok(Math.abs(PN.kraftAus(6, Z) - 1072.8) < 0.2);
-  assert.match(html, /F aus 1073 N = p · A − Feder · Feder jetzt 82 N · Hub 0 mm/, "die Anzeige steht nicht ohne JavaScript da");
-  assert.match(html, /1178 N − 105 N Feder = <strong>1073 N<\/strong>/);
-  assert.match(html, /bei 3 bar: F<sub>aus<\/sub> = 0,3 N\/mm² · 1963\.5 mm² − 105 N = <strong>484 N<\/strong>/);
-  assert.match(LEGENDE.find((e) => e.piece === "feder").satz, /82 N eingefahren, 105 N ausgefahren.*1073 N/);
+  assert.equal(Math.round(PN.kraftJetzt(6, { weg: 0 }, Z)), 1096);
+  assert.match(html, /F aus 1096 N = p · A − Feder jetzt 82 N · Hub 0 mm/, "die Anzeige steht nicht ohne JavaScript da");
+  assert.match(html, /am Hubanfang: F<sub>aus<\/sub> = 1178 N − 82 N Feder = <strong>1096 N<\/strong>/);
+  assert.match(html, /am Hubende: F<sub>aus<\/sub> = 1178 N − 105 N Feder = <strong>1073 N<\/strong>/);
+  assert.match(html, /bei 3 bar am Hubende: F<sub>aus<\/sub> = 0,3 N\/mm² · 1963\.5 mm² − 105 N = <strong>484 N<\/strong>/);
+  assert.match(LEGENDE.find((e) => e.piece === "feder").satz, /82 N eingefahren, 105 N am Hubende.*Am Hubende bleiben bei 6 bar nur 1073 N/);
 });
 
-test("Das Begleitbild zeigt Zylinder und Ventil als Schaltzeichen", () => {
+test("Die Texte nennen die Federkräfte und die Reibungsannahme", () => {
+  assert.match(html, /<h2>Warum fährt er langsamer ein, als er ausfährt\?<\/h2>/);
+  assert.match(html, /42 bis 65 N/);
+  assert.match(html, /mit den angenommenen 40 N Reibung unter etwa 0,6 bar/);
+});
+
+test("Das Begleitbild zeigt Zylinder und Ventil als Schaltzeichen, der Druckknopf mit Halbkreis", () => {
   assert.match(html, /class="sz-feder"/);
-  assert.match(html, /data-art="taster"/);
+  assert.match(html, /data-art="taster"><path d="[^"]*A[\d.]+ [\d.]+ 0 0 0 /);
   assert.equal((html.match(/class="sz-symbol"/g) || []).length, 2);
 });
 
