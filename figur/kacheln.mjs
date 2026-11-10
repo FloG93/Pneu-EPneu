@@ -151,9 +151,13 @@ export const RUBRIKEN = [
       {
         id: "drosselrueckschlagventil",
         name: "Drosselrückschlagventil",
-        satz: "Drosselt in eine Richtung und lässt in der anderen frei durch. Damit stellt man die Geschwindigkeit eines Zylinders ein – meist über die Abluft.",
-        zustand: "geplant",
-        sinnbild: "Drosselrückschlagventil",
+        satz:
+          "Zwei Wege nebeneinander: Von 1 nach 2 sperrt die Kugel, und die Luft muss durch die einstellbare Drossel, von 2 nach 1 hebt sie ab und die Luft strömt frei. "
+          + "Damit stellt man die Geschwindigkeit eines Zylinders ein, meist über die Abluft. Kräftiges Blau steht vor der Drossel, blasses dahinter.",
+        zustand: "fertig",
+        ordner: "Drosselrueckschlagventil",
+        sinnbild: "Drosselrückschlagventil, einstellbar",
+        marken: ["G1/4", "Leitungseinbau", "einstellbar", "420 / 780 l/min"],
       },
       {
         id: "schnellentlueftungsventil",

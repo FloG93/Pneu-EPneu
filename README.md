@@ -12,10 +12,11 @@ Erklärte Bauteile für Auszubildende: jedes als interaktive isometrische Zeichn
 | **Aktoren** | **Einfachwirkender Zylinder** | Rundzylinder nach dem Vorbild Festo ESNU-50-25 mit Rückstellfeder und dem 3/2-Wegeventil, das ihn ansteuert. Taster halten füllt die Kammer, loslassen lässt die Feder zurückfahren; die Federkammer atmet durch einen Filter und bleibt blass. Die Kraft p · A − Feder wird live gerechnet, Zeitlupe, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Zylinder-Einfachwirkend/) |
 | **Wegeventile** | **5/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers. Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Mono- und bistabil, Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-5-2/) |
 | **Wegeventile** | **3/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers, in Ruhe gesperrt (NC) oder in Ruhe offen (NO). Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-3-2/) |
+| **Sperr- und Stromventile** | **Drosselrückschlagventil** | Schnitt durch ein einstellbares Drosselrückschlagventil (G¼, Vorbild Festo GRA-1/4-B) mit zwei Wegen nebeneinander: Von 1 nach 2 sperrt die Kugel und die Luft muss durch die Drossel, von 2 nach 1 hebt sie ab. Kräftiges Blau vor der Drossel, blasses dahinter, das Schaltzeichen färbt den durchströmten Zweig. Richtung, Drosselschraube, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Drosselrueckschlagventil/) |
 
 [![Doppeltwirkender Zylinder im Schnitt, mit strömender Druckluft](docs/bilder/schnitt-nah.png)](https://flog93.github.io/Pneu-EPneu/Zylinder-Doppeltwirkend/)
 
-Weitere Bauteile sind auf der Übersichtsseite als Kacheln angelegt und kommen nach und nach dazu: Zylinder mit beidseitiger Kolbenstange, Teleskop- und Tandemzylinder, kolbenstangenloser Zylinder; 4/2- und 5/3-Wegeventile; Rückschlag-, Drosselrückschlag-, Schnellentlüftungs-, Wechsel- und Zweidruckventil; dazu die E-Pneumatik mit Magnetspule, Relais und Stromlaufplan.
+Weitere Bauteile sind auf der Übersichtsseite als Kacheln angelegt und kommen nach und nach dazu: Zylinder mit beidseitiger Kolbenstange, Teleskop- und Tandemzylinder, kolbenstangenloser Zylinder; 4/2- und 5/3-Wegeventile; Rückschlag-, Schnellentlüftungs-, Wechsel- und Zweidruckventil; dazu die E-Pneumatik mit Magnetspule, Relais und Stromlaufplan.
 
 ## Für wen das gemacht ist
 
@@ -43,9 +44,14 @@ Wegeventil-3-2/             Bauteilseite
   index.html                erzeugt, nicht von Hand geschrieben
   favicon.svg, vorschau.svg (Kachelbild), README.md
   tests/tools/build-ventil-3-2.mjs Geometrie + vier Datentabellen
+Drosselrueckschlagventil/   Bauteilseite
+  index.html                erzeugt, nicht von Hand geschrieben
+  favicon.svg, vorschau.svg (Kachelbild), README.md
+  tests/tools/build-drossel.mjs    Geometrie + vier Datentabellen
 figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
                             wird deshalb nicht veröffentlicht)
   pneumatik.mjs             Rechenmodell: Flächen, Kräfte, Drücke, Bewegung
+  stromventil.mjs           Rechenmodell: Drosselrückschlagventil (Durchfluss, Nadel, Kugel)
   explode.mjs               Explosion: Wege, Federn, Tiefensortierung
   legende.mjs               Legende, Nummern, Erklärzeile
   ventil.mjs                Rechenmodell des Wegeventils: Schieber, Steuerkammern, Schaltzeit
@@ -110,6 +116,7 @@ npm test                      # Rechenmodell, Kontrast, Bauteile
 npm run test:zylinder-ew      # nur die Tests des einfachwirkenden Zylinders
 npm run test:ventil           # nur die Tests des 5/2-Wegeventils
 npm run test:ventil32         # nur die Tests des 3/2-Wegeventils
+npm run test:drossel          # nur die Tests des Drosselrückschlagventils
 ```
 
 ```bash
@@ -136,4 +143,10 @@ npm run pruef:browser:ventil  # Browsertest, Server auf Port 8311 nötig
 npm run bau:ventil32            # erzeugt Wegeventil-3-2/index.html neu
 npm run pruef:ventil32          # prüft dort Geometrie in Ruhe und zerlegt
 npm run pruef:browser:ventil32  # Browsertest, Server auf Port 8311 nötig
+```
+
+```bash
+npm run bau:drossel            # erzeugt Drosselrueckschlagventil/index.html neu
+npm run pruef:drossel          # prüft dort Geometrie in Ruhe und zerlegt
+npm run pruef:browser:drossel  # Browsertest, Server auf Port 8311 nötig
 ```

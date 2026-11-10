@@ -1,0 +1,21 @@
+<svg viewBox="0 0 240 135" role="img" aria-label="Schnitt durch ein Drosselrückschlagventil bei Strömung von 1 nach 2: links die Kammer hinter Anschluss 1 und der obere Weg bis zur Drossel in kräftigem Blau, hinter der Drosselnadel und in der rechten Kammer blasses Blau; unten liegt die Kugel auf ihrem Sitz, die Feder drückt sie an, der untere Weg ist gesperrt">
+  <path class="v-wand" d="M44 22H196V116H44Z"/>
+  <path class="v-stark" d="M44 63H58V77H44ZM58 34H72V104H58ZM72 42H118V56H72Z"/>
+  <path class="v-blass" d="M126 42H170V56H126ZM170 34H184V104H170ZM184 63H196V77H184ZM146 84H170V98H146Z"/>
+  <path class="v-stark" d="M72 84H138V98H72Z"/>
+  <path class="v-blass" d="M138 89H146V93H138Z"/>
+  <path class="v-wand" d="M108 50H132V56H108ZM138 84H146V89H138ZM138 93H146V98H138Z"/>
+  <path class="v-teil" d="M113 12H127V42L120 50 113 42Z"/>
+  <path class="v-teil" d="M108 6H132V13H108Z"/>
+  <path class="v-leitung" d="M76 91L80 85 85 97 90 85 95 97 100 85 105 97 109 91"/>
+  <circle class="v-teil" cx="125" cy="91" r="8"/>
+  <path class="v-leitung" d="M20 70H44M196 70H220"/>
+  <path class="v-hilfslinie" d="M44 124H196"/>
+  <circle class="v-stark" cx="82" cy="49" r="3.2"/>
+  <circle class="v-stark" cx="98" cy="49" r="3.2"/>
+  <circle class="v-stark" cx="64" cy="58" r="3.2"/>
+  <circle class="v-stark" cx="30" cy="70" r="3.2"/>
+  <circle class="v-blass" cx="150" cy="49" r="3.2"/>
+  <circle class="v-blass" cx="177" cy="62" r="3.2"/>
+  <circle class="v-blass" cx="209" cy="70" r="3.2"/>
+</svg>
