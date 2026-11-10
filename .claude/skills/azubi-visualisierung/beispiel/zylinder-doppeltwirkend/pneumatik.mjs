@@ -45,6 +45,41 @@ export const ISO_15552_50 = {
   ueberdeckung: 0.3,    // share of the transit with both working ports shut (positive overlap)
 };
 
+/**
+ * Single-acting round cylinder with a return spring in the rod chamber,
+ * Festo ESNU-50-25-P-A (data sheet 196383). The spring pushes the piston back;
+ * the rod chamber breathes through a filter and is always at ambient.
+ * Chamber A (the piston side) is the only one that sees compressed air, so the
+ * model needs just two paths: `aZu` (valve 1→2) and `aAb` (valve 2→3).
+ */
+export const ESNU_50_25 = {
+  bohrung: 50,          // mm, piston diameter D              – Katalog
+  stange: 20,           // mm, piston rod diameter d          – Annahme, passt zu M16×1,5
+  hub: 25,              // mm, stroke                         – Katalog
+  totraum: 6,           // mm, dead length at each end        – Annahme, wie ISO_15552_50
+  schlauch: 11000,      // mm³, hose + port volume            – Annahme, wie ISO_15552_50
+  daempfung: 0,         // mm, no cushioning zone             – Katalog: elastische Dämpfungsringe
+  masse: 2.5,           // kg, moving mass incl. the load     – Annahme (Zylinder allein 0,476 kg)
+  reibung: 40,          // N, seal friction (Coulomb)         – Annahme, wie ISO_15552_50
+  viskos: 80,           // N per (m/s), seal drag + load      – Annahme, kleiner als beim großen Zylinder
+  // Conductances are set so a stroke takes 0.05–0.15 s in real time and the return is clearly
+  // slower than the advance: at 6 bar about 0.06 s out, 0.12 s back. The exhaust path is the
+  // wide one (a valve's Qn of several hundred l/min is some 1e7 mm³/s per bar) because the whole
+  // stroke volume plus the hose has to leave through it before the spring can win. The way back
+  // is slower anyway: the spring (65 N net of friction) pushes, not 1000 N of air, and the
+  // spool, the pressure decay in chamber A and the stroke all come first.
+  leitwertZu: 3.5e5,    // mm³/s per bar, supply path         – Annahme, auf Hubzeit gestellt
+  leitwertAb: 1.0e7,    // mm³/s per bar, exhaust path        – Annahme, auf Rückhubzeit gestellt
+  leitwertDrossel: 1.0e7, // mm³/s per bar, unused here (no cushioning screw)
+  schaltzeit: 0.025,    // s, spool transit                   – Annahme, wie ISO_15552_50
+  ueberdeckung: 0.3,    // share of the transit with both working ports shut
+  einfach: true,        // chamber B is the filter-vented spring chamber, always ambient
+  feder: {
+    vorspannung: 82,    // N at the retracted end             – Katalog: Federrückstellkraft 82 N
+    rate: 0.932,        // N/mm = (105,3 − 82) / 25           – abgeleitet: 0,6·π/4·50² − 1072,8 = 105,3 N
+  },
+};
+
 // --- Areas and forces ----------------------------------------------------
 
 /** Piston area, annulus area, rod area and the ratio φ, in mm². */
@@ -54,13 +89,26 @@ export function flaechen({ bohrung, stange }) {
   return { kolben, ring, stange: kolben - ring, verhaeltnis: kolben / ring };
 }
 
-/** Theoretical extending force, N. The full piston area is under pressure. */
-export function kraftAus(druckBar, masse) {
-  return druckBar * NMM2_JE_BAR * flaechen(masse).kolben;
+/** Return spring force at the piston position in `z`, N. 0 for a cylinder without a spring. */
+export function federKraft(z, masse) {
+  return masse.feder ? masse.feder.vorspannung + masse.feder.rate * z.weg : 0;
 }
 
-/** Theoretical retracting force, N. Only the annulus is left — the rod takes area away. */
+/**
+ * Theoretical extending force, N. The full piston area is under pressure.
+ * A spring takes its force at full stroke off again (catalogue: 1072,8 N at 6 bar).
+ */
+export function kraftAus(druckBar, masse) {
+  const kraft = druckBar * NMM2_JE_BAR * flaechen(masse).kolben;
+  return masse.feder ? kraft - federKraft({ weg: masse.hub }, masse) : kraft;
+}
+
+/**
+ * Theoretical retracting force, N. Only the annulus is left — the rod takes area away.
+ * A single-acting cylinder has no air on that side: the spring alone brings it back.
+ */
 export function kraftEin(druckBar, masse) {
+  if (masse.einfach) return federKraft({ weg: 0 }, masse);
   return druckBar * NMM2_JE_BAR * flaechen(masse).ring;
 }
 
@@ -70,7 +118,7 @@ export function luftJeHub(druckBar, masse) {
   const faktor = (UMGEBUNG + druckBar) / UMGEBUNG / 1e6;   // mm³ at pressure → normal litres
   return {
     aus: f.kolben * masse.hub * faktor,
-    ein: f.ring * masse.hub * faktor,
+    ein: masse.einfach ? 0 : f.ring * masse.hub * faktor,   // the spring brings it back, no air
   };
 }
 
@@ -136,6 +184,10 @@ export function oeffnung(z, masse) {
  */
 export function leitwerte(z, masse) {
   const o = oeffnung(z, masse);
+  if (masse.einfach) {
+    // Valve 1→2 fills chamber A, 2→3 empties it; the spring chamber is a filter, not a valve path.
+    return { aZu: o.a * masse.leitwertZu, aAb: o.b * masse.leitwertAb, bZu: 0, bAb: 0 };
+  }
   const drossel = Math.min(1, masse.leitwertDrossel / masse.leitwertAb);
   return {
     aZu: o.a * masse.leitwertZu,
@@ -145,10 +197,11 @@ export function leitwerte(z, masse) {
   };
 }
 
-/** Net force on the piston, N. Ambient pushes back on the exposed rod face. */
+/** Net force on the piston, N. Ambient pushes back on the exposed rod face; a spring pushes back too. */
 export function kraftNetto(z, masse) {
   const f = flaechen(masse);
-  return NMM2_JE_BAR * (z.pA * f.kolben - z.pB * f.ring - UMGEBUNG * f.stange);
+  const luft = NMM2_JE_BAR * (z.pA * f.kolben - z.pB * f.ring - UMGEBUNG * f.stange);
+  return masse.feder ? luft - federKraft(z, masse) : luft;
 }
 
 // --- One step ------------------------------------------------------------
@@ -187,7 +240,8 @@ function teilschritt(z, masse, h, druckBar) {
   const qA = aZu * (quelle - z.pA) + aAb * (UMGEBUNG - z.pA);
   const qB = bZu * (quelle - z.pB) + bAb * (UMGEBUNG - z.pB);
   z.pA = kammerSchritt(z.pA, qA, dVa, v.a, h, quelle);
-  z.pB = kammerSchritt(z.pB, qB, dVb, v.b, h, quelle);
+  // The spring chamber of a single-acting cylinder breathes freely through its filter.
+  z.pB = masse.einfach ? UMGEBUNG : kammerSchritt(z.pB, qB, dVb, v.b, h, quelle);
 
   // Newton on the piston, with Coulomb friction and a little seal drag.
   const treibend = kraftNetto(z, masse) - (masse.viskos * z.v) / 1000;
@@ -224,6 +278,12 @@ export function steht(z, masse) {
 
 /** Is everything settled — piston parked and both chambers at their final pressure? */
 export function ruht(z, masse, druckBar) {
+  if (masse.einfach) {
+    // Chamber A has settled and nothing moves. With too little pressure the spring wins and
+    // the piston stays home, which is also a state of rest.
+    const luftA = z.stellung === "ausfahren" ? UMGEBUNG + druckBar - z.pA : z.pA - UMGEBUNG;
+    return Math.abs(z.v) < 1 && luftA < 0.02 && (z.stellung === "ausfahren" || z.weg <= 0.01);
+  }
   if (!steht(z, masse)) return false;
   const quelle = UMGEBUNG + druckBar;
   const [voll, leer] = z.stellung === "ausfahren" ? [z.pA, z.pB] : [z.pB, z.pA];
@@ -239,6 +299,13 @@ export function ruht(z, masse, druckBar) {
 export function anzeige(z, masse, druckBar) {
   const f = flaechen(masse);
   const luft = luftJeHub(druckBar, masse);
+  const feder = masse.feder
+    ? {
+        federJetzt: runde(federKraft(z, masse), 0),
+        federAus: runde(federKraft({ weg: masse.hub }, masse), 0),
+        federEin: runde(federKraft({ weg: 0 }, masse), 0),
+      }
+    : {};
   return {
     druck: runde(druckBar, 1),
     weg: runde(z.weg, 0),
@@ -253,6 +320,7 @@ export function anzeige(z, masse, druckBar) {
     verhaeltnis: runde(f.verhaeltnis, 2),
     luftAus: runde(luft.aus, 2),
     luftEin: runde(luft.ein, 2),
+    ...feder,
   };
 }
 

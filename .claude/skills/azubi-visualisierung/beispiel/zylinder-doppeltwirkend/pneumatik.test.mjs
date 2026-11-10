@@ -364,3 +364,110 @@ test("Die angezeigte Kraft folgt dem Druckschieber", () => {
   assert.equal(P.anzeige(z, Z, 3).kraftAus, 589);
   assert.equal(P.anzeige(z, Z, 8).kraftAus, 1571);
 });
+
+// --- Single-acting cylinder with a return spring (Festo ESNU-50-25-P-A) ----
+
+const E = P.ESNU_50_25;
+
+/** Run the single-acting cylinder: hold the button (ausfahren) or let go (einfahren). */
+function laufeEinfach(z, druck, dauer = 3) {
+  const spur = [];
+  for (let t = DT; t < dauer; t += DT) {
+    P.schritt(z, E, DT, druck);
+    spur.push({ t, weg: z.weg, v: z.v, pA: z.pA, pB: z.pB });
+  }
+  return spur;
+}
+
+/** Time until the piston has covered the stroke, from the moment the valve is thrown. */
+function hubZeit(nach, druck = 6) {
+  const z = P.neuerZustand(E, { weg: nach === "ausfahren" ? 0 : E.hub, stellung: nach });
+  if (nach === "einfahren") {
+    z.pA = P.UMGEBUNG + druck;   // chamber A still full when the button is released
+    z.schieber = 1;
+  }
+  const ziel = nach === "ausfahren" ? (s) => s.weg >= E.hub - 0.01 : (s) => s.weg <= 0.01;
+  const spur = laufeEinfach(z, druck, 4);
+  const treffer = spur.find(ziel);
+  assert.ok(treffer, `der Kolben kommt beim ${nach} nicht an`);
+  return treffer.t;
+}
+
+test("Einfachwirkend: F aus bei 6 bar ist der Katalogwert 1072,8 N", () => {
+  // Katalog: 0,6 N/mm² · 1963,495 mm² − 105,3 N Feder bei vollem Hub = 1072,8 N
+  const f = P.kraftAus(6, E);
+  assert.ok(Math.abs(f - 1072.8) < 0.2, `F_aus ${f}`);
+});
+
+test("Einfachwirkend: bei 3 bar bleiben 484 N", () => {
+  // 0,3 · 1963,495 − 105,3 = 589,05 − 105,3 = 483,75 N
+  assert.ok(Math.abs(P.kraftAus(3, E) - 483.75) < 0.2);
+  assert.equal(P.anzeige(P.neuerZustand(E), E, 3).kraftAus, 484);
+});
+
+test("Einfachwirkend: die Feder drückt 82 N eingefahren und 105,3 N ausgefahren", () => {
+  // 82 + 0,932 · 25 = 105,3 N
+  assert.equal(P.federKraft(P.neuerZustand(E, { weg: 0 }), E), 82);
+  assert.ok(Math.abs(P.federKraft(P.neuerZustand(E, { weg: E.hub }), E) - 105.3) < 0.01);
+  assert.equal(P.kraftEin(6, E), 82, "zurück drückt nur die Feder, der Druck hilft nicht");
+  assert.equal(P.federKraft(P.neuerZustand(Z), Z), 0, "der doppeltwirkende Zylinder hat keine Feder");
+});
+
+test("Einfachwirkend: die Anzeige nennt die Federkräfte", () => {
+  const a = P.anzeige(P.neuerZustand(E, { weg: 0 }), E, 6);
+  assert.equal(a.kraftAus, 1073);
+  assert.equal(a.federEin, 82);
+  assert.equal(a.federAus, 105);
+  assert.equal(a.federJetzt, 82);
+  assert.equal(P.anzeige(P.neuerZustand(E, { weg: E.hub }), E, 6).federJetzt, 105);
+  assert.ok(!("federJetzt" in P.anzeige(P.neuerZustand(Z), Z, 6)), "doppeltwirkend zeigt keine Feder");
+});
+
+test("Einfachwirkend: der Federraum bleibt über einen ganzen Zyklus auf Umgebung", () => {
+  const z = P.neuerZustand(E, { weg: 0, stellung: "ausfahren" });
+  const aus = laufeEinfach(z, 6, 1);
+  z.stellung = "einfahren";
+  const ein = laufeEinfach(z, 6, 1);
+  for (const s of [...aus, ...ein]) assert.equal(s.pB, P.UMGEBUNG, `Federraum bei ${s.pB} bar`);
+  assert.ok(aus.some((s) => s.weg > E.hub - 0.5), "der Kolben ist nie ausgefahren");
+  assert.ok(ein[ein.length - 1].weg < 0.5, "der Kolben ist nicht zurück");
+});
+
+test("Einfachwirkend: Taster los, der Kolben kehrt ohne Druck in A auf 0 zurück", () => {
+  const z = P.neuerZustand(E, { weg: 0, stellung: "ausfahren" });
+  laufeEinfach(z, 6, 1);
+  assert.ok(z.weg > E.hub - 0.5 && z.pA > 6.9, "nicht ausgefahren und voll");
+  z.stellung = "einfahren";
+  const spur = laufeEinfach(z, 6, 1.5);
+  assert.ok(z.weg < 0.1, `Kolben steht bei ${z.weg} mm`);
+  assert.ok(Math.abs(z.pA - P.UMGEBUNG) < 0.02, `Kammer A bei ${z.pA} bar`);
+  // The way back is the spring's alone: A never goes above its start value while returning.
+  assert.ok(spur.every((s) => s.pA <= 7.0001));
+  assert.ok(P.ruht(z, E, 6));
+});
+
+test("Einfachwirkend: der Rückhub ist langsamer als der Vorhub, beide gut sichtbar kurz", () => {
+  const aus = hubZeit("ausfahren");
+  const ein = hubZeit("einfahren");
+  assert.ok(aus >= 0.05 && aus <= 0.15, `Vorhub ${aus.toFixed(3)} s`);
+  assert.ok(ein >= 0.05 && ein <= 0.15, `Rückhub ${ein.toFixed(3)} s`);
+  assert.ok(ein > aus * 1.3, `Rückhub ${ein.toFixed(3)} s nicht merklich langsamer als Vorhub ${aus.toFixed(3)} s`);
+});
+
+test("Einfachwirkend: bei 0,5 bar fährt er nicht aus, bei 2 bar schon", () => {
+  // 0,05 N/mm² · 1963,5 mm² = 98 N < 82 N Feder + 40 N Reibung
+  const z = P.neuerZustand(E, { weg: 0, stellung: "ausfahren" });
+  laufeEinfach(z, 0.5, 1);
+  assert.ok(z.weg < 0.5, `fährt bei 0,5 bar auf ${z.weg} mm`);
+  assert.ok(P.ruht(z, E, 0.5), "beruhigt, aber nicht ausgefahren");
+  const y = P.neuerZustand(E, { weg: 0, stellung: "ausfahren" });
+  laufeEinfach(y, 2, 1);
+  assert.ok(y.weg > E.hub - 0.5);
+});
+
+test("Einfachwirkend: keine Zahl wird NaN, Kammer A bleibt zwischen Umgebung und Versorgung", () => {
+  const z = P.neuerZustand(E, { weg: 0, stellung: "ausfahren" });
+  for (const s of laufeEinfach(z, 8, 1)) {
+    assert.ok(Number.isFinite(s.weg) && s.pA >= P.UMGEBUNG - 1e-6 && s.pA <= 9 + 1e-6);
+  }
+});
