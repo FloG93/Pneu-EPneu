@@ -7,6 +7,10 @@
 // s, turns of the adjusting screw.
 // Origin of every constant: "Katalog" = Festo data sheet 6509 (GRA-1/4-B),
 // "abgeleitet" = computed from catalogue values, "Annahme" = assumed.
+// Pressure convention: `dpBar` is always the pressure drop in the direction of flow,
+// positive. `kugelHub` is only meaningful for the free direction 2 → 1, where that drop
+// equals p2 − p1 (the pressure that lifts the ball); in the throttle direction the ball
+// is shut by `richtung` and never asks.
 // No top-level name here may clash with one in pneumatik.mjs or ventil.mjs:
 // pages inline model files into one classic script.
 
@@ -23,7 +27,7 @@ export const GRA_1_4 = {
   kugelRampe: 0.02,      // s, the ball travels its whole lift in this time – Annahme
   nadelTempo: 6,         // turns/s, how fast the needle follows the slider – Annahme
   steigung: 1,           // mm per turn, pitch of the adjusting thread – Annahme
-  kugelHub: 2,           // mm, lift of the ball off its seat – Annahme
+  kugelHubMm: 2,         // mm, lift of the ball off its seat (drawing and spring travel) – Annahme
 };
 
 const stromBegrenze = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
