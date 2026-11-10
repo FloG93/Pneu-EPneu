@@ -1,19 +1,19 @@
 // A throttle check valve (Festo GRA-1/4-B as the model: G1/4 both ends, knurled
-// adjusting screw) as an isometric section in the plane of both channels.
+// adjusting screw) as an isometric section in the plane of both passages.
 // Dimensions in mm, 1 world unit = 1 mm. Catalogue values are listed in the
-// figure's README; the inside is a textbook arrangement (needle throttle and a
-// spring-loaded ball check valve side by side) and an assumption.
+// figure's README; the inside is a textbook arrangement and an assumption.
 //
 // This script holds geometry and the four data tables; springs, depth sorting,
 // legend and page shell come from ../../../figur/.
 //
 // The kit's camera looks from +x, +y, +z, so the half of the valve that is kept
 // is the one at y <= 0 and its cut face at y = 0 looks at the viewer. Port 1 is
-// on the left (x = 0), port 2 on the right (x = LAENGE).
-//   throttle path: 1 → left channel → orifice (needle seat) → needle chamber
-//                  → outlet channel → riser → right channel → 2
-//   check path:    1 → riser → lower channel → chamber under the ball →
-//                  ball seat → neck → right channel → 2
+// on the left (x = 0), port 2 on the right (x = LAENGE). Inside: a chamber behind
+// each port and two straight passages between them.
+//   upper passage (throttle): a ridge in the floor is the needle's seat, the needle
+//                  comes down on it from the top
+//   lower passage (check):    a ball, pressed by a spring against a wall with a hole;
+//                  1 → 2 presses the ball onto the hole (shut), 2 → 1 lifts it off
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,60 +24,71 @@ import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mj
 import * as SCH from "../../../figur/schnitt.mjs";
 import * as EX from "../../../figur/explode.mjs";
 import * as LEG from "../../../figur/legende.mjs";
-import * as LU from "../../../figur/luft.mjs";
 import { GRA_1_4 as M } from "../../../figur/stromventil.mjs";
 import { seite, knopf, hausBedienung } from "../../../figur/seite.mjs";
 import { zeichner } from "../../../figur/zylinderteile.mjs";
-import { normteile, sechskant, federPruefen, SCHNITT_CSS } from "../../../figur/normteile.mjs";
+import { normteile, stummel, sechskant, federPruefen, SCHNITT_CSS } from "../../../figur/normteile.mjs";
 import { CSS as LUFT_CSS } from "../../../figur/luft.mjs";
 import { LEGENDE } from "./legende-drossel.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
-const WURZEL = join(HIER, "..", "..", "..");
 const W = 900;
 const H = 800;
+const TAU = Math.PI * 2;
 
 // --- Dimensions ----------------------------------------------------------
-const LAENGE = 70, TIEFE = 16, HOEHE = 58;     // housing block; the half y in [-16, 0] is kept
-const ZA = 36;                                  // port axis height
+const LAENGE = 86, TIEFE = 16, HOEHE = 62;      // housing block; the half y in [-16, 0] is kept
+const ZA = 31;                                  // port axis height
 const R_PORT = 6.5;                             // G1/4 thread bore, outside Ø 13.2
 const R_STUMMEL = R_PORT - 0.2;                 // the threaded stub of a fitting, clear of the thread
-const R_KANAL = 4.5;                            // main channels
-const X_DROSSEL = 24;                           // needle axis
-const R_ORIFICE = 2.5, ZS = 46;                 // orifice up to the needle seat at z = 46
-const R_KAMMER = 6, Z_KAMMER = [46, 54];        // needle chamber
+const X_KAMMER = [[12, 24], [62, 74]];          // the two chambers behind the ports
+const Z_KAMMER = [8, 54];
+const OBEN = [40, 50];                          // upper passage, z
+const UNTEN = [11, 23];                         // lower passage, z
+const X_PASSAGE = [24, 62];
+const X_N = 43;                                 // needle axis
+const RIDGE = { x: [38.5, 47.5], z: 43.5 };     // the throttle seat: a ridge in the floor of the upper passage
 const R_GEWINDE = 3.5, Z_GEWINDE = [54, HOEHE]; // thread of the adjusting screw, in the housing
-const X_AUSLASS = 40;                           // riser from the outlet channel down to port 2
-const X_KUGEL = 54;                             // check valve axis
-const R_KUGELBOHRUNG = 6, Z_SITZ = 26, R_SITZ = 3;   // ball bore up to the seat, neck r 3 above it
+const Z_KUGEL = (UNTEN[0] + UNTEN[1]) / 2;      // axis of the check valve
+const WAND = [54, 58], R_SITZ = 2.5;            // wall with the ball's seat hole
 const R_KUGEL = 4.4;
-const Z_KUGEL = Z_SITZ - Math.sqrt(R_KUGEL ** 2 - R_SITZ ** 2);   // ball centre on its seat
-const Z_FEDERFUSS = 4;                          // top of the plug's thread = spring seat
-const Z_UNTEN = 14;                             // lower channel (the check path's way back to 1)
-const X_RISER = 16;                             // riser from channel 1 down to the lower channel
+const X_KUGEL = WAND[0] - Math.sqrt(R_KUGEL ** 2 - R_SITZ ** 2);   // ball centre on its seat
+const X_STUETZE = 26.5, R_STUETZE = 2.4;        // the plug's post, the spring's seat
+const Z_STUETZE = 21;
 
 // Needle: the tip's height follows the turns of the screw (model: pitch 1 mm).
 const U0 = M.umdrehungen / 2;                   // start: half open
-const Z_SPITZE_ZU = ZS - 4.2;                   // tip height with the throttle shut (cone r 2.5 at the seat)
+const Z_SPITZE_ZU = RIDGE.z;                    // tip height with the throttle shut
 const zSpitze = (u) => Z_SPITZE_ZU + M.steigung * u;
 const ZT = zSpitze(U0);
-const KONUS = 0.48;                             // cone slope, dr/ds
 const Z_KONTER = [HOEHE, HOEHE + 4.5];          // lock nut on top of the housing
 const Z_KOPF = [Z_KONTER[1] + 10, Z_KONTER[1] + 20];   // knurled head
 const R_KOPF = 9;
 
-// Ball spring.
-const FEDER = { draht: 1.4, windungen: 6, rWindung: 3.6, laenge: Z_KUGEL - R_KUGEL - Z_FEDERFUSS };
+// Ball spring: horizontal, from the post to the ball.
+const FEDER_A = X_STUETZE + R_STUETZE;
+const FEDER = { draht: 1.4, windungen: 6, rWindung: 3.6, laenge: X_KUGEL - R_KUGEL - FEDER_A };
 const FEDER_TEXT = federPruefen(FEDER, M.kugelHub, 2);
 
 // Fittings and hoses along the port axis, s from the housing's face outward.
 const VERSCHRAUBUNG = { gewinde: [-12, 0], sechskant: [0, 4.5], rS: 7.6, koerper: [4.5, 11], rK: 6, ring: [11, 12.5], rR: 5.2 };
-const R_SCHLAUCH = 4, SCHLAUCH_LAENGE = 24;
+const R_SCHLAUCH = 4, R_SCHLAUCH_INNEN = 3;
+// A short hose stub out of each fitting, bent towards the viewer so its cut end is seen as a ring.
+const WEGE = Object.fromEntries([1, 2].map((nr) => {
+  const v = nr === 1 ? -1 : 1;
+  const s0 = VERSCHRAUBUNG.ring[1];
+  const p0 = [v === -1 ? -s0 : LAENGE + s0, 0, ZA];
+  return [nr, stummel(p0, [v, 0, 0], [p0[0] + v * 22, 20, ZA - 4], v === -1 ? [-0.25, 0.96, -0.1] : [0.6, 0.8, -0.1], 9)];
+}));
 
+// The extreme points of what is drawn: the block, the heads of the fittings, the ends of the hoses,
+// the knurled head and the plug's head.
 const P = k.fitProjection(
-  [[-42, -TIEFE - 8, -10], [LAENGE + 42, TIEFE + 8, -10], [-42, TIEFE + 8, Z_KOPF[1] + 4], [LAENGE + 42, -TIEFE - 8, Z_KOPF[1] + 4],
-    [-42, -TIEFE, Z_KOPF[1] + 4], [LAENGE + 42, TIEFE, Z_KOPF[1] + 4]],
-  W, H, { pad: 24, azimuth: 38, elevation: 34 },
+  [[0, -TIEFE, 0], [LAENGE, -TIEFE, 0], [0, 0, 0], [LAENGE, 0, 0], [0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE],
+    ...WEGE[1].slice(-1).map((q) => [q[0] - 5, q[1] + 5, q[2] + 5]), ...WEGE[1].slice(-1).map((q) => [q[0] - 5, q[1] + 5, q[2] - 5]),
+    ...WEGE[2].slice(-1).map((q) => [q[0] + 5, q[1] + 5, q[2] + 5]), ...WEGE[2].slice(-1).map((q) => [q[0] + 5, q[1] + 5, q[2] - 5]),
+    [X_N - R_KOPF, -R_KOPF, Z_KOPF[1]], [X_N + R_KOPF, R_KOPF, Z_KOPF[1]], [X_STUETZE - 7, 7, -5], [X_STUETZE + 7, 7, -5]],
+  W, H, { pad: 30, azimuth: 38, elevation: 34 },
 );
 
 // --- Assemblies ----------------------------------------------------------
@@ -90,8 +101,8 @@ const STAGGER = ["leitung", "verschraubung", "schraube", "kontermutter", "versch
 const MOVE = {
   grund: [0, 0, 0],
   luft: [0, 0, 0],
-  leitung: [0, 100, 16],
-  verschraubung: [0, 62, 8],
+  leitung: [0, 90, 16],
+  verschraubung: [0, 55, 8],
   schraube: [0, 0, 72],
   kontermutter: [0, 0, 40],
   verschluss: [0, 0, -52],
@@ -103,6 +114,7 @@ const MOVE = {
 const { R, rec, put, gruppe } = zeichner({ P, MOVE });
 const NT = normteile({ P, rec, put, gruppe });
 const at = (p) => k.iso(p, P);
+const V = G.viewOf(P);
 const SV = (paths, style) => k.solidSvg(paths, style);
 const L = (d, style) => k.lineSvg(d, style);
 const ring3 = (punkte) => SCH.pfad(punkte.map(at));
@@ -112,28 +124,27 @@ const FPORT = { 1: G.frameOf([0, 0, ZA], [-1, 0, 0], [0, 1, 0], [0, 0, 1]), 2: G
 const ortPort = (nr) => (rng) => { const s = (rng[0] + rng[1]) / 2; return [nr === 1 ? -s : LAENGE + s, 0, ZA]; };
 
 // --- The hollows: rectangles (x0, x1, z0, z1) in the cut plane --------------
-const rect = (x, r, z0, z1) => [x - r, x + r, z0, z1];
+// kind: "h" horizontal bore (lit from below), "v" vertical bore (lit from the right)
 const HOHLRAUM = [
-  [0, 12, ZA - R_PORT, ZA + R_PORT],                                  // port 1 (thread bore)
-  [12, X_DROSSEL + R_KANAL, ZA - R_KANAL, ZA + R_KANAL],              // channel 1
-  rect(X_RISER, 3.5, Z_UNTEN - 3.5, ZA),                              // riser down to the lower channel
-  [X_RISER - 3.5, X_KUGEL - R_KUGELBOHRUNG, Z_UNTEN - 3.5, Z_UNTEN + 3.5],   // lower channel
-  rect(X_DROSSEL, R_ORIFICE, ZA, ZS),                                 // orifice
-  rect(X_DROSSEL, R_KAMMER, ...Z_KAMMER),                             // needle chamber
-  rect(X_DROSSEL, R_GEWINDE, ...Z_GEWINDE),                           // thread bore
-  [X_DROSSEL + R_KAMMER, X_AUSLASS + 3.5, 52 - 3.5, 52 + 3.5],        // outlet channel
-  rect(X_AUSLASS, 3.5, ZA - R_KANAL, 52 + 3.5),                       // riser to port 2
-  [X_AUSLASS, LAENGE - 12, ZA - R_KANAL, ZA + R_KANAL],               // channel 2
-  rect(X_KUGEL, R_SITZ, Z_SITZ, ZA - R_KANAL),                        // neck above the ball seat
-  rect(X_KUGEL, R_KUGELBOHRUNG, 0, Z_SITZ),                           // ball bore, open at the bottom
-  [LAENGE - 12, LAENGE, ZA - R_PORT, ZA + R_PORT],                    // port 2 (thread bore)
+  [[0, 12, ZA - R_PORT, ZA + R_PORT], "h"],                                // port 1 (thread bore)
+  [[X_KAMMER[0][0], X_KAMMER[0][1], ...Z_KAMMER], "v"],                    // chamber 1
+  [[X_PASSAGE[0], RIDGE.x[0], OBEN[0], OBEN[1]], "h"],                     // upper passage, left of the seat
+  [[RIDGE.x[0], RIDGE.x[1], RIDGE.z, OBEN[1]], "h"],                       // above the seat
+  [[RIDGE.x[1], X_PASSAGE[1], OBEN[0], OBEN[1]], "h"],                     // right of the seat
+  [[X_N - R_GEWINDE, X_N + R_GEWINDE, OBEN[1], HOEHE], "v"],               // the needle's thread bore
+  [[X_PASSAGE[0], WAND[0], UNTEN[0], UNTEN[1]], "h"],                      // lower passage, ball side
+  [[WAND[0], WAND[1], Z_KUGEL - R_SITZ, Z_KUGEL + R_SITZ], "h"],           // the ball's seat hole
+  [[WAND[1], X_PASSAGE[1], UNTEN[0], UNTEN[1]], "h"],                      // lower passage, 2 side
+  [[X_STUETZE - 3.5, X_STUETZE + 3.5, 0, UNTEN[0]], "v"],                  // the plug's bore, from below
+  [[X_KAMMER[1][0], X_KAMMER[1][1], ...Z_KAMMER], "v"],                    // chamber 2
+  [[LAENGE - 12, LAENGE, ZA - R_PORT, ZA + R_PORT], "h"],                  // port 2 (thread bore)
 ];
-const innen = (x, z) => HOHLRAUM.some(([a, b, c, d]) => x > a + 1e-9 && x < b - 1e-9 && z > c + 1e-9 && z < d - 1e-9);
+const innen = (x, z) => HOHLRAUM.some(([[a, b, c, d]]) => x > a + 1e-9 && x < b - 1e-9 && z > c + 1e-9 && z < d - 1e-9);
 
 /** The material of the half block as axis boxes: the grid of all hollow edges, empty cells left out, runs merged. */
 function materialKoerper() {
-  const xs = [...new Set([0, LAENGE, ...HOHLRAUM.flatMap(([a, b]) => [a, b])])].sort((a, b) => a - b);
-  const zs = [...new Set([0, HOEHE, ...HOHLRAUM.flatMap(([, , c, d]) => [c, d])])].sort((a, b) => a - b);
+  const xs = [...new Set([0, LAENGE, ...HOHLRAUM.flatMap(([[a, b]]) => [a, b])])].sort((a, b) => a - b);
+  const zs = [...new Set([0, HOEHE, ...HOHLRAUM.flatMap(([[, , c, d]]) => [c, d])])].sort((a, b) => a - b);
   const boxen = [];
   for (let j = 0; j < zs.length - 1; j += 1) {
     let start = null;
@@ -151,15 +162,24 @@ function materialKoerper() {
   });
 }
 
-/** One hollow on the cut face: the lit far half of a round bore, one flat tone. */
-function hohlraum([x0, x1, z0, z1]) {
-  return `<path class="iso-shade" data-shade="2" d="${ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])}"/>`;
+const flaeche = (x0, x1, z0, z1, band) => `<path class="iso-shade" data-shade="${band}" d="${ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])}"/>`;
+/** One hollow on the cut face: the far half of a round bore, dark where the light does not reach, lit on the far side. */
+function hohlraum([[x0, x1, z0, z1], art]) {
+  const h = z1 - z0, b = x1 - x0;
+  if (art === "h") return flaeche(x0, x1, z0, z1, 0) + flaeche(x0, x1, z0, z0 + h * 0.62, 1) + flaeche(x0, x1, z0, z0 + h * 0.28, 2);
+  return flaeche(x0, x1, z0, z1, 0) + flaeche(x0 + b * 0.4, x1, z0, z1, 1) + flaeche(x0 + b * 0.72, x1, z0, z1, 2);
 }
 
 // --- The housing ------------------------------------------------------------
 function gehaeuse() {
   gruppe("gehaeuse");
   const plan = { x: 0, y: -TIEFE, w: LAENGE, d: TIEFE, r: 0 };
+  const umriss = (x0, x1, z0, z1) => ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]]);
+  const stege = [
+    [RIDGE.x[0], RIDGE.x[1], OBEN[0], RIDGE.z],                      // the seat ridge
+    [WAND[0], WAND[1], UNTEN[0], Z_KUGEL - R_SITZ],                  // the wall of the ball's seat, below the hole
+    [WAND[0], WAND[1], Z_KUGEL + R_SITZ, UNTEN[1]],                  // and above it
+  ];
   const teile = [
     `<path class="iso-halo" d="${k.haloOf(plan, 0, HOEHE, P)}"/>`,
     // top and the right end: the two outer faces the camera sees besides the cut face
@@ -168,12 +188,16 @@ function gehaeuse() {
     // the cut face
     NT.schnitt([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]),
     // The hollows: all outlines first, then all fills over them, so the lines inside a junction
-    // of two channels are covered and only the outline of the union stays.
-    L(HOHLRAUM.map(([x0, x1, z0, z1]) => ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])).join(""), { tone: "mid" }),
+    // of two hollows are covered and only the outline of the union stays.
+    L(HOHLRAUM.map(([r]) => umriss(...r)).join(""), { tone: "mid" }),
     ...HOHLRAUM.map(hohlraum),
+    // what stands inside the hollows is cut material again: the seat ridge and the seat wall
+    ...stege.map(([x0, x1, z0, z1]) => NT.schnitt([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])),
+    L(stege.map((r) => umriss(...r)).join(""), { tone: "mid" }),
     L(ring3([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]), { tone: "mid" }),
-    L(k.segment([LAENGE, -TIEFE, HOEHE], [LAENGE, 0, HOEHE], P) + k.segment([0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE], P)
-      + k.segment([LAENGE, -TIEFE, 0], [LAENGE, -TIEFE, HOEHE], P) + k.segment([LAENGE, -TIEFE, 0], [LAENGE, 0, 0], P), { tone: "mid" }),
+    // the outer edges of the half block that are not part of a face's outline
+    L(k.segment([LAENGE, 0, HOEHE], [LAENGE, -TIEFE, HOEHE], P) + k.segment([LAENGE, -TIEFE, HOEHE], [0, -TIEFE, HOEHE], P) + k.segment([0, -TIEFE, HOEHE], [0, 0, HOEHE], P)
+      + k.segment([LAENGE, -TIEFE, HOEHE], [LAENGE, -TIEFE, 0], P) + k.segment([LAENGE, -TIEFE, 0], [LAENGE, 0, 0], P), { tone: "mid" }),
   ];
   put([LAENGE / 2, -TIEFE / 2, HOEHE / 2], teile.join(""), materialKoerper(), { name: "gehaeuse.koerper" });
 }
@@ -184,54 +208,55 @@ function kugelUndFeder() {
   const mitte = [X_KUGEL, 0, Z_KUGEL];
   put(mitte, SV(G.sphereOf(mitte, R_KUGEL, P), { tone: "hi" }), [rec(A.ball(mitte, R_KUGEL, { name: "kugel.kugel" }))], { name: "kugel.kugel" });
 
+  // The spring runs along x, from the post to the ball: its pieces carry their x (data-federx).
   gruppe("feder");
-  const F = FZ(X_KUGEL);
+  const F = G.frameOf([0, 0, Z_KUGEL], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
   const r = FEDER.draht / 2;
-  const wendel = NT.druckfeder(F, Z_FEDERFUSS + r, Z_KUGEL - R_KUGEL - r, FEDER);
-  put([X_KUGEL, 0, (Z_FEDERFUSS + Z_KUGEL - R_KUGEL) / 2], wendel.join(""), [
-    rec(A.ring(F, Z_FEDERFUSS, Z_KUGEL - R_KUGEL, FEDER.rWindung - r, FEDER.rWindung + r, { name: "feder.wendel" })),
+  const wendel = NT.druckfeder(F, FEDER_A + r, X_KUGEL - R_KUGEL - r, FEDER);
+  put([(FEDER_A + X_KUGEL - R_KUGEL) / 2, 0, Z_KUGEL], wendel.join(""), [
+    rec(A.ring(F, FEDER_A, X_KUGEL - R_KUGEL, FEDER.rWindung - r, FEDER.rWindung + r, { name: "feder.wendel" })),
   ], { name: "feder.wendel" });
 }
 
-// --- The plug under the ball bore -------------------------------------------
+// --- The plug under the lower passage; its post is the spring's seat ----------
 function verschluss() {
   gruppe("verschluss");
-  const F = FZ(X_KUGEL);
-  const hx = sechskant(8);
-  put([X_KUGEL, 0, 0], [
-    NT.gewinde(F, 0, Z_FEDERFUSS, R_KUGELBOHRUNG - 0.05),
-    SV(G.ringBand(-1, 0, R_KUGELBOHRUNG - 0.05, 7.4, F, P), { tone: "lo" }),
+  const F = FZ(X_STUETZE);
+  const hx = sechskant(7);
+  put([X_STUETZE, 0, 6], [
+    NT.gewinde(F, 0, 8, 3.45),
+    SV(G.disc(8, Z_STUETZE, R_STUETZE, F, P), { tone: "hi" }),
+    SV(G.ringBand(-1, 0, 3.45, 6, F, P), { tone: "lo" }),
     SV(G.prismOf(F, hx, -5, -1, P), { tone: "mid" }),
-    L(G.circleOf(F, -5, 3.2, P), { tone: "faint" }),
+    L(G.circleOf(F, -5, 2.6, P), { tone: "faint" }),
   ].join(""), [
-    rec(A.disc(F, 0, Z_FEDERFUSS, R_KUGELBOHRUNG - 0.05, { name: "verschluss.gewinde" })),
-    rec(A.ring(F, -1, 0, R_KUGELBOHRUNG - 0.05, 7.4, { name: "verschluss.dichtring" })),
+    rec(A.disc(F, 0, 8, 3.45, { name: "verschluss.gewinde" })),
+    rec(A.disc(F, 8, Z_STUETZE, R_STUETZE, { name: "verschluss.stuetze" })),
+    rec(A.ring(F, -1, 0, 3.45, 6, { name: "verschluss.dichtring" })),
     rec(A.prism(F, hx, -5, -1, { name: "verschluss.kopf" })),
   ], { name: "verschluss.kopf" });
 }
 
 // --- Adjusting screw with needle, lock nut -----------------------------------
 function schraube() {
-  const F = FZ(X_DROSSEL);
+  const F = FZ(X_N);
   const zNadel = [[ZT, 0.4], [ZT + 4.6, 2.7], [ZT + 4.6, 3.3], [Z_GEWINDE[0] - 2, 3.3], [Z_GEWINDE[0] - 2, R_GEWINDE], [Z_KONTER[1], R_GEWINDE]];
   const gewinde = [];
   for (let s = Z_GEWINDE[0] + 0.6; s < Z_KONTER[1] - 0.3; s += 1.3) gewinde.push(G.arcOf(F, s, R_GEWINDE, P));
 
-  // The part below the nut's top face: needle, shaft with thread, the O-ring in the chamber.
+  // The part below the nut's top face: needle, shaft with thread.
   gruppe("schraube");
-  put([X_DROSSEL, 0, (ZT + Z_KONTER[1]) / 2], [
+  put([X_N, 0, (ZT + Z_KONTER[1]) / 2], [
     SV(G.solidOf(zNadel, F, P), { tone: "hi" }),
-    SV(G.ringBand(Z_KAMMER[1] - 3, Z_KAMMER[1] - 1, R_GEWINDE - 0.05, 5, F, P), { tone: "lo" }),
     L(gewinde.join(""), { tone: "faint" }),
   ].join(""), [
     rec(A.solid(F, zNadel, { name: "schraube.nadel" })),
-    rec(A.ring(F, Z_KAMMER[1] - 3, Z_KAMMER[1] - 1, R_GEWINDE, 5, { name: "schraube.oring" })),
   ], { name: "schraube.nadel" });
 
   // The lock nut: a hexagon on the thread, on top of the housing.
   gruppe("kontermutter");
   const hx = sechskant(7.6);
-  put([X_DROSSEL, 0, (Z_KONTER[0] + Z_KONTER[1]) / 2], [
+  put([X_N, 0, (Z_KONTER[0] + Z_KONTER[1]) / 2], [
     SV(G.prismOf(F, hx, Z_KONTER[0], Z_KONTER[1], P), { tone: "mid" }),
     L(G.circleOf(F, Z_KONTER[1], R_GEWINDE + 0.8, P), { tone: "faint" }),
   ].join(""), [
@@ -240,16 +265,32 @@ function schraube() {
 
   // Above the nut: the rest of the shaft and the knurled head, drawn after the nut.
   gruppe("schraube");
-  const F2 = Z_KOPF[0] + 0.6;
-  put([X_DROSSEL, 0, (Z_KONTER[1] + Z_KOPF[1]) / 2], [
+  put([X_N, 0, (Z_KONTER[1] + Z_KOPF[1]) / 2], [
     SV(G.disc(Z_KONTER[1], Z_KOPF[0] + 0.5, R_GEWINDE, F, P), { tone: "hi" }),
     SV(G.disc(Z_KOPF[0], Z_KOPF[1], R_KOPF, F, P), { tone: "hi" }),
-    L(G.ribsOf(F, F2, Z_KOPF[1] - 1, R_KOPF, 22, P, { seams: true }), { tone: "faint" }),
+    L(G.ribsOf(F, Z_KOPF[0] + 0.6, Z_KOPF[1] - 1, R_KOPF, 22, P, { seams: true }), { tone: "faint" }),
     L(G.circleOf(F, Z_KOPF[1], 3.2, P), { tone: "faint" }),
   ].join(""), [
     rec(A.disc(F, Z_KONTER[1], Z_KOPF[0], R_GEWINDE, { name: "schraube.hals" })),
     rec(A.disc(F, Z_KOPF[0], Z_KOPF[1], R_KOPF, { name: "schraube.kopf" })),
   ], { name: "schraube.kopf" });
+}
+
+/** The cut end of a hose: its wall as a ring and the dark bore inside. */
+function schnittEnde(punkte, rAussen, rInnen) {
+  const ende = punkte[punkte.length - 1];
+  const vor = punkte[punkte.length - 2];
+  const F = G.frameAlong(ende, G.unit3(G.sub3(ende, vor)));
+  const band = G.toneOf(F.a, P);
+  const ringPfad = (r) => Array.from({ length: 41 }, (_, i) => at(G.pointOf(F, 0, r, (i / 40) * TAU)));
+  if (G.dot3(F.a, V) <= 0) return "";
+  return [
+    `<path class="iso-fill" d="${SCH.pfad(ringPfad(rAussen))}"/>`,
+    band >= 4 ? `<path class="iso-top" d="${SCH.pfad(ringPfad(rAussen))}"/>` : `<path class="iso-shade" data-shade="${band}" d="${SCH.pfad(ringPfad(rAussen))}"/>`,
+    `<path class="iso-shade" data-shade="0" d="${SCH.pfad(ringPfad(rInnen))}"/>`,
+    L(SCH.pfad(ringPfad(rAussen)), { tone: "mid" }),
+    L(SCH.pfad(ringPfad(rInnen)), { tone: "mid" }),
+  ].join("");
 }
 
 // --- Fittings and hoses ---------------------------------------------------------
@@ -259,12 +300,14 @@ function anschluesse() {
   }
   gruppe("leitung");
   for (const nr of [1, 2]) {
-    const v = nr === 1 ? -1 : 1;
-    const s0 = VERSCHRAUBUNG.ring[1];
-    const punkte = [[v === -1 ? -s0 : LAENGE + s0, 0, ZA], [v === -1 ? -(s0 + SCHLAUCH_LAENGE) : LAENGE + s0 + SCHLAUCH_LAENGE, 0, ZA]];
+    const punkte = WEGE[nr];
+    // The far end is cut off in the air on purpose: it is no tip that must land on a part.
     R.route(`leitung.${nr}`, punkte, R_SCHLAUCH, { piece: "leitung", move: MOVE.leitung, ends: [true, false], free: [true, false] });
-    tubePieces(punkte, R_SCHLAUCH, P, { maxLength: 60 }).forEach((teil, i) => {
-      put(teil.mid, tubeSvg(teil, { tone: "lo" }), [A.tube(teil.points, teil.radii)],
+    const stuecke = tubePieces(punkte, R_SCHLAUCH, P, { maxLength: 14 });
+    stuecke.forEach((teil, i) => {
+      const letztes = i === stuecke.length - 1;
+      put(teil.mid, tubeSvg(teil, { tone: "mid" }) + (letztes ? schnittEnde(punkte, R_SCHLAUCH, R_SCHLAUCH_INNEN) : ""),
+        [A.tube(teil.points, teil.radii)],
         { name: `leitung.schlauch${nr}:${i}`, route: `leitung.${nr}`, chunk: i });
     });
   }
@@ -298,7 +341,10 @@ const eintrag = (name) => R.items.find((it) => it.name === name);
 }
 R.items.sort((a, b) => a.key - b.key);
 
-const { KEYS, LIFT, VIEW0, VIEW1, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
+const { KEYS, LIFT, VIEW0, VIEW1: VIEW1_ROH, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
+// vorbereiten measures the parts' places, not their extent: the housing is big, so the view
+// with everything out is widened by a tenth about its centre (same aspect ratio).
+const VIEW1 = (([x, y, w, h]) => [x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12])(VIEW1_ROH);
 
 const svg = k.figureSvg({
   width: W,
