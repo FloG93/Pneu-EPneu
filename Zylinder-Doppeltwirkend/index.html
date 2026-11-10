@@ -1969,14 +1969,74 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
 }
 
 
+const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
+const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
+
+function teileVerschieben(weg, schieber, schieberWeg) {
+  const t = translateAlong(P, [weg, 0, 0]);
+  for (const el of hubTeile) el.setAttribute("transform", t);
+  const ts = translateAlong(P, [(schieber - 0.5) * 2 * schieberWeg, 0, 0]);
+  for (const el of schieberTeile) el.setAttribute("transform", ts);
+}
+
+const druckAnteil = (p, druck) => Math.max(0, Math.min(1, (p - UMGEBUNG) / Math.max(0.2, druck)));
+function kammerFuellen(el, p, druck, F) {
+  el.setAttribute("fill", mische(F.abluft, F.druck, druckAnteil(p, druck)));
+}
+
+function kammerFluesse(z, druck) {
+  const q = UMGEBUNG + druck;
+  const l = leitwerte(z, MASSE);
+  return {
+    qA: l.aZu * (q - z.pA) + l.aAb * (UMGEBUNG - z.pA),
+    qB: l.bZu * (q - z.pB) + l.bAb * (UMGEBUNG - z.pB),
+  };
+}
+const stromTempo = (x) => Math.max(-260, Math.min(260, x * 2.4e-4));
+const stromKraft = (x) => Math.max(0, Math.min(1, Math.abs(x) / 2.2e5));
+
+let zyklus = 0;
+function takteNeu() { zyklus = 0; }
+function automatikTakt(z, dt, druck) {
+  zyklus += dt;
+  if (zyklus > (ruht(z, MASSE, druck) ? 0.8 : 1e9)) {
+    z.stellung = z.stellung === "ausfahren" ? "einfahren" : "ausfahren";
+    zyklus = 0;
+  }
+}
+
+function zustandSetzen(z, weg, stellung, druck) {
+  z.weg = weg;
+  z.v = 0;
+  if (stellung) {
+    z.stellung = stellung;
+    z.schieber = stellung === "ausfahren" ? 1 : 0;
+    const voll = UMGEBUNG + druck;
+    z.pA = stellung === "ausfahren" ? voll : UMGEBUNG;
+    z.pB = stellung === "ausfahren" || MASSE.einfach ? UMGEBUNG : voll;
+  }
+}
+
+function figurGrundstock(zusatz) {
+  return {
+    zustand, MASSE,
+    druck: () => druck,
+    offen: () => offenAnteil(),
+    zerlegt: () => zerlegt,
+    spiele,
+    waehle,
+    weiter: () => { angehalten = false; },
+    ...zusatz,
+  };
+}
+
+
 // --- the model drives everything -----------------------------------------
 const zustand = neuerZustand(MASSE, { weg: WEG0, stellung: "ausfahren" });
 let druck = 6;
 let auto = true;
 let angehalten = false;
 
-const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
 const SCHIEBER_WEG = 14;
 const kammerA = svg.querySelector('[data-kammer="a"]');
 const kammerB = svg.querySelector('[data-kammer="b"]');
@@ -1990,10 +2050,7 @@ for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[nam
 let hubAnteil = 1;
 function zeichneHub() {
   const weg = zustand.weg * hubAnteil;
-  const t = translateAlong(P, [weg, 0, 0]);
-  for (const el of hubTeile) el.setAttribute("transform", t);
-  const ts = translateAlong(P, [(zustand.schieber - 0.5) * 2 * SCHIEBER_WEG, 0, 0]);
-  for (const el of schieberTeile) el.setAttribute("transform", ts);
+  teileVerschieben(weg, zustand.schieber, SCHIEBER_WEG);
   const vorn = KOLBEN0 + weg;
   kammerA.setAttribute("d", kammerPfad(X_ROHR[0] + 1, vorn));
   kammerB.setAttribute("d", kammerPfad(vorn + KB, X_ROHR[1] - 1));
@@ -2001,16 +2058,11 @@ function zeichneHub() {
 
 function zeichneLuft(dt) {
   const F = luftFarben();
-  const q = UMGEBUNG + druck;
-  const l = leitwerte(zustand, MASSE);
-  const qA = l.aZu * (q - zustand.pA) + l.aAb * (UMGEBUNG - zustand.pA);
-  const qB = l.bZu * (q - zustand.pB) + l.bAb * (UMGEBUNG - zustand.pB);
-  const anteil = (p) => Math.max(0, Math.min(1, (p - UMGEBUNG) / Math.max(0.2, druck)));
-  kammerA.setAttribute("fill", mische(F.abluft, F.druck, anteil(zustand.pA)));
-  kammerB.setAttribute("fill", mische(F.abluft, F.druck, anteil(zustand.pB)));
+  const { qA, qB } = kammerFluesse(zustand, druck);
+  kammerFuellen(kammerA, zustand.pA, druck, F);
+  kammerFuellen(kammerB, zustand.pB, druck, F);
 
-  const tempo = (x) => Math.max(-260, Math.min(260, x * 2.4e-4));
-  const kraft = (x) => Math.max(0, Math.min(1, Math.abs(x) / 2.2e5));
+  const tempo = stromTempo, kraft = stromKraft;
   stromSchritt(stroeme.A, dt, tempo(-qA), kraft(qA), qA > 0 ? F.druck : F.abluft);
   stromSchritt(stroeme.B, dt, tempo(-qB), kraft(qB), qB > 0 ? F.druck : F.abluft);
   stromSchritt(stroeme.V, dt, tempo(-(Math.max(0, qA) + Math.max(0, qB))), kraft(Math.max(0, qA) + Math.max(0, qB)), F.druck);
@@ -2026,7 +2078,6 @@ function zeichneAnzeige() {
 }
 
 // --- one frame (the loop itself is EX.ABLAUF) -----------------------------
-let zyklus = 0;
 function bildZeichnen(dt, offen, bewegt) {
   const ruhig = still.matches;
   const willHub = Math.max(0, 1 - offen * 2);
@@ -2036,11 +2087,7 @@ function bildZeichnen(dt, offen, bewegt) {
   // The machine stops while it is being taken apart and carries on afterwards.
   if (offen < 0.01 && !bewegt) {
     if (auto) {
-      zyklus += dt;
-      if (zyklus > (ruht(zustand, MASSE, druck) ? 0.8 : 1e9)) {
-        zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren";
-        zyklus = 0;
-      }
+      automatikTakt(zustand, dt, druck);
     }
     if (!angehalten) schritt(zustand, MASSE, ruhig ? dt * 0.4 : dt, druck);
     zeichneHub();
@@ -2063,7 +2110,7 @@ const druckWert = document.getElementById("druck-wert");
 function schalte() {
   angehalten = false;
   zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren";
-  zyklus = 0;
+  takteNeu();
   run();
 }
 knopfVentil.addEventListener("click", () => {
@@ -2075,7 +2122,7 @@ knopfAuto.addEventListener("click", () => {
   auto = !auto;
   angehalten = false;
   knopfAuto.setAttribute("aria-pressed", String(auto));
-  zyklus = 0;
+  takteNeu();
   run();
 });
 knopfAuto.setAttribute("aria-pressed", "true");
@@ -2093,30 +2140,15 @@ poseExplode();
 
 // A handle for the browser test and for screenshots: it can put the figure
 // into a known state instead of waiting and hoping to catch the right moment.
-window.__figur = {
-  zustand, MASSE,
+window.__figur = figurGrundstock({
   stelle(weg, stellung) {
     auto = false;
     angehalten = true;
     knopfAuto.setAttribute("aria-pressed", "false");
-    zustand.weg = weg;
-    zustand.v = 0;
-    if (stellung) {
-      zustand.stellung = stellung;
-      zustand.schieber = stellung === "ausfahren" ? 1 : 0;
-      const voll = UMGEBUNG + druck;
-      zustand.pA = stellung === "ausfahren" ? voll : UMGEBUNG;
-      zustand.pB = stellung === "ausfahren" ? UMGEBUNG : voll;
-    }
+    zustandSetzen(zustand, weg, stellung, druck);
     zeichneHub();
     zeichneLuft(0.016);
     zeichneAnzeige();
   },
-  druck: () => druck,
-  offen: () => offenAnteil(),
-  zerlegt: () => zerlegt,
-  spiele,
-  waehle,
-  weiter: () => { angehalten = false; },
-};
+});
 </script></body></html>

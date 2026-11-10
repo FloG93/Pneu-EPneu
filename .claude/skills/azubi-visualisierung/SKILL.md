@@ -66,6 +66,7 @@ Das ausgearbeitete Beispiel liegt in `beispiel/zylinder-doppeltwirkend/` (Zylind
 | `normteile.mjs` | Zeichenhelfer für Normteile (Schnittfläche, Schraube, Gewinde, Verschraubung, Schalldämpfer, Feder) |
 | `bedienung.mjs` | Signalknöpfe als Laufzeit: Halten, Impuls, Automatik auf Modellzeit |
 | `gehaeuse.mjs`, `ventilraeume.mjs`, `ventilseite.mjs` | Schieberventil-Familie: aufgeschnittenes Gehäuse, Lufträume und Teilchenwege, Regler, Anzeige und Schaltzeichen. Kennen den Aufbau der Bauart, kein bestimmtes Ventil |
+| `zylinderteile.mjs`, `zylinderseite.mjs` | Zylinder-Familie: Füße, Schiene, Lastschlitten, Ventil auf Grundplatte und Schläuche; Laufzeit für Hub, Kammerfüllung, Luftströme und Automatik. Kennen den Aufbau „Zylinder auf Schiene mit Ventil", keinen bestimmten Zylinder |
 | `seite.mjs` | Karte, Bedienleiste, Hell/Dunkel, Kontrast, Startskript |
 | `toene.mjs` | Grautöne und Kontraststufen |
 | `kacheln.mjs` | Inhalt der Übersicht (`SEITE`, `RUBRIKEN`) |

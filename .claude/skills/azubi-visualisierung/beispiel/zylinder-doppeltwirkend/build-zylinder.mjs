@@ -10,13 +10,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../../../.claude/skills/anatomy/kit/lathe.mjs";
-import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mjs";
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
 import * as SCH from "../../../figur/schnitt.mjs";
 import * as PN from "../../../figur/pneumatik.mjs";
 import * as EX from "../../../figur/explode.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import * as LEG from "../../../figur/legende.mjs";
+import { zylinderTeile, schlauch } from "../../../figur/zylinderteile.mjs";
+import * as ZS from "../../../figur/zylinderseite.mjs";
 import { seite, knopf, schieber, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
 import { LEGENDE } from "./legende-zylinder.mjs";
 
@@ -78,9 +79,7 @@ const WEG0 = Math.round(HUB * 0.42);
 
 // --- Frames --------------------------------------------------------------
 const FZ = G.frameOf([0, 0, ZC], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
-const FV = G.frameOf([0, VY, VZ], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
 const quer = (x, z) => G.frameOf([x, 0, z], [0, 1, 0], [1, 0, 0], [0, 0, 1]);
-const hoch = (x, y) => G.frameOf([x, y, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
 
 const P = k.fitProjection(
   [
@@ -146,53 +145,7 @@ function put(pos, svg, shapes = [], extra = {}) {
   });
 }
 
-// --- Feet and rail: the machine stands on its own mounts -----------------
-function grundplatte() {
-  GRUPPE = "grund";
-  for (const x of FUSS) {
-    const bett = { x: x - 17, y: -50, w: 34, d: 100, r: 3 };
-    const steg = { x: x - 12, y: -42, w: 24, d: 84, r: 2 };
-    put([x, 0, FUSS_Z / 2], [
-      `<path class="iso-halo" d="${k.haloOf(bett, 0, 9, P)}"/>`,
-      SV(k.slabOf(bett, 0, 9, P, 3, 0.7), { tone: "lo" }),
-      L(k.planOutline(k.insetPlan(bett, 6), 9, P), { tone: "faint" }),
-      D(k.corners(bett, 8).map(([cx, cy]) => at([cx, cy, 9])), { size: 0.5 }),
-      SV(k.slabOf(steg, 9, FUSS_Z - 9, P, 3, 0.6), { tone: "mid" }),
-      L(k.planOutline(k.insetPlan(steg, 5), FUSS_Z, P), { tone: "faint" }),
-      D([at([x, -32, FUSS_Z]), at([x, 32, FUSS_Z])], { size: 0.5 }),
-    ].join(""), [
-      rec(A.slab(bett, 0, 9, { name: "grund.bett", ground: true })),
-      rec(A.slab(steg, 9, FUSS_Z - 9, { name: "grund.steg" })),
-    ], { name: "grund.fuss", bias: -500 });
-  }
-
-  const bett = { x: SCHIENE.x - 8, y: SCHIENE.y - 10, w: SCHIENE.w + 16, d: SCHIENE.d + 20, r: 4 };
-  put([SCHIENE.x + SCHIENE.w / 2, 0, 5], [
-    `<path class="iso-halo" d="${k.haloOf(bett, 0, 8, P)}"/>`,
-    SV(k.slabOf(bett, 0, 8, P, 4, 0.7), { tone: "lo" }),
-    SV(k.slabOf(SCHIENE, 8, 9, P, 3, 0.5), { tone: "mid" }),
-    L(k.planOutline(k.insetPlan(SCHIENE, 7), 17, P), { tone: "faint" }),
-    D([SCHIENE.x + 26, SCHIENE.x + SCHIENE.w / 2, SCHIENE.x + SCHIENE.w - 26]
-      .flatMap((x) => [at([x, -22, 17]), at([x, 22, 17])]), { size: 0.45, tone: "lo" }),
-  ].join(""), [
-    rec(A.slab(bett, 0, 8, { name: "grund.schienenbett", ground: true })),
-    rec(A.slab(SCHIENE, 8, 9, { name: "grund.schiene" })),
-  ], { name: "grund.schiene", bias: -500 });
-}
-
-/** The load, built at stroke 0 and translated by the runtime. */
-function lastBlock() {
-  const x = SPITZE0;
-  const plan = { x, y: -LAST_D / 2, w: LAST_HW * 2, d: LAST_D, r: 4 };
-  return [
-    `<path class="iso-halo" d="${k.haloOf(k.insetPlan(plan, 4), 17, 0.1, P)}" style="filter:blur(5px)"/>`,
-    SV(G.disc(x - 15, x, 13, FZ, P, { steps: 6 }), { tone: "mid" }),
-    SV(k.slabOf(plan, 17, LAST_H, P, 4, 0.9), { tone: "hi" }),
-    L(k.planOutline(k.insetPlan(plan, 8), 17 + LAST_H, P), { tone: "faint" }),
-    L(k.sideSeam(plan, 17 + LAST_H - 15, P, 4), { tone: "faint" }),
-    D(k.corners(plan, 11).map(([cx, cy]) => at([cx, cy, 17 + LAST_H])), { size: 0.55 }),
-  ].join("");
-}
+const ZT = zylinderTeile({ P, R, put, gruppe: (g) => { GRUPPE = g; }, MOVE });
 
 // --- Caps ----------------------------------------------------------------
 function deckelRing(hw, r = 6, n = 5) {
@@ -368,149 +321,11 @@ function innereien() {
   ].join(""), [rec(A.disc(FZ, X_KOPF[1], SPITZE0, RS, { name: "stange.aussen" }))],
     { name: "stange.aussen", bias: 30, hub: true, clip: "stange-clip" });
 
-  GRUPPE = "grund";
-  put([SPITZE0 + LAST_HW, 0, 17 + LAST_H / 2], lastBlock(),
-    [rec(A.slab({ x: SPITZE0, y: -LAST_D / 2, w: LAST_HW * 2, d: LAST_D, r: 4 }, 17, LAST_H, { name: "grund.last" })),
-      rec(A.ring(FZ, SPITZE0 - 15, SPITZE0, RS, 13, { name: "grund.mutter" }))],
-    { name: "grund.last", hub: true, bias: 40 });
-}
-
-// --- The 5/2 valve -------------------------------------------------------
-// Cut at the plane of its spool: the half towards the viewer is taken off, so
-// the spool and its sealing discs sit on the cut face where they can be seen.
-function ventil() {
-  GRUPPE = "gehaeuse";
-  const koerper = { x: V_X[0], y: VY - V_HW, w: V_X[1] - V_X[0], d: V_HW, r: 3 };
-  const sockel = { x: V_X[0] - 6, y: VY - V_HW - 3, w: V_X[1] - V_X[0] + 12, d: V_HW + 25, r: 2 };
-  const PY_ = VY - V_HW / 2;          // centre line of the half that is left
-  const teile = [
-    `<path class="iso-halo" d="${k.haloOf(sockel, 0, SOCKEL_H, P)}"/>`,
-    SV(k.slabOf(sockel, 0, SOCKEL_H, P, 4, 0.8), { tone: "lo" }),
-    L(k.planOutline(k.insetPlan(sockel, 6), SOCKEL_H, P), { tone: "faint" }),
-    SV(k.slabOf(koerper, SOCKEL_H, VZ + 20 - SOCKEL_H, P, 3, 0.9), { tone: "mid" }),
-    L(k.planOutline(k.insetPlan(koerper, 5), VZ + 20, P), { tone: "faint" }),
-    // The bore, seen end-on on the cut face at both ends of the body.
-    L(SCH.bogenPfad(FV, V_X[0], R_BOHRUNG, Math.PI / 2, (3 * Math.PI) / 2, P, 20), { tone: "faint" }),
-    L(SCH.bogenPfad(FV, V_X[1], R_BOHRUNG, Math.PI / 2, (3 * Math.PI) / 2, P, 20), { tone: "faint" }),
-    // The bore as a channel: the far inner half of the cylinder, shaded, so
-    // the spool sits in it instead of being stuck on the outside.
-    SCH.flaeche(
-      SCH.flaechenstueck(FV, V_X[0], V_X[1], R_BOHRUNG, SCH.naechsterWinkel(FV, P) + Math.PI / 2,
-        SCH.naechsterWinkel(FV, P) + (3 * Math.PI) / 2, P, 20),
-      [0, -1, 0], P,
-    ),
-    L(k.segment([V_X[0], VY, VZ + R_BOHRUNG], [V_X[1], VY, VZ + R_BOHRUNG], P), { tone: "lo" }),
-    L(k.segment([V_X[0], VY, VZ - R_BOHRUNG], [V_X[1], VY, VZ - R_BOHRUNG], P), { tone: "lo" }),
-  ];
-  // Only the working ports and the supply get a boss on top. The two exhaust
-  // ways run down through the sub-base, the way a sub-base valve really does
-  // it — which also keeps the top clear for the hoses.
-  for (const nr of ARBEIT) {
-    const x = PORT[nr];
-    const F = hoch(x, PY_);
-    const hoehe = nr === 1 ? 42 : 38;
-    teile.push(SV(G.disc(VZ + 20, VZ + hoehe, 7, F, P), { tone: "mid" }));
-    teile.push(L(G.arcOf(F, VZ + 26, 7, P), { tone: "faint" }));
-    teile.push(k.faceTextSvg(k.topMatrix([x - 5, PY_ - 15], VZ + 20.2, P), String(nr), { size: 11, tone: "mid" }));
-    teile.push(L(k.segment([x, VY, VZ + R_BOHRUNG], [x, VY, VZ + 20], P), { tone: "faint", free: true }));
-    if (nr === 1) {
-      teile.push(L(G.circleOf(F, VZ + 42, 4.4, P), { tone: "faint" }));
-      continue;
-    }
-    // An elbow: the hose leaves along the valve, not towards the viewer.
-    const FW = G.frameOf([x, PY_, VZ + 29], [WINKEL[nr], 0, 0], [0, 1, 0], [0, 0, 1]);
-    teile.push(SV(G.disc(6.6, 20, 6, FW, P), { tone: "mid" }));
-    teile.push(L(G.circleOf(FW, 20, 4.2, P), { tone: "faint" }));
-    teile.push(L(G.arcOf(FW, 15, 6, P), { tone: "faint" }));
-  }
-  for (const nr of ABLUFT) {
-    const x = PORT[nr];
-    // The drilling from the bore down into the sub-base, on the cut face.
-    teile.push(L(k.segment([x, VY, VZ - R_BOHRUNG], [x, VY, SOCKEL_H / 2], P), { tone: "faint", free: true }));
-    teile.push(k.faceTextSvg(k.sideMatrix([x - 5, VY], VZ - R_BOHRUNG - 4, P, "right"), String(nr), { size: 10, tone: "mid" }));
-  }
-  // The bosses are drawn, so they are recorded: a hose has to end on a part.
-  const stutzen = ARBEIT.flatMap((nr) => {
-    const x = PORT[nr];
-    if (nr === 1) return [rec(A.disc(hoch(x, PY_), VZ + 20, VZ + 42, 7, { name: "gehaeuse.stutzen1" }))];
-    const FW = G.frameOf([x, PY_, VZ + 29], [WINKEL[nr], 0, 0], [0, 1, 0], [0, 0, 1]);
-    return [
-      rec(A.disc(hoch(x, PY_), VZ + 20, VZ + 38, 7, { name: `gehaeuse.stutzen${nr}` })),
-      rec(A.disc(FW, 6.6, 20, 6, { name: `gehaeuse.winkel${nr}` })),
-    ];
-  });
-  put([(V_X[0] + V_X[1]) / 2, PY_, VZ], teile.join(""), [
-    ...stutzen,
-    rec(A.slab(sockel, 0, SOCKEL_H, { name: "gehaeuse.sockel", ground: true })),
-    rec(A.slab(koerper, SOCKEL_H, VZ - (R_BOHRUNG - 0.3) - SOCKEL_H, { name: "gehaeuse.unten" })),
-    rec(A.slab(koerper, VZ + R_BOHRUNG - 0.3, 20 - R_BOHRUNG + 0.3, { name: "gehaeuse.oben" })),
-  ], { name: "gehaeuse.koerper" });
-
-  // The spool: a shaft with four sealing discs, one between each pair of
-  // neighbouring ports. Sliding it by one port width swaps every connection.
-  GRUPPE = "schieber";
-  const mitten = [95, 124.5, 153.5, 183];
-  put([(V_X[0] + V_X[1]) / 2, VY, VZ], [
-    SV(G.disc(V_X[0] + 4, V_X[1] - 4, R_SCHIEBER, FV, P), { tone: "hi" }),
-    ...mitten.map((x) => SV(G.disc(x - 5.5, x + 5.5, R_BOHRUNG - 0.3, FV, P), { tone: "hi" })),
-    ...mitten.map((x) => L(G.arcOf(FV, x, R_BOHRUNG - 0.3, P), { tone: "faint" })),
-    ...mitten.map((x) => L(G.circleOf(FV, x - 5.5, R_BOHRUNG - 0.3, P), { tone: "faint" })),
-  ].join(""), [rec(A.disc(FV, V_X[0] + 4, V_X[1] - 4, R_BOHRUNG - 0.3, { name: "schieber.kolben" }))],
-    { name: "schieber.kolben", bias: 40, schieber: true });
-
-  // Push button one end, return spring the other.
-  GRUPPE = "betaetigung";
-  const FB = G.frameOf([0, VY, VZ], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
-  put([V_X[1] + 16, VY, VZ], [
-    SV(G.disc(V_X[1], V_X[1] + 10, 13, FB, P), { tone: "mid" }),
-    SV(G.disc(V_X[1] + 10, V_X[1] + 24, 10, FB, P), { tone: "hi" }),
-    L(G.ribsOf(FB, V_X[1] + 11, V_X[1] + 23, 10, 18, P, { seams: true }), { tone: "faint" }),
-    L(G.circleOf(FB, V_X[1] + 24, 10, P), { tone: "lo" }),
-  ].join(""), [rec(A.disc(FB, V_X[1], V_X[1] + 24, 13, { name: "betaetigung.taster" }))],
-    { name: "betaetigung.taster", bias: 40 });
-  // The cap is short enough for the spring to show: a spring buried in its own
-  // housing is drawn over it and its ends land on nothing.
-  const feder = k.coil(V_X[0] - 18, V_X[0], [VY, VZ], 8, 6, "x", P);
-  put([V_X[0] - 14, VY, VZ], [
-    SV(G.disc(V_X[0] - 30, V_X[0] - 18, 12, FB, P), { tone: "mid" }),
-    L(G.ribsOf(FB, V_X[0] - 29, V_X[0] - 19, 12, 16, P, { seams: true }), { tone: "faint" }),
-    L(G.circleOf(FB, V_X[0] - 18, 8, P), { tone: "faint" }),
-    L(feder.back, { tone: "lo" }),
-    SV(G.disc(V_X[0] - 18, V_X[0] + 4, R_SCHIEBER, FB, P), { tone: "mid" }),
-    L(feder.front, { tone: "lo" }),
-    L(G.circleOf(FB, V_X[0], 8, P), { tone: "faint" }),
-  ].join(""), [
-    rec(A.disc(FB, V_X[0] - 30, V_X[0] - 18, 12, { name: "betaetigung.kappe" })),
-    rec(A.disc(FB, V_X[0] - 18, V_X[0] + 4, R_SCHIEBER, { name: "betaetigung.stift" })),
-  ], { name: "betaetigung.feder", bias: 40 });
+  ZT.lastschlitten({ x: SPITZE0, hw: LAST_HW, d: LAST_D, h: LAST_H, F: FZ, rStange: RS });
 }
 
 // --- Hoses and the supply line -------------------------------------------
 const PY_ = VY - V_HW / 2;
-
-/** A smooth hose from one port to another, leaving and arriving along the ports. */
-function hermite(p0, d0, p1, d1, n = 30) {
-  const punkte = [];
-  for (let i = 0; i <= n; i += 1) {
-    const t = i / n, t2 = t * t, t3 = t2 * t;
-    const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
-    punkte.push([0, 1, 2].map((j) => h00 * p0[j] + h10 * d0[j] + h01 * p1[j] + h11 * d1[j]));
-  }
-  return punkte;
-}
-
-/**
- * A hose between two ports. It leaves and enters along the port axis on a
- * short straight piece, so its end face sits flush in the fitting; the curve
- * between them is smooth, with no corner tighter than the hose is thick.
- */
-function schlauch(p0, aus, p1, ein, k0, k1) {
-  const weiter = (p, d, t) => [0, 1, 2].map((j) => p[j] + d[j] * t);
-  const a0 = weiter(p0, aus, 18);
-  const a1 = weiter(p1, ein, 26);
-  const kurve = hermite(a0, aus.map((v) => v * k0), a1, ein.map((v) => -v * k1), 34);
-  return [p0, ...kurve, p1];
-}
 
 const AUF = [0, 0, 1];
 const VOR = [0, 1, 0];
@@ -519,46 +334,19 @@ const WEGE = {
   B: schlauch([276, DHW + 15, ZC], VOR, [PORT[2] + 20, PY_, VZ + 29], [1, 0, 0], 120, 40),
   V: schlauch([PORT[1], PY_, VZ + 42], AUF, [PORT[1] - 96, VY + 86, 34], AUF, 190, 170),
 };
-const BAHN_PUNKTE = {};
-function schlaeuche() {
-  GRUPPE = "leitung";
-  for (const [name, punkte] of Object.entries(WEGE)) {
-    BAHN_PUNKTE[name] = punkte;
-    R.route(`leitung.${name}`, punkte, R_SCHLAUCH, { piece: "leitung", move: MOVE.leitung, free: [true, true] });
-    tubePieces(punkte, R_SCHLAUCH, P, { maxLength: 60 }).forEach((teil, i) => {
-      put(teil.mid, tubeSvg(teil, { tone: "lo" }), [A.tube(teil.points, teil.radii)],
-        { name: `leitung.${name}:${i}`, route: `leitung.${name}`, chunk: i });
-    });
-  }
-  // Where the figure's air comes from: a coupling on a post, so the supply
-  // line ends on a real part instead of in mid-air.
-  const ende = WEGE.V[WEGE.V.length - 1];
-  const fuss = { x: ende[0] - 20, y: ende[1] - 20, w: 40, d: 40, r: 3 };
-  const F = G.frameOf([ende[0], ende[1], 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
-  put([ende[0], ende[1], 16], [
-    `<path class="iso-halo" d="${k.haloOf(fuss, 0, 7, P)}"/>`,
-    SV(k.slabOf(fuss, 0, 7, P, 3, 0.6), { tone: "lo" }),
-    SV(G.disc(7, 22, 9, F, P), { tone: "mid" }),
-    SV(G.disc(22, 34, 12, F, P), { tone: "hi" }),
-    L(G.ribsOf(F, 23, 33, 12, 16, P, { seams: true }), { tone: "faint" }),
-    L(G.circleOf(F, 34, 12, P), { tone: "lo" }),
-    L(G.circleOf(F, 34, 5, P), { tone: "faint" }),
-  ].join(""), [
-    rec(A.slab(fuss, 0, 7, { name: "leitung.kupplungsfuss", ground: true })),
-    rec(A.disc(F, 7, 34, 12, { name: "leitung.kupplung" })),
-  ], { name: "leitung.kupplung", bias: 40 });
-}
-
 // --- Compose -------------------------------------------------------------
-grundplatte();
+ZT.grundplatte({ fuss: FUSS, fussZ: FUSS_Z, schiene: SCHIENE });
 zylinderboden();
 zuganker();
 const FINFO = zylinderrohr();
 innereien();
 zylinderkopf();
 drosselschrauben();
-ventil();
-schlaeuche();
+ZT.ventil({
+  x: V_X, y: VY, z: VZ, halbbreite: V_HW, rBohrung: R_BOHRUNG, rSchieber: R_SCHIEBER, port: PORT,
+  oben: ARBEIT, unten: ABLUFT, winkel: WINKEL, sockelH: SOCKEL_H, scheiben: [95, 124.5, 153.5, 183],
+});
+const BAHN_PUNKTE = ZT.schlaeuche(WEGE, { radius: R_SCHLAUCH, versorgung: "V" });
 
 A.settle(R, P);
 
@@ -648,6 +436,7 @@ ${EX.LAUFZEIT}
 ${LEG.LAUFZEIT}
 ${EX.ABLAUF}
 ${LU.LAUFZEIT}
+${ZS.LAUFZEIT}
 
 // --- the model drives everything -----------------------------------------
 const zustand = neuerZustand(MASSE, { weg: WEG0, stellung: "ausfahren" });
@@ -655,8 +444,6 @@ let druck = 6;
 let auto = true;
 let angehalten = false;
 
-const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-const schieberTeile = Array.from(svg.querySelectorAll("[data-schieber]"));
 const SCHIEBER_WEG = ${SCHIEBER_WEG};
 const kammerA = svg.querySelector('[data-kammer="a"]');
 const kammerB = svg.querySelector('[data-kammer="b"]');
@@ -670,10 +457,7 @@ for (const name in BAHNEN) stroeme[name] = stromBauen(luftLage, name, BAHNEN[nam
 let hubAnteil = 1;
 function zeichneHub() {
   const weg = zustand.weg * hubAnteil;
-  const t = translateAlong(P, [weg, 0, 0]);
-  for (const el of hubTeile) el.setAttribute("transform", t);
-  const ts = translateAlong(P, [(zustand.schieber - 0.5) * 2 * SCHIEBER_WEG, 0, 0]);
-  for (const el of schieberTeile) el.setAttribute("transform", ts);
+  teileVerschieben(weg, zustand.schieber, SCHIEBER_WEG);
   const vorn = KOLBEN0 + weg;
   kammerA.setAttribute("d", kammerPfad(X_ROHR[0] + 1, vorn));
   kammerB.setAttribute("d", kammerPfad(vorn + KB, X_ROHR[1] - 1));
@@ -681,16 +465,11 @@ function zeichneHub() {
 
 function zeichneLuft(dt) {
   const F = luftFarben();
-  const q = UMGEBUNG + druck;
-  const l = leitwerte(zustand, MASSE);
-  const qA = l.aZu * (q - zustand.pA) + l.aAb * (UMGEBUNG - zustand.pA);
-  const qB = l.bZu * (q - zustand.pB) + l.bAb * (UMGEBUNG - zustand.pB);
-  const anteil = (p) => Math.max(0, Math.min(1, (p - UMGEBUNG) / Math.max(0.2, druck)));
-  kammerA.setAttribute("fill", mische(F.abluft, F.druck, anteil(zustand.pA)));
-  kammerB.setAttribute("fill", mische(F.abluft, F.druck, anteil(zustand.pB)));
+  const { qA, qB } = kammerFluesse(zustand, druck);
+  kammerFuellen(kammerA, zustand.pA, druck, F);
+  kammerFuellen(kammerB, zustand.pB, druck, F);
 
-  const tempo = (x) => Math.max(-260, Math.min(260, x * 2.4e-4));
-  const kraft = (x) => Math.max(0, Math.min(1, Math.abs(x) / 2.2e5));
+  const tempo = stromTempo, kraft = stromKraft;
   stromSchritt(stroeme.A, dt, tempo(-qA), kraft(qA), qA > 0 ? F.druck : F.abluft);
   stromSchritt(stroeme.B, dt, tempo(-qB), kraft(qB), qB > 0 ? F.druck : F.abluft);
   stromSchritt(stroeme.V, dt, tempo(-(Math.max(0, qA) + Math.max(0, qB))), kraft(Math.max(0, qA) + Math.max(0, qB)), F.druck);
@@ -706,7 +485,6 @@ function zeichneAnzeige() {
 }
 
 // --- one frame (the loop itself is EX.ABLAUF) -----------------------------
-let zyklus = 0;
 function bildZeichnen(dt, offen, bewegt) {
   const ruhig = still.matches;
   const willHub = Math.max(0, 1 - offen * 2);
@@ -716,11 +494,7 @@ function bildZeichnen(dt, offen, bewegt) {
   // The machine stops while it is being taken apart and carries on afterwards.
   if (offen < 0.01 && !bewegt) {
     if (auto) {
-      zyklus += dt;
-      if (zyklus > (ruht(zustand, MASSE, druck) ? 0.8 : 1e9)) {
-        zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren";
-        zyklus = 0;
-      }
+      automatikTakt(zustand, dt, druck);
     }
     if (!angehalten) schritt(zustand, MASSE, ruhig ? dt * 0.4 : dt, druck);
     zeichneHub();
@@ -743,7 +517,7 @@ const druckWert = document.getElementById("druck-wert");
 function schalte() {
   angehalten = false;
   zustand.stellung = zustand.stellung === "ausfahren" ? "einfahren" : "ausfahren";
-  zyklus = 0;
+  takteNeu();
   run();
 }
 knopfVentil.addEventListener("click", () => {
@@ -755,7 +529,7 @@ knopfAuto.addEventListener("click", () => {
   auto = !auto;
   angehalten = false;
   knopfAuto.setAttribute("aria-pressed", String(auto));
-  zyklus = 0;
+  takteNeu();
   run();
 });
 knopfAuto.setAttribute("aria-pressed", "true");
@@ -773,32 +547,17 @@ poseExplode();
 
 // A handle for the browser test and for screenshots: it can put the figure
 // into a known state instead of waiting and hoping to catch the right moment.
-window.__figur = {
-  zustand, MASSE,
+window.__figur = figurGrundstock({
   stelle(weg, stellung) {
     auto = false;
     angehalten = true;
     knopfAuto.setAttribute("aria-pressed", "false");
-    zustand.weg = weg;
-    zustand.v = 0;
-    if (stellung) {
-      zustand.stellung = stellung;
-      zustand.schieber = stellung === "ausfahren" ? 1 : 0;
-      const voll = UMGEBUNG + druck;
-      zustand.pA = stellung === "ausfahren" ? voll : UMGEBUNG;
-      zustand.pB = stellung === "ausfahren" ? UMGEBUNG : voll;
-    }
+    zustandSetzen(zustand, weg, stellung, druck);
     zeichneHub();
     zeichneLuft(0.016);
     zeichneAnzeige();
   },
-  druck: () => druck,
-  offen: () => offenAnteil(),
-  zerlegt: () => zerlegt,
-  spiele,
-  waehle,
-  weiter: () => { angehalten = false; },
-};
+});
 `;
 
 const INFO =
