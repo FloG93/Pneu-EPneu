@@ -153,6 +153,7 @@ export default async function pruefeDrossel({ seite, V, modus }) {
         // a drawn layer that is blended out (the lip's other shape, the whole-part layer) is not there
         const lage = el.closest("[data-lippe], [data-lage]");
         if (lage && Number(getComputedStyle(lage).opacity) < 0.1) continue;
+        if (el.closest("[data-hohl]")) continue;   // the air's own bore (shading and room) of a cut fitting
         const g = el.closest("[data-piece]");
         // A dot on a cut face or a fitting: either it is painted over the material (the solid comes before it
         // in the drawing order) or the route runs through the material and the part hides it.

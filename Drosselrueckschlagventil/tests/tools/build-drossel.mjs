@@ -45,48 +45,51 @@ const H = 800;
 const TAU = Math.PI * 2;
 
 // --- Dimensions ----------------------------------------------------------
+// The core (insert, lip seal, bush, pin) is drawn large: about half of the block's width, so that the ring
+// gap and the lip can be seen at overview scale. The sizes are estimates anyway (README).
 const XC = 35;                                   // the axis of the screw, insert and bush
-const LAENGE = 70, TIEFE = 16, HOEHE = 42;       // housing block; the half y in [-16, 0] is kept
-const Z1 = 13.5, Z2 = 22.5;                      // port axes: 1 low on the left, 2 higher on the right
+const LAENGE = 70, TIEFE = 16, HOEHE = 58;       // housing block; the half y in [-16, 0] is kept
+const Z1 = 16, Z2 = 33;                          // port axes: 1 low on the left, 2 higher on the right
 const R_PORT = 6.5;                              // G1/4 thread bore, outside Ø 13.2
 const R_STUMMEL = R_PORT - 0.2;                  // the threaded stub of a fitting, clear of the thread
 const BODEN = 9;                                 // floor of the central cavity (= bottom of channel 1)
-const R_KAV = 9.5, Z_KAV = 27.5;                 // cavity for the insert and the lip: up to the bush's lower end
-const R_GEW = 10.5;                              // thread bore of the bush, from Z_KAV to the top face
-const ZM = 25;                                   // top of the insert: the throttle bore's mouth
-const R_BOHRUNG = 3.0;                           // throttle bore (exaggerated, see README)
-const R_EIN = 6.5;                               // outside of the insert's tube
-const FENSTER = [12.5, 14.5];                    // the cross holes in the insert's wall: air from port 1 enters
-const LIPPE = { wurzel: [21.5, 23.5], mund: 17.6, rZu: 9.4, rAuf: 7.2 };   // the lip seal: root, mouth height, mouth radius shut / folded
-const SCHEIBE = { z: [15.8, 16.8], r: [R_EIN, 8.3] };                    // the support disc
-// The pin (Zapfen) of the screw: a cone that grows 0,4 mm in radius per mm, up to the bore's radius.
-const KONUS = 0.4, R_SPITZE = 0.6, L_KONUS = (R_BOHRUNG - R_SPITZE) / KONUS;   // 6 mm
+const R_KAV = 14, Z_KAV = 36.5;                  // cavity for the insert and the lip: up to the bush's lower end
+const R_GEW = 16;                                // thread bore of the bush, from Z_KAV to the top face
+const ZM = 33;                                   // top of the insert: the throttle bore's mouth
+const R_BOHRUNG = 4.5;                           // throttle bore (exaggerated, see README)
+const R_EIN = 10;                                // outside of the insert's tube
+const R_FUSS = 12.5, Z_FUSS = 12.5;              // the insert's foot
+const FENSTER = [14.5, 17.5];                    // the cross holes in the insert's wall: air from port 1 enters
+// The lip seal: root heights, height and radius of the mouth when it is shut / folded in, radius of its root
+const LIPPE = { wurzel: [28, 31], mund: 22, rZu: 13.8, rAuf: 11.3, rWurzel: 12, rMundInnen: 11.4, rMundInnenAuf: 10.1 };
+const SCHEIBE = { z: [19.5, 21], r: [R_EIN, 12.5] };                    // the support disc
+// The pin (Zapfen) of the screw: a cone that grows in radius up to the bore's radius over six millimetres.
+const L_KONUS = 6, R_SPITZE = 1, KONUS = (R_BOHRUNG - R_SPITZE) / L_KONUS;
 const U0 = M.umdrehungen / 2;                    // start: half open
 const zSpitze = (u) => ZM - L_KONUS + M.steigung * u;   // closed at 0 turns: the cone's base meets the mouth
 const ZT0 = zSpitze(U0);
-const BUCHSE = { z0: Z_KAV, bund: [43.4, 47], hals: [47, 60], rBund: 13, rHals: 8.5, rInnen: 4.5, rTasche: 5.5, zTasche: 29.5 };
-const MUTTER = { z: [51, 57], rIn: 8.5, rHex: 13 };
-const R_KOPF = 9, Z_KOPF = [64, 74];
-const Z_SCHAFT_OBEN = 64;
-const LOCH = { x: [11, 59], z: 34, r: 3.5 };     // the two mounting holes, across the block
+const BUCHSE = { z0: Z_KAV, bund: [HOEHE + 2, HOEHE + 7], hals: [HOEHE + 7, HOEHE + 25], rBund: 19.5, rHals: 13, rInnen: 7, rTasche: 8.5, zTasche: Z_KAV + 3 };
+const MUTTER = { z: [HOEHE + 10, HOEHE + 18], rIn: 13, rHex: 20 };
+const R_KOPF = 12, Z_KOPF = [HOEHE + 28, HOEHE + 40];
+const Z_SCHAFT_OBEN = Z_KOPF[0];
+const LOCH = { x: [9, 61], z: 47, r: 4 };        // the two mounting holes, across the block
 
 // Fittings and hoses along the port axis, s from the housing's face outward.
 const VERSCHRAUBUNG = { gewinde: [-12, 0], sechskant: [0, 4.5], rS: 7.6, koerper: [4.5, 11], rK: 6, ring: [11, 12.5], rR: 5.2 };
 const R_SCHLAUCH = 4, R_SCHLAUCH_INNEN = 3;
+const SCHLAUCH_LAENGE = 14;                      // the hose stubs drawn in the section
 const WEGE = Object.fromEntries([1, 2].map((nr) => {
   const v = nr === 1 ? -1 : 1;
   const s0 = VERSCHRAUBUNG.ring[1];
   const za = nr === 1 ? Z1 : Z2;
   const p0 = [v === -1 ? -s0 : LAENGE + s0, 0, za];
-  // left: out and round towards the viewer (its cut end faces us); right: straight out, its cut end faces us anyway
+  // seen whole (while the valve is taken apart) the left one bends towards the viewer, so that its cut end faces us
   return [nr, v === -1 ? stummel(p0, [-1, 0, 0], [p0[0] - 12, 15, za - 2], [-0.35, 0.92, -0.1], 6) : stummel(p0, [1, 0, 0], [p0[0] + 12, 0, za], [1, 0, 0], 8)];
 }));
 
 // The extreme points of what is drawn: the block, the fittings' hoses, the knurled head.
 const P = k.fitProjection(
-  [[0, -TIEFE, 0], [LAENGE, -TIEFE, 0], [0, 0, 0], [LAENGE, 0, 0], [0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE],
-    ...WEGE[1].slice(-1).map((q) => [q[0] - 5, q[1] + 5, q[2] + 5]), ...WEGE[1].slice(-1).map((q) => [q[0] - 5, q[1] + 5, q[2] - 5]),
-    ...WEGE[2].slice(-1).map((q) => [q[0] + 5, q[1] + 5, q[2] + 5]), ...WEGE[2].slice(-1).map((q) => [q[0] + 5, q[1] + 5, q[2] - 5]),
+  [[-VERSCHRAUBUNG.ring[1] - SCHLAUCH_LAENGE, 0, 0], [LAENGE + VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE, 0, 0], [0, -TIEFE, 0], [LAENGE, -TIEFE, 0], [0, 0, 0], [LAENGE, 0, 0], [0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE],
     [XC - R_KOPF, -R_KOPF, Z_KOPF[1]], [XC + R_KOPF, R_KOPF, Z_KOPF[1]]],
   W, H, { pad: 30, azimuth: 38, elevation: 34 },
 );
@@ -101,14 +104,14 @@ const STAGGER = ["leitung", "verschraubung", "schraube", "kontermutter", "buchse
 const MOVE = {
   grund: [0, 0, 0],
   luft: [0, 0, 0],
-  leitung: [0, 90, 16],
-  verschraubung: [0, 55, 8],
-  schraube: [0, 0, 120],
-  kontermutter: [0, 0, 100],
-  buchse: [0, 0, 70],
-  manschette: [0, 0, 70],
-  scheibe: [0, 0, 45],
-  einsatz: [0, 0, 20],
+  leitung: [0, 50, 6],
+  verschraubung: [0, 32, 4],
+  schraube: [-30, 0, 88],
+  kontermutter: [34, 0, 90],
+  buchse: [0, 0, 65],
+  manschette: [30, 0, 62],
+  scheibe: [-28, 0, 45],
+  einsatz: [0, 0, 14],
   gehaeuse: [0, 0, 0],
 };
 
@@ -133,7 +136,7 @@ const HOHLRAUM = [
   [[0, 12, Z1 - R_PORT, Z1 + R_PORT], "h"],                         // port 1 (thread bore)
   [[12, XC - R_KAV, Z1 - 4.5, Z1 + 4.5], "h"],                      // channel 1: under the middle
   [[XC - R_KAV, XC + R_KAV, BODEN, Z_KAV], "v"],                    // the cavity of insert and lip
-  [[XC + R_KAV, LAENGE - 12, Z2 - 4.5, Z2 + 4.5], "h"],             // channel 2: into the ring space
+  [[XC + R_KAV, LAENGE - 12, Z2 - 3.5, Z2 + 3.5], "h"],             // channel 2: into the ring space
   [[LAENGE - 12, LAENGE, Z2 - R_PORT, Z2 + R_PORT], "h"],           // port 2 (thread bore)
   [[XC - R_GEW, XC + R_GEW, Z_KAV, HOEHE], "v"],                    // the bush's thread bore (the bush fills it)
   [[LOCH.x[0] - LOCH.r, LOCH.x[0] + LOCH.r, LOCH.z - LOCH.r, LOCH.z + LOCH.r], "loch"],   // mounting holes, across the block
@@ -238,19 +241,24 @@ function halbSechskant(rIn, rAus, z) {
 // --- Rooms of air: polygons (radius or x, z) painted over the hollows, by side of the valve ------------
 // s1 is the side of port 1 (cavity under the lip, inside the insert, channel 1), s2 the side of port 2
 // (ring space above the lip, the gap under the bush, channel 2). The page paints them, see the runtime.
+/** The bores of the cut fittings and hoses outside the block (the air inside them is part of the figure). */
+const AUSSEN_HOHL = [
+  [[-VERSCHRAUBUNG.ring[1] - SCHLAUCH_LAENGE, 0, Z1 - 4, Z1 + 4], "h"],
+  [[LAENGE, LAENGE + VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE, Z2 - 4, Z2 + 4], "h"],
+];
 const RAUM_RECHTECKE = [
   ["s1", [0, 12, Z1 - R_PORT, Z1 + R_PORT]], ["s1", [12, XC - R_KAV, Z1 - 4.5, Z1 + 4.5]],
   ["s1", [XC - R_KAV, XC + R_KAV, BODEN, LIPPE.mund]],                          // cavity below the lip's mouth
   ["s1", [XC - R_BOHRUNG, XC + R_BOHRUNG, BODEN, ZM]],                          // the throttle bore, up to its mouth
-  ["s2", [XC + R_KAV, LAENGE - 12, Z2 - 4.5, Z2 + 4.5]], ["s2", [LAENGE - 12, LAENGE, Z2 - R_PORT, Z2 + R_PORT]],
+  ["s2", [XC + R_KAV, LAENGE - 12, Z2 - 3.5, Z2 + 3.5]], ["s2", [LAENGE - 12, LAENGE, Z2 - R_PORT, Z2 + R_PORT]],
   ["s2", [XC - R_KAV, XC + R_KAV, LIPPE.wurzel[1], Z_KAV]],                     // the ring space over the lip, wall to wall
   ["s2", [XC - R_KAV, XC + R_KAV, ZM, LIPPE.wurzel[1]]],                        // and round the insert's top
   ["s2", [XC - BUCHSE.rTasche, XC + BUCHSE.rTasche, Z_KAV, BUCHSE.zTasche]],    // the bush's pocket round the pin
 ];
 /** The space between the insert and the lip (side 1) and the wedge outside the lip (side 2), once per side. */
 const RAUM_KEILE = [
-  ["s1", [[R_EIN, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [LIPPE.rZu - 0.4, LIPPE.mund], [7.8, LIPPE.wurzel[1]], [R_EIN, LIPPE.wurzel[1]]]],
-  ["s2", [[LIPPE.rZu, LIPPE.mund], [R_KAV, LIPPE.mund], [R_KAV, LIPPE.wurzel[1]], [7.8, LIPPE.wurzel[1]]]],
+  ["s1", [[R_EIN, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [LIPPE.rZu - 0.4, LIPPE.mund], [LIPPE.rWurzel, LIPPE.wurzel[1]], [R_EIN, LIPPE.wurzel[1]]]],
+  ["s2", [[LIPPE.rZu, LIPPE.mund], [R_KAV, LIPPE.mund], [R_KAV, LIPPE.wurzel[1]], [LIPPE.rWurzel, LIPPE.wurzel[1]]]],
 ];
 
 // --- The housing ---------------------------------------------------------------------------------------
@@ -273,6 +281,9 @@ function gehaeuse() {
     // of two hollows are covered and only the outline of the union stays.
     L(HOHLRAUM.filter(([, art]) => art !== "loch").map(([[x0, x1, z0, z1]]) => rahmen(x0, x1, z0, z1)).join(""), { tone: "mid" }),
     ...HOHLRAUM.map(hohlraum),
+    // the round walls behind the cut: the far half of the insert's bore, of the gaps round the insert and of the pocket round the pin
+    ...[[XC - R_BOHRUNG, XC + R_BOHRUNG, BODEN, ZM], [XC - R_KAV, XC - R_EIN, BODEN, Z_KAV], [XC + R_EIN, XC + R_KAV, BODEN, Z_KAV],
+      [XC - BUCHSE.rTasche, XC + BUCHSE.rTasche, Z_KAV, BUCHSE.zTasche]].map((r) => hohlraum([r, "v"])),
     ...raeume,
     L(HOHLRAUM.filter(([, art]) => art === "loch").map(([[x0, x1, z0, z1]]) => ring3(Array.from({ length: 41 }, (_, i) => [(x0 + x1) / 2 + ((x1 - x0) / 2) * Math.cos((i / 40) * TAU), 0, (z0 + z1) / 2 + ((z1 - z0) / 2) * Math.sin((i / 40) * TAU)]))).join(""), { tone: "mid" }),
     L(rahmen(0, LAENGE, 0, HOEHE), { tone: "mid" }),
@@ -290,7 +301,7 @@ function einsatz() {
   gruppe("einsatz");
   const F = FZ();
   const profil = [
-    [[R_BOHRUNG, BODEN], [8.5, BODEN], [8.5, 11.5], [R_EIN, 11.5], [R_EIN, FENSTER[0]], [R_BOHRUNG, FENSTER[0]]],      // foot with the lower wall
+    [[R_BOHRUNG, BODEN], [R_FUSS, BODEN], [R_FUSS, Z_FUSS], [R_EIN, Z_FUSS], [R_EIN, FENSTER[0]], [R_BOHRUNG, FENSTER[0]]],      // foot with the lower wall
     [[R_BOHRUNG, FENSTER[1]], [R_EIN, FENSTER[1]], [R_EIN, ZM], [R_BOHRUNG, ZM]],                                       // the tube above the cross holes
   ];
   const flaechen = profil.flatMap(beideSeiten);
@@ -300,12 +311,14 @@ function einsatz() {
     // the mouth of the throttle bore, where the pin's cone must sit at 0 turns (a mark for the browser test)
     `<circle data-mund="" cx="${at([XC, 0, ZM])[0].toFixed(2)}" cy="${at([XC, 0, ZM])[1].toFixed(2)}" r="0.05" fill="none"/>`,
   ].join(""), [
-    SV(G.ringBand(BODEN, 11.5, R_BOHRUNG, 8.5, F, P), { tone: "mid" }),
-    SV(G.ringBand(11.5, ZM, R_BOHRUNG, R_EIN, F, P), { tone: "hi" }),
+    SV(G.ringBand(BODEN, Z_FUSS, R_BOHRUNG, R_FUSS, F, P), { tone: "mid" }),
+    SV(G.ringBand(Z_FUSS, ZM, R_BOHRUNG, R_EIN, F, P), { tone: "hi" }),
     L(G.circleOf(F, ZM, R_BOHRUNG, P), { tone: "mid" }),
   ].join("")), [
-    rec(A.ring(F, BODEN, 11.5, R_BOHRUNG, 8.5, { name: "einsatz.fuss" })),
-    rec(A.ring(F, 11.5, FENSTER[0], R_BOHRUNG, R_EIN, { name: "einsatz.wand1" })),
+    rec(A.ring(F, BODEN, Z_FUSS, R_BOHRUNG, R_FUSS, { name: "einsatz.fuss" })),
+    rec(A.ring(F, Z_FUSS, FENSTER[0], R_BOHRUNG, R_EIN, { name: "einsatz.wand1" })),
+    // the cross holes are two small drillings in the tube, not a slit round it: between the two walls the tube is whole
+    rec(A.ring(F, FENSTER[0], FENSTER[1], R_BOHRUNG, R_EIN, { name: "einsatz.steg" })),
     rec(A.ring(F, FENSTER[1], ZM, R_BOHRUNG, R_EIN, { name: "einsatz.wand2" })),
   ], { name: "einsatz.fuss" });
 }
@@ -317,16 +330,16 @@ function manschette() {
   gruppe("manschette");
   const F = FZ();
   const [w0, w1] = LIPPE.wurzel;
-  const zu = [[R_EIN, w0], [7.0, w0], [8.3, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [7.8, w1], [R_EIN, w1]];
-  const auf = [[R_EIN, w0], [LIPPE.rAuf - 0.7, w0], [LIPPE.rAuf - 0.7, LIPPE.mund], [LIPPE.rAuf, LIPPE.mund], [7.8, w1], [R_EIN, w1]];
+  const zu = [[R_EIN, w0], [R_EIN + 0.5, w0], [LIPPE.rMundInnen, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [LIPPE.rWurzel, w1], [R_EIN, w1]];
+  const auf = [[R_EIN, w0], [LIPPE.rMundInnenAuf, w0], [LIPPE.rMundInnenAuf, LIPPE.mund], [LIPPE.rAuf, LIPPE.mund], [LIPPE.rWurzel, w1], [R_EIN, w1]];
   // the rubber is drawn dark, like the black rings of the catalogue
-  const lage = (profil, art) => `<g data-lippe="${art}">${beideSeiten(profil).map((f) => `<path class="iso-shade" data-shade="0" d="${umriss(f)}"/>`).join("")}${L(beideSeiten(profil).map(umriss).join(""), { tone: "mid" })}</g>`;
+  const lage = (profil, art) => `<g data-lippe="${art}">${beideSeiten(profil).map((f) => `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${umriss(f)}"/>`).join("")}${L(beideSeiten(profil).map(umriss).join(""), { tone: "mid" })}</g>`;
   put([XC, 0, (LIPPE.mund + w1) / 2], zweiLagen([
     lage(zu, "zu"), lage(auf, "auf"),
   ].join(""), [
-    SV(G.ringBand(21.5, w1, R_EIN, 7.8, F, P), { tone: "lo" }),
-    SV(G.ringBand(19.5, 21.5, R_EIN, 8.6, F, P), { tone: "lo" }),
-    SV(G.ringBand(LIPPE.mund, 19.5, R_EIN, LIPPE.rZu, F, P), { tone: "lo" }),
+    SV(G.ringBand(w0, w1, R_EIN, LIPPE.rWurzel, F, P), { tone: "lo" }),
+    SV(G.ringBand((w0 + LIPPE.mund) / 2, w0, R_EIN, LIPPE.rMundInnen, F, P), { tone: "lo" }),
+    SV(G.ringBand(LIPPE.mund, (w0 + LIPPE.mund) / 2, R_EIN, LIPPE.rZu, F, P), { tone: "lo" }),
   ].join("")), [
     rec(A.ring(F, LIPPE.mund, w1, R_EIN, LIPPE.rZu, { name: "manschette.lippe" })),
   ], { name: "manschette.lippe" });
@@ -457,9 +470,47 @@ function anschluesse() {
   }
 }
 
+// The fittings and the hose stubs cut in the same plane as the block: walls in the section tone, the bore free, so the
+// way of the air from the hose to the core can be followed. While they leave the valve the whole parts are shown.
+function anschlussSchnitte() {
+  for (const nr of [1, 2]) {
+    const v = nr === 1 ? -1 : 1, za = nr === 1 ? Z1 : Z2;
+    const x = (sOut) => (v < 0 ? -sOut : LAENGE + sOut);
+    const streifen = (s0, s1, rIn, rAus, richtung) => [[x(s0), x(s1)].sort((a, b) => a - b), rIn, rAus, richtung];
+    const teile = [
+      [[-12, 0], 4, R_STUMMEL, 1],                       // the threaded stub, in the housing's port bore
+      [[0, 4.5], 4, 6.6, -1],                            // the hexagon (across the flats at the cut)
+      [[4.5, 11], 4, 6, 1],                              // the body
+      [[11, 12.5], 4, 5.2, -1],                          // the release collar
+    ];
+    // the bore outside the block, with its far wall and its room of air: part of the fitting's section
+    const bohrung = AUSSEN_HOHL[nr - 1][0];
+    const flaechen = [`<g data-hohl="">${hohlraum(AUSSEN_HOHL[nr - 1])}`, `<path class="kammer" data-raum="${nr === 1 ? "s1" : "s2"}" fill="none" d="${ring3([[bohrung[0], 0, bohrung[2]], [bohrung[1], 0, bohrung[2]], [bohrung[1], 0, bohrung[3]], [bohrung[0], 0, bohrung[3]]])}"/></g>`], linien = [];
+    for (const [[s0, s1], rIn, rAus, richtung] of teile) {
+      const [xa, xb] = [x(s0), x(s1)].sort((a, b) => a - b);
+      for (const [za0, za1] of [[za + rIn, za + rAus], [za - rAus, za - rIn]]) {
+        const poly = [[xa, 0, za0], [xb, 0, za0], [xb, 0, za1], [xa, 0, za1]];
+        flaechen.push(schnittFlaeche(poly, richtung));
+        linien.push(ring3(poly));
+      }
+    }
+    const [ha, hb] = [x(VERSCHRAUBUNG.ring[1]), x(VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE)].sort((a, b) => a - b);
+    for (const [za0, za1] of [[za + R_SCHLAUCH_INNEN, za + R_SCHLAUCH], [za - R_SCHLAUCH, za - R_SCHLAUCH_INNEN]]) {
+      const poly = [[ha, 0, za0], [hb, 0, za0], [hb, 0, za1], [ha, 0, za1]];
+      linien.push(ring3(poly));
+      flaechen.push(`<path class="iso-shade" data-shade="0" d="${ring3(poly)}"/>`);
+    }
+    // The section hangs on the whole fitting's first item (an item without a recorded body would not pass the audit)
+    // and is drawn before it: the part's own recorded body is the whole stub.
+    const trager = R.items.find((it) => it.name === `verschraubung${nr}.gewinde`);
+    trager.svg = `<g data-lage="schnitt">${flaechen.join("")}${L(linien.join(""), { tone: "mid" })}</g><g data-lage="ganz">${trager.svg}</g>`;
+  }
+}
+
 // --- Compose ----------------------------------------------------------------------------------------------------
 gehaeuse();
 anschluesse();
+anschlussSchnitte();
 einsatz();
 scheibe();
 manschette();
@@ -485,13 +536,15 @@ const eintrag = (name) => R.items.find((it) => it.name === name);
   const reihe = ["einsatz.fuss", "scheibe.ring", "manschette.lippe", "buchse.gewinde", "kontermutter.mutter", "schraube.zapfen"].map(eintrag);
   const basis = Math.min(...reihe.map((it) => it.key));
   reihe.forEach((it, i) => { it.key = basis + i * 0.01; });
+  // the whole fittings and hoses are what is seen once they have left; in place the cut ones are
+  for (const it of R.items) if ((it.piece === "verschraubung" || it.piece === "leitung") && !it.svg.startsWith("<g data-lage=\"schnitt\">")) it.svg = `<g data-lage="ganz">${it.svg}</g>`;
 }
 R.items.sort((a, b) => a.key - b.key);
 
 const { KEYS, LIFT, VIEW0, VIEW1: VIEW1_ROH, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
 // vorbereiten measures the parts' places, not their extent: the housing is big, so the view
-// with everything out is widened by a tenth about its centre (same aspect ratio).
-const VIEW1 = (([x, y, w, h]) => [x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12])(VIEW1_ROH);
+// with everything out is widened by a few percent about its centre (same aspect ratio).
+const VIEW1 = (([x, y, w, h]) => [x - w * 0.03, y - h * 0.03, w * 1.06, h * 1.06])(VIEW1_ROH);
 
 
 // --- Air: the ways the particles take, in the cut plane, always in the direction 1 → 2 ----------------------
@@ -500,31 +553,40 @@ const VIEW1 = (([x, y, w, h]) => [x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12
 // `spaltBahnen` whenever the pin has moved), over the insert's top into the ring space and out of channel 2;
 // and, when the lip is folded in, down the ring space outside the lip and straight across at the height of the
 // cross holes. The streams sit in the housing's back layer, the hoses' in the front layer.
-const X_RING = XC + 8.7;                         // the ring space outside the lip: between its root (7,8) and the wall (9,5)
-const ROUTEN_FEST = {
-  z1: G.cut(WEGE[1].slice().reverse(), 0, G.pathLength(WEGE[1]) - 9),
-  k1: [[17, 0, Z1], [XC - 8.7, 0, Z1]],
-  w: [[XC - 8.7, 0, Z1], [XC + 8.7, 0, Z1]],
-  l: [[XC + 8.7, 0, Z1], [X_RING, 0, Z1 + 4], [X_RING, 0, Z2]],
-  z2: G.cut(WEGE[2], 9, G.pathLength(WEGE[2])),
-};
-/** The routes through the ring gap for a pin whose tip stands at `zt`: left leg bl/gl, right leg b/g. */
-function spaltBahnen(zt) {
-  const mitte = (z) => (Math.min(R_BOHRUNG, R_SPITZE + KONUS * Math.max(0, z - zt)) + R_BOHRUNG) / 2;   // middle of the free band at height z
+// Free spaces the particles use: the middle of the ring space outside the lip, the gaps between insert and wall.
+const X_RING = (LIPPE.rWurzel + R_KAV) / 2;      // distance of the ring space's middle from the axis
+const X_MIT = (R_EIN + R_KAV) / 2;               // the middle of the gap between the insert's tube and the cavity's wall
+const X_TASCHE = (R_BOHRUNG + BUCHSE.rTasche) / 2;   // the middle of the pocket round the pin
+const Z_OBEN = ZM + 1.8;                         // over the insert's top, under the bush
+const X_ENDE = LAENGE - 21;                      // where the ways end in channel 2: clear of the fitting
+const SPALT = { XC, ZM, Z1, Z2, R_BOHRUNG, R_SPITZE, KONUS, ZT0, X_RING, X_MIT, X_TASCHE, Z_OBEN, X_ENDE, LAENGE };
+const SPALT_GEO = { R_SPITZE, LAENGE, HOEHE, LIPPE_ZU: LIPPE.rZu, LIPPE_AUF: LIPPE.rAuf, L_KONUS };
+/** The routes through the ring gap for a pin whose tip stands at `zt`: left leg bl/gl, right leg b/g. A pure
+ * function of its two arguments, because the page embeds its source and calls it whenever the pin has moved. */
+function spaltBahnen(S, zt) {
+  const mitte = (z) => (Math.min(S.R_BOHRUNG, S.R_SPITZE + S.KONUS * Math.max(0, z - zt)) + S.R_BOHRUNG) / 2;   // middle of the free band at height z
   const lauf = (seite) => {
-    const x = (r) => XC + seite * r;
-    const zu = Math.max(Z1 + 1, zt - 1.0);
-    const hoch = [[x(1.0), 0, zu], [x(mitte(zt + 0.4)), 0, zt + 0.4], [x(mitte(ZM - 0.2)), 0, ZM - 0.2]];
+    const x = (r) => S.XC + seite * r;
+    const zu = Math.max(S.Z1 + 1, zt - 1.0);
+    const hoch = [[x(1.5), 0, zu], [x(mitte(zt + 0.4)), 0, zt + 0.4], [x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2]];
     return {
-      b: [[XC + seite * (-3.5), 0, Z1], [x(1.0), 0, Z1], ...hoch],
-      g: [[x(mitte(ZM - 0.2)), 0, ZM - 0.2], [x(4.2), 0, 26.2], seite > 0 ? [X_RING, 0, 26.2] : [XC - 8.0, 0, 26.2],
-        ...(seite > 0 ? [[X_RING, 0, Z2], [LAENGE - 21, 0, Z2]] : [])],
+      b: [[S.XC - seite * (S.R_BOHRUNG + 1), 0, S.Z1], [x(1.5), 0, S.Z1], ...hoch],
+      g: [[x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2], [x(S.X_TASCHE), 0, S.Z_OBEN], [x(S.X_RING), 0, S.Z_OBEN],
+        ...(seite > 0 ? [[x(S.X_RING), 0, S.Z2], [S.X_ENDE, 0, S.Z2]] : [])],
     };
   };
-  const links = lauf(-1), rechts = lauf(1);
-  return { b: rechts.b, g: rechts.g, bl: links.b, gl: links.g };
+  const l = lauf(-1), r = lauf(1);
+  return { b: r.b, g: r.g, bl: l.b, gl: l.g };
 }
-const BAHNEN = Object.fromEntries(Object.entries({ ...ROUTEN_FEST, ...spaltBahnen(ZT0) }).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
+// The streams in the channels and fittings run through the cut bores: hose end → fitting → port bore → channel.
+const ROUTEN_FEST = {
+  z1: [[-VERSCHRAUBUNG.ring[1] - SCHLAUCH_LAENGE + 1, 0, Z1], [14, 0, Z1]],
+  k1: [[13.5, 0, Z1], [XC - X_MIT, 0, Z1]],
+  w: [[XC - X_MIT, 0, Z1], [XC + X_MIT, 0, Z1]],
+  l: [[XC + X_RING, 0, Z1], [XC + X_RING, 0, Z1 + 4], [XC + X_RING, 0, Z2]],
+  z2: [[LAENGE - 14, 0, Z2], [LAENGE + VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE - 1, 0, Z2]],
+};
+const BAHNEN = Object.fromEntries(Object.entries({ ...ROUTEN_FEST, ...spaltBahnen(SPALT, ZT0) }).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
 const SEITE_VON = { z1: "s1", k1: "s1", w: "s1", b: "s1", bl: "s1", l: "s2", g: "s2", gl: "s2", z2: "s2" };
 
 const svg = k.figureSvg({
@@ -567,8 +629,8 @@ const DP = ${DP};
 const U0 = ${M.umdrehungen / 2};
 const AUTO_TAKT = 3;    // s between two automatic changes of direction
 // what the ring gap's routes need to follow the pin
-const SPALT = ${JSON.stringify({ XC, ZM, Z1, Z2, R_BOHRUNG, R_SPITZE, KONUS, ZT0, X_RING, LAENGE })};
-const SPALT_GEO = ${JSON.stringify({ R_SPITZE, LAENGE, HOEHE, LIPPE_ZU: LIPPE.rZu, LIPPE_AUF: LIPPE.rAuf, L_KONUS })};
+const SPALT = ${JSON.stringify(SPALT)};
+const SPALT_GEO = ${JSON.stringify(SPALT_GEO)};
 
 const stage = document.querySelector(".iso-stage");
 const svg = stage.querySelector("svg");
@@ -632,27 +694,12 @@ function bahnNeu(punkte) {
   for (let i = 1; i < flach.length; i += 1) laenge.push(laenge[i - 1] + Math.hypot(flach[i][0] - flach[i - 1][0], flach[i][1] - flach[i - 1][1]));
   return { punkte: flach.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]), laenge, gesamt: laenge[laenge.length - 1] };
 }
-function spaltBahnen(zt) {
-  const S = SPALT;
-  const mitte = (z) => (Math.min(S.R_BOHRUNG, S.R_SPITZE + S.KONUS * Math.max(0, z - zt)) + S.R_BOHRUNG) / 2;
-  const lauf = (seite) => {
-    const x = (r) => S.XC + seite * r;
-    const zu = Math.max(S.Z1 + 1, zt - 1.0);
-    const hoch = [[x(1.0), 0, zu], [x(mitte(zt + 0.4)), 0, zt + 0.4], [x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2]];
-    return {
-      b: [[S.XC - seite * 3.5, 0, S.Z1], [x(1.0), 0, S.Z1], ...hoch],
-      g: [[x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2], [x(4.2), 0, 26.2], seite > 0 ? [S.X_RING, 0, 26.2] : [S.XC - 8.0, 0, 26.2],
-        ...(seite > 0 ? [[S.X_RING, 0, S.Z2], [S.LAENGE - 21, 0, S.Z2]] : [])],
-    };
-  };
-  const l = lauf(-1), r = lauf(1);
-  return { b: r.b, g: r.g, bl: l.b, gl: l.g };
-}
+${spaltBahnen.toString()}
 let spaltZapfen = null;
 function zeichneSpalt() {
   if (spaltZapfen !== null && Math.abs(zustand.zapfen - spaltZapfen) < 0.04) return;
   spaltZapfen = zustand.zapfen;
-  const neu = spaltBahnen(SPALT.ZT0 + (zustand.zapfen - U0) * GRA_1_4.steigung);
+  const neu = spaltBahnen(SPALT, SPALT.ZT0 + (zustand.zapfen - U0) * GRA_1_4.steigung);
   for (const name in neu) stroeme[name].bahn = bahnNeu(neu[name]);
 }
 
@@ -959,6 +1006,8 @@ if (process.argv.includes("--audit")) {
       ["buchse.*", "manschette.*"], ["buchse.*", "einsatz.*"],
     ],
     crowd: [],
-    cover: [],
+    // The section of a whole fitting with its hose stub hangs on the stub's item; the other parts of the fitting
+    // and the hose have bodies of their own.
+    cover: ["verschraubung1.gewinde", "verschraubung2.gewinde"],
   });
 }
