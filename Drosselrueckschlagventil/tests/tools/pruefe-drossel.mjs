@@ -4,11 +4,12 @@
 //   node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Drosselrueckschlagventil/ \
 //        Drosselrueckschlagventil/tests/tools/pruefe-drossel.mjs
 //
-// Measured on what the browser draws, never on a class alone: where the ball
-// stands on screen in each direction, whether the needle and the knurled head
-// move with the regulator while the lock nut stays, which passages carry
-// particles, the tones of the two sides, the readout (420 / 210 / 0 and
-// 780 / 360 l/min), and which branch of the symbol is coloured.
+// Measured on what the browser draws, never on a class alone: how far the lip of the seal is
+// spread or folded in each direction (the drawn shapes and their blend), whether the screw's pin
+// moves with the regulator by turns × pitch and lands in its bore at 0 turns, which ways carry
+// particles and in which direction they run, that no particle lies on a cut face, the tones of the
+// two sides (in the free direction BOTH strong), the readout (420 / 210 / 0 and 780 / 360 l/min),
+// and which branch of the symbol is coloured.
 export default async function pruefeDrossel({ seite, V, modus }) {
   const stelle = async (richtung, u) => {
     await seite.evaluate(([r, w]) => window.__figur.stelle(r, w), [richtung, u]);
@@ -45,48 +46,56 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   const zweig = (name) => seite.evaluate((n) => document.querySelector(`.beifigur-symbol [data-weg="${n}"]`).classList.contains("stark")
     || document.querySelector(`.beifigur-symbol [data-weg="${n}"]`).classList.contains("blass"), name);
 
-  // The scale and the seat, measured on the drawing: the ridge in the upper passage is 9 mm long and
-  // 3,5 mm high (the page marks it data-sitz); its top edge is where the needle's tip has to land.
-  const sitz = await seite.evaluate(() => {
-    const pfad = document.querySelector("[data-sitz]");
+  // The scale, measured on the drawing: the housing's cut face is LAENGE × HOEHE mm (the page marks it data-mass).
+  const mass = await seite.evaluate(() => {
+    const pfad = document.querySelector("[data-mass]");
     const zahlen = pfad.getAttribute("d").match(/-?[\d.]+/g).map(Number);
     const ctm = pfad.getScreenCTM();
     const punkte = [0, 2, 4, 6].map((i) => { const q = pfad.ownerSVGElement.createSVGPoint(); q.x = zahlen[i]; q.y = zahlen[i + 1]; const r = q.matrixTransform(ctm); return { x: r.x, y: r.y }; });
     return punkte;   // bottom left, bottom right, top right, top left
   });
-  const pxX = abstand(sitz[0], sitz[1]) / 9;
-  const pxZ = abstand(sitz[0], sitz[3]) / 3.5;
-  const obenMitte = { x: (sitz[2].x + sitz[3].x) / 2, y: (sitz[2].y + sitz[3].y) / 2 };
   const MASSE = await seite.evaluate(() => window.__figur.MASSE);
+  const GEO = await seite.evaluate(() => window.__figur.geometrie);
+  const pxX = abstand(mass[0], mass[1]) / GEO.LAENGE;
+  const pxZ = abstand(mass[0], mass[3]) / GEO.HOEHE;
 
-  // --- the ball: on its seat in the throttle direction, lifted in the free one ----------
+  // --- the lip: spread against the wall in 1 → 2, folded in in 2 → 1 -----------------------
+  const lippe = () => seite.evaluate(() => {
+    const dichte = (art) => Math.max(...[...document.querySelectorAll(`[data-lippe="${art}"]`)].map((e) => Number(getComputedStyle(e).opacity)));
+    const kasten = (art) => {
+      const r = [...document.querySelectorAll(`[data-lippe="${art}"]`)].map((e) => e.getBoundingClientRect());
+      return { l: Math.min(...r.map((b) => b.left)), r: Math.max(...r.map((b) => b.right)) };
+    };
+    return { zu: dichte("zu"), auf: dichte("auf"), breiteZu: kasten("zu").r - kasten("zu").l, breiteAuf: kasten("auf").r - kasten("auf").l };
+  });
   await stelle("drossel", 3);
-  const kugelZu = mitte(await kasten('[data-g="kugel"]'));
-  const federZu = await kasten('[data-g="feder"]');
+  const lippeZu = await lippe();
   await stelle("frei", 3);
-  const kugelAuf = mitte(await kasten('[data-g="kugel"]'));
-  const federAuf = await kasten('[data-g="feder"]');
-  const hub = abstand(kugelZu, kugelAuf);
-  V(`die Kugel hebt um kugelHubMm ab: ${hub.toFixed(1)} px gemessen, ${(MASSE.kugelHubMm * pxX).toFixed(1)} px erwartet`, Math.abs(hub - MASSE.kugelHubMm * pxX) <= 1);
-  V("beim Abheben geht die Kugel nach links, weg vom Sitz", kugelAuf.x < kugelZu.x - 1);
-  V("die Feder wird mit der Kugel zusammengedrückt (Breite)", (federAuf.r - federAuf.l) < (federZu.r - federZu.l) - 1);
-  await stelle("drossel", 3);
-  V("zurück in Drosselrichtung sitzt die Kugel wieder auf", abstand(mitte(await kasten('[data-g="kugel"]')), kugelZu) < 1);
+  const lippeOffen = await lippe();
+  V(`die Lippe ist in 1 → 2 gespreizt gezeichnet (gespreizt ${lippeZu.zu.toFixed(2)}, eingeklappt ${lippeZu.auf.toFixed(2)})`, lippeZu.zu > 0.95 && lippeZu.auf < 0.05);
+  V(`die Lippe ist in 2 → 1 eingeklappt gezeichnet (gespreizt ${lippeOffen.zu.toFixed(2)}, eingeklappt ${lippeOffen.auf.toFixed(2)})`, lippeOffen.zu < 0.05 && lippeOffen.auf > 0.95);
+  // The mouth really moves: the folded shape is narrower than the spread one by twice the fold, in pixels.
+  const soll = 2 * (GEO.LIPPE_ZU - GEO.LIPPE_AUF) * pxX;
+  V(`die Mündung wandert um ${((lippeZu.breiteZu - lippeZu.breiteAuf) / 2).toFixed(1)} px je Seite (erwartet etwa ${(soll / 2).toFixed(1)})`,
+    lippeZu.breiteZu - lippeZu.breiteAuf > soll * 0.5);
 
-  // --- needle and head follow the regulator, the lock nut stays ---------------------------
+  // --- the pin follows the regulator, the lip's blend follows the model ---------------------
   await stelle("drossel", 0);
-  const nadel0 = await kasten('[data-g="schraube"]');
-  const mutter0 = await kasten('[data-g="kontermutter"]');
+  const zapfen0 = await kasten('[data-g="schraube"]');
+  const mund = await seite.evaluate(() => { const r = document.querySelector("[data-mund]").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   await stelle("drossel", 3);
-  const nadel3 = await kasten('[data-g="schraube"]');
+  const zapfen3 = await kasten('[data-g="schraube"]');
   await stelle("drossel", 6);
-  const nadel6 = await kasten('[data-g="schraube"]');
-  const mutter6 = await kasten('[data-g="kontermutter"]');
+  const zapfen6 = await kasten('[data-g="schraube"]');
   const erwartet = 3 * MASSE.steigung * pxZ;
-  V(`die Schraube fährt je 3 Umdrehungen um Umdrehungen × Steigung nach oben (${(nadel0.t - nadel3.t).toFixed(1)} / ${(nadel3.t - nadel6.t).toFixed(1)} px, erwartet ${erwartet.toFixed(1)})`,
-    Math.abs((nadel0.t - nadel3.t) - erwartet) <= 1 && Math.abs((nadel3.t - nadel6.t) - erwartet) <= 1);
-  V(`bei 0 Umdrehungen sitzt die Nadelspitze auf dem Sitz (Abstand ${(nadel0.b - obenMitte.y).toFixed(1)} px)`, Math.abs(nadel0.b - obenMitte.y) <= 1.5);
-  V("die Kontermutter bleibt beim Einstellen stehen", Math.abs(mutter0.t - mutter6.t) < 0.5 && Math.abs(mutter0.l - mutter6.l) < 0.5);
+  V(`der Zapfen fährt je 3 Umdrehungen um Umdrehungen × Steigung nach oben (${(zapfen0.t - zapfen3.t).toFixed(1)} / ${(zapfen3.t - zapfen6.t).toFixed(1)} px, erwartet ${erwartet.toFixed(1)})`,
+    Math.abs((zapfen0.t - zapfen3.t) - erwartet) <= 1 && Math.abs((zapfen3.t - zapfen6.t) - erwartet) <= 1);
+  // At 0 turns the cone's base sits in the bore's mouth: its tip hangs one cone length below it.
+  // (the tip is a flat end of radius R_SPITZE: its right corner lies a little lower on the screen)
+  const pxXy = (mass[1].y - mass[0].y) / GEO.LAENGE;
+  const spitze = GEO.L_KONUS * pxZ + GEO.R_SPITZE * pxXy;
+  V(`bei 0 Umdrehungen sitzt der Kegel in der Bohrung: Spitze ${(zapfen0.b - mund.y).toFixed(1)} px unter der Mündung (erwartet ${spitze.toFixed(1)})`,
+    Math.abs((zapfen0.b - mund.y) - spitze) <= 1);
 
   // --- readout: the model's numbers at the catalogue's conditions --------------------------
   const faelle = [["drossel", 6, 420], ["drossel", 3, 210], ["drossel", 0, 0], ["frei", 6, 780], ["frei", 0, 360]];
@@ -96,30 +105,33 @@ export default async function pruefeDrossel({ seite, V, modus }) {
     V(`Anzeige ${r === "frei" ? "2 → 1" : "1 → 2"}, ${u} Umdrehungen: ${soll} l/min`, new RegExp(`^Q ${soll} l/min \\(`).test(t) && /\n(1 → 2|2 → 1) · 6 bar · Δp 1 bar$/.test(t));
   }
 
-  // --- particles: which passages carry air ---------------------------------------------
+  // --- particles: which ways carry air -----------------------------------------------------
+  // b, g: through the ring gap (and its left leg bl, gl); k1, z1, z2: the channels and hoses; w, l: round the lip.
   await stelle("drossel", 3);
   let t = await teilchen();
-  V(`1 → 2: Luft strömt durch den oberen Weg (${summe(t, ["a1", "a2"])} Teilchen), der untere Weg bleibt leer (${summe(t, ["b1", "b2"])})`,
-    summe(t, ["a1", "a2"]) >= 4 && summe(t, ["b1", "b2"]) === 0);
+  V(`1 → 2: Luft strömt durch den Ringspalt (${summe(t, ["b", "g"])} Teilchen), an der Lippe vorbei bleibt es leer (${summe(t, ["w", "l"])})`,
+    summe(t, ["b", "g"]) >= 6 && summe(t, ["w", "l"]) === 0 && summe(t, ["k1", "z1", "z2"]) >= 6);
   await stelle("frei", 3);
   t = await teilchen();
-  const oben = summe(t, ["a1", "a2"]), unten = summe(t, ["b1", "b2"]);
-  V(`2 → 1: Teilchen in beiden Wegen (${oben} / ${unten}), im unteren kräftiger (${mittel(t, ["b1", "b2"]).toFixed(2)} gegen ${mittel(t, ["a1", "a2"]).toFixed(2)})`,
-    oben >= 4 && unten >= 4 && mittel(t, ["b1", "b2"]) > mittel(t, ["a1", "a2"]));
+  V(`2 → 1: Teilchen im Spalt (${summe(t, ["b", "g"])}) und an der Lippe vorbei (${summe(t, ["w", "l"])}), dort kräftiger (${mittel(t, ["w", "l"]).toFixed(2)} gegen ${mittel(t, ["b", "g"]).toFixed(2)})`,
+    summe(t, ["b", "g"]) >= 6 && summe(t, ["w", "l"]) >= 6 && mittel(t, ["w", "l"]) > mittel(t, ["b", "g"]));
   await stelle("drossel", 0);
   t = await teilchen();
   V("Drossel zu in Drosselrichtung: gar keine Teilchen", Object.values(t).every((x) => x.n === 0));
   await stelle("frei", 0);
   t = await teilchen();
-  V("2 → 1 bei zugedrehter Drossel: nur der untere Weg führt Luft", summe(t, ["a1", "a2"]) === 0 && summe(t, ["b1", "b2"]) >= 4);
+  V("2 → 1 bei zugedrehter Drossel: nur an der Lippe vorbei", summe(t, ["b", "g"]) === 0 && summe(t, ["w", "l"]) >= 6);
 
-  // --- tones: strong blue before the throttle, pale behind it ---------------------------
+  // --- tones (Rule: strong = under pressure, pale = relaxed) --------------------------------
   await stelle("drossel", 0);
   const d1 = await hell('[data-raum="s1"]'), d2 = await hell('[data-raum="s2"]');
-  V("1 → 2: vor der Drossel kräftiges Blau, dahinter blasses (auch bei zugedrehter Drossel)", staerker(d1, d2));
+  V("1 → 2: Seite 1 kräftiges Blau, Seite 2 blasses (auch bei zugedrehter Drossel)", staerker(d1, d2));
+  await stelle("drossel", 3);
+  const starkRef = await hell('[data-raum="s1"]');
   await stelle("frei", 3);
   const f1 = await hell('[data-raum="s1"]'), f2 = await hell('[data-raum="s2"]');
-  V("2 → 1: die Töne tauschen die Seiten", staerker(f2, f1));
+  V(`2 → 1 mit eingeklappter Lippe: BEIDE Seiten kräftig (${f1.toFixed(2)} / ${f2.toFixed(2)}, kräftig = ${starkRef.toFixed(2)})`,
+    Math.abs(f1 - starkRef) < 0.02 && Math.abs(f2 - starkRef) < 0.02);
 
   // --- the symbol colours the branch that carries air -----------------------------------
   await stelle("drossel", 3);
@@ -131,16 +143,20 @@ export default async function pruefeDrossel({ seite, V, modus }) {
 
   // --- no particle over solid material, and they run in the direction of the flow -----------
   const ueberMaterial = () => seite.evaluate(() => {
-    const feste = ["verschraubung", "kugel", "feder", "verschluss", "schraube", "kontermutter"];
+    const feste = ["verschraubung", "einsatz", "scheibe", "manschette", "buchse", "kontermutter", "schraube"];
     const treffer = [];
     for (const c of document.querySelectorAll("[data-strom] circle")) {
       if (Number(c.getAttribute("opacity")) < 0.3) continue;
       const r = c.getBoundingClientRect();
       const x = r.left + r.width / 2, y = r.top + r.height / 2;
       for (const el of document.elementsFromPoint(x, y)) {
+        // a drawn layer that is blended out (the lip's other shape, the whole-part layer) is not there
+        const lage = el.closest("[data-lippe], [data-lage]");
+        if (lage && Number(getComputedStyle(lage).opacity) < 0.1) continue;
         const g = el.closest("[data-piece]");
-        // a solid that comes BEFORE the dot in the drawing order lies under it: the dot is painted over the material
-        if (g && feste.includes(g.dataset.piece) && (c.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING)) {
+        // A dot on a cut face or a fitting: either it is painted over the material (the solid comes before it
+        // in the drawing order) or the route runs through the material and the part hides it.
+        if (g && feste.includes(g.dataset.piece)) {
           treffer.push(`${c.closest("[data-strom]").dataset.strom} über ${g.dataset.piece}`); break;
         }
       }
@@ -155,41 +171,43 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   // Direction: the first particle of a stream moves right in 1 → 2 (along the upper passage's second half)
   // and left in 2 → 1. Two samples of one stream one frame apart.
   const lauf = async (name) => {
-    // Both samples are read inside the page, one frame apart: a round trip per sample let a loaded
-    // machine stretch the gap until the particles of this short stream wrapped round and the sign flipped.
-    const [a, b] = await seite.evaluate(async (n) => {
+    // Read inside the page, frame after frame: a round trip per sample let a loaded machine stretch the gap
+    // until the short streams wrapped round and the sign flipped. A stream's particles all jump by one spacing
+    // when its phase wraps (in one frame of about four): such a jump is left out (a step is under 6 px) and
+    // the median of the pairs counts.
+    return seite.evaluate(async (n) => {
       const lies = () => [...document.querySelectorAll(`[data-strom="${n}"] circle`)]
         .map((c) => [Number(c.getAttribute("opacity")), Number(c.getAttribute("cx")), Number(c.getAttribute("cy"))]);
       const bild = () => new Promise((r) => requestAnimationFrame(r));
-      // One frame apart, and only a pair whose frames really were close together counts: after a long
-      // frame the particles have run far enough to alias.
-      for (let i = 0; i < 40; i += 1) {
-        const t0 = await bild(); const eins = lies(); const t1 = await bild(); const zwei = lies();
-        if (t1 - t0 < 30) return [eins, zwei];
+      const mitteVon = (liste) => { const l = liste.slice().sort((x, y) => x - y); return l.length ? l[Math.floor(l.length / 2)] : 0; };
+      const paare = [];
+      for (let versuch = 0; versuch < 60 && paare.length < 7; versuch += 1) {
+        const t0 = await bild(); const a = lies(); const t1 = await bild(); const b = lies();
+        if (t1 - t0 >= 20) continue;
+        // along the channel both screen coordinates grow in the direction 1 → 2
+        const d = a.map((p, i) => (p[0] > 0.3 && b[i][0] > 0.3 ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null)).filter((v) => v !== null && Math.abs(v) < 6);   // the wrap jump is a whole spacing (about 11 px)
+        if (d.length) paare.push(mitteVon(d));
       }
-      return [[], []];
+      return mitteVon(paare);
     }, name);
-    // along the upper passage both screen coordinates grow in the direction 1 → 2; a particle that wrapped round jumps, so it is left out
-    const d = a.map((p, i) => (p[0] > 0.3 && b[i][0] > 0.3 ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null)).filter((v) => v !== null && Math.abs(v) < 25).sort((x, y) => x - y);
-    return d.length ? d[Math.floor(d.length / 2)] : 0;
   };
   await seite.evaluate(() => window.__figur.stelle("drossel", 6)); await seite.evaluate(() => { window.__figur.weiter(); });
   await seite.waitForTimeout(120);
-  const vor = await lauf("a2");
+  const vor = await lauf("k1");
   await seite.evaluate(() => { window.__figur.stelle("frei", 6); window.__figur.weiter(); });
   await seite.waitForTimeout(120);
-  const zurueck = await lauf("a2");
+  const zurueck = await lauf("k1");
   V(`die Teilchen laufen in Strömungsrichtung (1 → 2: ${vor.toFixed(1)} px, 2 → 1: ${zurueck.toFixed(1)} px)`, vor > 0.3 && zurueck < -0.3);
 
   // --- the controls really switch -------------------------------------------------------
   await stelle("drossel", 3);
   await seite.click("#btn-richtung");
   await seite.waitForTimeout(250);
-  V("der Richtungsknopf schaltet auf 2 → 1 um", (await seite.evaluate(() => window.__figur.richtung())) === "frei" && /Kugel offen/.test(await text()));
+  V("der Richtungsknopf schaltet auf 2 → 1 um", (await seite.evaluate(() => window.__figur.richtung())) === "frei" && /Lippe offen/.test(await text()));
   await seite.fill("#drossel", "6");
   await seite.dispatchEvent("#drossel", "input");
   await seite.waitForTimeout(700);
-  V("der Drosselregler stellt die Nadel nach (Modell folgt dem Regler)", (await seite.evaluate(() => window.__figur.modell().nadel)) > 5.9);
+  V("der Drosselregler stellt den Zapfen nach (Modell folgt dem Regler)", (await seite.evaluate(() => window.__figur.modell().zapfen)) > 5.9);
   V("die Automatik ist nach einem Eingriff aus", (await seite.getAttribute("#btn-auto", "aria-pressed")) === "false");
 
   // --- the automatic cycle turns the direction by itself within its takt (3 s) -------------------
@@ -217,10 +235,10 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   await seite.waitForFunction(() => window.__figur.offen() > 0.9, null, { timeout: 15000 }).catch(() => {});
   await seite.waitForTimeout(400);
   const lage = await seite.evaluate(() => ({
-    kugel: document.querySelector("[data-schieber]").getAttribute("transform"),
-    nadel: [...document.querySelectorAll('[data-g="schraube"] [data-hub]')].map((e) => e.getAttribute("transform")),
+    zapfen: [...document.querySelectorAll('[data-g="schraube"] [data-hub]')].map((e) => e.getAttribute("transform")),
+    lippe: Number(getComputedStyle(document.querySelector('[data-lippe="zu"]')).opacity),
   }));
-  V("zerlegt: Kugel und Schraube stehen auf ihrem Ausgangsplatz", lage.kugel === null && lage.nadel.every((x) => x === null));
+  V("zerlegt: Zapfen und Lippe stehen auf ihrem Ausgangsplatz", lage.zapfen.every((x) => x === null) && lage.lippe > 0.95);
   await seite.click("#btn-explode");
   await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
   await seite.waitForTimeout(300);

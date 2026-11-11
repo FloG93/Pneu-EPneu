@@ -12,7 +12,7 @@ Erklärte Bauteile für Auszubildende: jedes als interaktive isometrische Zeichn
 | **Aktoren** | **Einfachwirkender Zylinder** | Rundzylinder nach dem Vorbild Festo ESNU-50-25 mit Rückstellfeder und dem 3/2-Wegeventil, das ihn ansteuert. Taster halten füllt die Kammer, loslassen lässt die Feder zurückfahren; die Federkammer atmet durch einen Filter und bleibt blass. Die Kraft p · A − Feder wird live gerechnet, Zeitlupe, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Zylinder-Einfachwirkend/) |
 | **Wegeventile** | **5/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers. Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Mono- und bistabil, Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-5-2/) |
 | **Wegeventile** | **3/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers, in Ruhe gesperrt (NC) oder in Ruhe offen (NO). Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-3-2/) |
-| **Sperr- und Stromventile** | **Drosselrückschlagventil** | Schnitt durch ein einstellbares Drosselrückschlagventil (G¼, Vorbild Festo GRA-1/4-B) mit zwei Wegen nebeneinander: Von 1 nach 2 sperrt die Kugel und die Luft muss durch die Drossel, von 2 nach 1 hebt sie ab. Kräftiges Blau vor der Drossel, blasses dahinter, das Schaltzeichen färbt den durchströmten Zweig. Richtung, Drosselschraube, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Drosselrueckschlagventil/) |
+| **Sperr- und Stromventile** | **Drosselrückschlagventil** | Schnitt durch ein einstellbares Drosselrückschlagventil (G¼, Vorbild Festo GR/GRA) in seiner echten Bauform: Der Zapfen der Rändelschraube bildet mit der Bohrung des Ventileinsatzes den Ringspalt, die Lippe einer Dichtmanschette ist das Rückschlagventil. Von 1 nach 2 sperrt sie, von 2 nach 1 klappt sie nach innen. Kräftiges Blau steht unter Druck, blasses ist entspannt, das Schaltzeichen färbt den durchströmten Zweig. Richtung, Drosselschraube, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Drosselrueckschlagventil/) |
 
 [![Doppeltwirkender Zylinder im Schnitt, mit strömender Druckluft](docs/bilder/schnitt-nah.png)](https://flog93.github.io/Pneu-EPneu/Zylinder-Doppeltwirkend/)
 
@@ -51,7 +51,7 @@ Drosselrueckschlagventil/   Bauteilseite
 figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
                             wird deshalb nicht veröffentlicht)
   pneumatik.mjs             Rechenmodell: Flächen, Kräfte, Drücke, Bewegung
-  stromventil.mjs           Rechenmodell: Drosselrückschlagventil (Durchfluss, Nadel, Kugel)
+  stromventil.mjs           Rechenmodell: Drosselrückschlagventil (Durchfluss, Zapfen, Lippe)
   explode.mjs               Explosion: Wege, Federn, Tiefensortierung
   legende.mjs               Legende, Nummern, Erklärzeile
   ventil.mjs                Rechenmodell des Wegeventils: Schieber, Steuerkammern, Schaltzeit

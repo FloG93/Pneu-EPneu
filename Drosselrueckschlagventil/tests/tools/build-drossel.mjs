@@ -268,7 +268,7 @@ function gehaeuse() {
     NT.flach([[0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE], [LAENGE, 0, HOEHE], [0, 0, HOEHE]], [0, 0, 1]),
     NT.flach([[LAENGE, -TIEFE, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [LAENGE, -TIEFE, HOEHE]], [1, 0, 0]),
     // the cut face
-    NT.schnitt([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]),
+    NT.schnitt([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]).replace("<path ", '<path data-mass="" '),   // data-mass: the browser test reads the scale from it
     // The hollows: all outlines first, then all fills over them, so the lines inside a junction
     // of two hollows are covered and only the outline of the union stays.
     L(HOHLRAUM.filter(([, art]) => art !== "loch").map(([[x0, x1, z0, z1]]) => rahmen(x0, x1, z0, z1)).join(""), { tone: "mid" }),
@@ -297,6 +297,8 @@ function einsatz() {
   put([XC, 0, (BODEN + ZM) / 2], zweiLagen([
     ...flaechen.map((f) => schnittFlaeche(f, 1)),
     L(flaechen.map(umriss).join(""), { tone: "mid" }),
+    // the mouth of the throttle bore, where the pin's cone must sit at 0 turns (a mark for the browser test)
+    `<circle data-mund="" cx="${at([XC, 0, ZM])[0].toFixed(2)}" cy="${at([XC, 0, ZM])[1].toFixed(2)}" r="0.05" fill="none"/>`,
   ].join(""), [
     SV(G.ringBand(BODEN, 11.5, R_BOHRUNG, 8.5, F, P), { tone: "mid" }),
     SV(G.ringBand(11.5, ZM, R_BOHRUNG, R_EIN, F, P), { tone: "hi" }),
@@ -501,7 +503,7 @@ const VIEW1 = (([x, y, w, h]) => [x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12
 const X_RING = XC + 8.7;                         // the ring space outside the lip: between its root (7,8) and the wall (9,5)
 const ROUTEN_FEST = {
   z1: G.cut(WEGE[1].slice().reverse(), 0, G.pathLength(WEGE[1]) - 9),
-  k1: [[14, 0, Z1], [XC - 8.7, 0, Z1]],
+  k1: [[17, 0, Z1], [XC - 8.7, 0, Z1]],
   w: [[XC - 8.7, 0, Z1], [XC + 8.7, 0, Z1]],
   l: [[XC + 8.7, 0, Z1], [X_RING, 0, Z1 + 4], [X_RING, 0, Z2]],
   z2: G.cut(WEGE[2], 9, G.pathLength(WEGE[2])),
@@ -516,7 +518,7 @@ function spaltBahnen(zt) {
     return {
       b: [[XC + seite * (-3.5), 0, Z1], [x(1.0), 0, Z1], ...hoch],
       g: [[x(mitte(ZM - 0.2)), 0, ZM - 0.2], [x(4.2), 0, 26.2], seite > 0 ? [X_RING, 0, 26.2] : [XC - 8.0, 0, 26.2],
-        ...(seite > 0 ? [[X_RING, 0, Z2], [LAENGE - 13, 0, Z2]] : [])],
+        ...(seite > 0 ? [[X_RING, 0, Z2], [LAENGE - 21, 0, Z2]] : [])],
     };
   };
   const links = lauf(-1), rechts = lauf(1);
@@ -566,6 +568,7 @@ const U0 = ${M.umdrehungen / 2};
 const AUTO_TAKT = 3;    // s between two automatic changes of direction
 // what the ring gap's routes need to follow the pin
 const SPALT = ${JSON.stringify({ XC, ZM, Z1, Z2, R_BOHRUNG, R_SPITZE, KONUS, ZT0, X_RING, LAENGE })};
+const SPALT_GEO = ${JSON.stringify({ R_SPITZE, LAENGE, HOEHE, LIPPE_ZU: LIPPE.rZu, LIPPE_AUF: LIPPE.rAuf, L_KONUS })};
 
 const stage = document.querySelector(".iso-stage");
 const svg = stage.querySelector("svg");
@@ -639,7 +642,7 @@ function spaltBahnen(zt) {
     return {
       b: [[S.XC - seite * 3.5, 0, S.Z1], [x(1.0), 0, S.Z1], ...hoch],
       g: [[x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2], [x(4.2), 0, 26.2], seite > 0 ? [S.X_RING, 0, 26.2] : [S.XC - 8.0, 0, 26.2],
-        ...(seite > 0 ? [[S.X_RING, 0, S.Z2], [S.LAENGE - 13, 0, S.Z2]] : [])],
+        ...(seite > 0 ? [[S.X_RING, 0, S.Z2], [S.LAENGE - 21, 0, S.Z2]] : [])],
     };
   };
   const l = lauf(-1), r = lauf(1);
@@ -693,7 +696,7 @@ function setzeRaumFarben(farbe) {
 }
 
 // Particle speed and strength follow the flow of the way they run on (l/min at the catalogue's pressure drop).
-const tempoVon = (q) => Math.min(200, q * 0.32);
+const tempoVon = (q) => Math.min(160, q * 0.25);
 const staerkeVon = (q) => (q > 0.5 ? Math.min(1, 0.3 + (0.7 * q) / 420) : 0);
 function zeichneLuft(dt) {
   const farbe = seitenFarben();
@@ -801,6 +804,7 @@ poseExplode();
 // A handle for the browser test and for screenshots: it puts the figure into a known state.
 window.__figur = {
   MASSE: GRA_1_4,
+  geometrie: SPALT_GEO,
   modell: () => zustand,
   richtung: () => richtung,
   regler: () => regler,

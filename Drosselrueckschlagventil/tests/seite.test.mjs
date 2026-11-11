@@ -36,7 +36,7 @@ test("Alle Bedienelemente sind da", () => {
 });
 
 test("Die Legende ist vollständig: ein Knopf je Eintrag, jede Baugruppe gezeichnet", () => {
-  assert.equal(LEGENDE.length, 8);
+  assert.equal(LEGENDE.length, 9);
   assert.equal((html.match(/class="pickbtn"/g) || []).length, LEGENDE.length);
   const gezeichnet = new Set([...html.matchAll(/data-piece="([a-z]+)"/g)].map((m) => m[1]));
   for (const e of LEGENDE) assert.ok(gezeichnet.has(e.piece), `Legendeneintrag "${e.piece}" hat keine Teile in der Zeichnung`);
@@ -56,7 +56,7 @@ test("Die Zahlen kommen aus dem Modell: 420, 210, 0, 780, 360 l/min", () => {
   assert.equal(durchfluss(FREIE_RICHTUNG, M.umdrehungen, 1, M).gesamt, 780);
   assert.equal(durchfluss(FREIE_RICHTUNG, 0, 1, M).gesamt, 360);
   // the readout stands in the page without JavaScript, at the catalogue's conditions
-  assert.match(html, /Q 210 l\/min \(Drossel 210 \+ Rückschlag 0\) · Kugel zu\n1 → 2 · 6 bar · Δp 1 bar/);
+  assert.match(html, /Q 210 l\/min \(Drossel 210 \+ Rückschlag 0\) · Lippe zu\n1 → 2 · 6 bar · Δp 1 bar/);
   // the legend and the prose name the model's numbers
   const legendeText = LEGENDE.map((e) => e.satz).join(" ");
   assert.match(legendeText, /420 l\/min/);
@@ -79,4 +79,15 @@ test("Der Text sagt, welcher Anschluss zum Zylinder zeigt, und nennt die Ausnahm
   assert.ok(!/P, A und R/.test(html), "die alten Buchstaben gehören nicht auf diese Seite");
   // what is an assumption says so
   assert.match(html, /im Modell noch 360 l\/min/);
+});
+
+test("Die Seite zeigt die echte Bauform: Lippe und Ringspalt, keine Kugel, keine Feder, keine Nadel", () => {
+  assert.match(html, /Dichtmanschette/);
+  assert.match(html, /Ringspalt/);
+  assert.match(html, /Ventileinsatz/);
+  // the page text may say that there is none; no legend entry or label may name a ball, a needle or a spring
+  const legendeText = LEGENDE.map((e) => `${e.name} ${e.satz}`).join(" ");
+  assert.ok(!/Kugel|Nadel|Feder\b/.test(legendeText), "die Legende nennt Kugel, Nadel oder Feder");
+  assert.ok(!/class="sz-feder"/.test(html), "das Schaltzeichen zeichnet eine Feder");
+  assert.match(html, /Eine zweite Kammer, einen zweiten Kanal oder eine Feder gibt es nicht/);
 });

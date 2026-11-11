@@ -25,8 +25,8 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 |---|---|
 | `figur/pneumatik.mjs` | Das Rechenmodell des Zylinders: Flächen, Kräfte, Kammerdrücke, Kolbenbewegung. Reine Funktionen, keine Zeichnung. |
 | `figur/ventil.mjs` | Das Rechenmodell der Wegeventile aus der Wegebeschreibung (5/2 und 3/2, NC und NO): Öffnung der Wegesätze, Kammerdruck-Schritt (beides nutzt auch der Zylinder), Schieber, Steuerkammern, Schaltzeit. Reine Funktionen, keine Zeichnung. |
-| `figur/stromventil.mjs` | Das Rechenmodell des Drosselrückschlagventils: Öffnungsanteil der Drossel, Hub der Kugel, Durchfluss beider Wege in l/min, Folgen von Nadel und Kugel, Anzeigezeile. Reine Funktionen, keine Zeichnung. |
-| `figur/schaltzeichen.mjs` | Schaltzeichen nach ISO 1219-1 aus einer Beschreibung der Wege (`VENTIL_5_2`, `VENTIL_3_2_NC`, `VENTIL_3_2_NO`), dazu die Laufzeit, die das Symbol mit dem Schieber gleiten lässt und offene Wege färbt; das Symbol des Drosselrückschlagventils (`drosselRueckschlagSymbol`) mit seiner Laufzeit, die den durchströmten Zweig färbt |
+| `figur/stromventil.mjs` | Das Rechenmodell des Drosselrückschlagventils: Öffnungsanteil der Drossel (Ringspalt am Zapfen), Klappe der Lippe der Dichtmanschette, Durchfluss beider Wege in l/min, Folgen von Zapfen und Lippe, Anzeigezeile. Reine Funktionen, keine Zeichnung. |
+| `figur/schaltzeichen.mjs` | Schaltzeichen nach ISO 1219-1 aus einer Beschreibung der Wege (`VENTIL_5_2`, `VENTIL_3_2_NC`, `VENTIL_3_2_NO`), dazu die Laufzeit, die das Symbol mit dem Schieber gleiten lässt und offene Wege färbt; das Symbol des Drosselrückschlagventils (`drosselRueckschlagSymbol`) mit seiner Laufzeit, die den durchströmten Zweig färbt (das Rückschlagventil ohne Feder, wie die Manschette es ist) |
 | `figur/explode.mjs` | Wege, Federn, Staffelung, Sortierung nach echter Tiefe je Bild, Nummern am nächsten eigenen Teil (`anker`); `ABLAUF`: Bildschleife, Knopf „Zerlegen und zusammenbauen", Escape |
 | `figur/legende.mjs` | Legendenliste, Nummern mit Führungslinie, Erklärzeile, Auswahl; `LAUFZEIT`: Zeigen/Merken, Erzählung beim Zusammenbau |
 | `figur/normteile.mjs` | Zeichenhelfer für Normteile (Schnittfläche, Schraubenkopf, Gewinde, Steckverschraubung, Schalldämpfer, Druckfeder, Schlauchstummel) und die Blocklängenprüfung der Feder; Schnittton `SCHNITT_CSS`; `FEDER_LAUFZEIT`, die eine gezeichnete Feder mit dem Hub zusammendrückt (alle Seiten) |
@@ -80,7 +80,7 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | … einfachwirkender Zylinder | `npm run pruef:browser:zylinder-ew` (dazu `npm run pruef:zylinder-ew` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 3/2-Wegeventil | `npm run pruef:browser:ventil32` (dazu `npm run pruef:ventil32` für Audit und Zerlegen) | `all checks passed (132)`, fünfmal hintereinander |
-| … Drosselrückschlagventil | `npm run pruef:browser:drossel` (dazu `npm run pruef:drossel` für Audit und Zerlegen) | `all checks passed (108)`, fünfmal hintereinander |
+| … Drosselrückschlagventil | `npm run pruef:browser:drossel` (dazu `npm run pruef:drossel` für Audit und Zerlegen) | `all checks passed (104)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |
 
 Die Browserprüfungen laufen **nicht** in der CI: Playwright ist außerhalb des Repos installiert (keine npm-Pakete im Repo). Sie sind ein manueller Schritt vor jeder Veröffentlichung.
