@@ -116,14 +116,14 @@ const STAGGER = ["leitung", "verschraubung", "schraube", "kontermutter", "buchse
 const MOVE = {
   grund: [0, 0, 0],
   luft: [0, 0, 0],
-  leitung: [0, 50, 6],
-  verschraubung: [0, 32, 4],
-  schraube: [-30, 0, 88],
-  kontermutter: [34, 0, 90],
-  buchse: [0, 0, 65],
-  manschette: [30, 0, 62],
-  scheibe: [-28, 0, 45],
-  einsatz: [0, 0, 14],
+  leitung: [0, 112, 0],
+  verschraubung: [0, 72, 0],
+  schraube: [-42, 0, 150],
+  kontermutter: [46, 0, 150],
+  buchse: [0, 0, 118],
+  manschette: [42, 0, 86],
+  scheibe: [-42, 0, 72],
+  einsatz: [0, 0, 62],
   gehaeuse: [0, 0, 0],
 };
 
