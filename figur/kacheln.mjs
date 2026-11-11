@@ -169,9 +169,14 @@ export const RUBRIKEN = [
       {
         id: "wechselventil",
         name: "Wechselventil (ODER)",
-        satz: "Zwei Eingänge, ein Ausgang: Luft kommt durch, wenn an mindestens einem Eingang Druck anliegt.",
-        zustand: "geplant",
+        satz:
+          "Zwei Eingänge, ein Ausgang: Ein loser Gummikörper liegt zwischen zwei Sitzen, der höhere Druck sperrt den anderen Eingang, und die Luft strömt durch den Spalt um den Körper zum Ausgang. "
+          + "Kräftiges Blau steht unter Druck, blasses ist drucklos, und das Schaltzeichen schaltet mit. "
+          + "Zwei Regler, Automatik durch die Wahrheitstabelle, Zeitlupe und Zerlegen.",
+        zustand: "fertig",
+        ordner: "Wechselventil",
         sinnbild: "Wechselventil, ODER-Funktion",
+        marken: ["OS-1/4-B", "G1/4", "ODER-Funktion"],
       },
       {
         id: "zweidruckventil",
