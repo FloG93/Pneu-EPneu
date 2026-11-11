@@ -220,9 +220,8 @@ function oring() {
   const kreis = (cz, dz) => ring3(Array.from({ length: 25 }, (_, i) => [O.x + O.rSchnur * Math.cos((i / 24) * TAU), 0, cz + dz + O.rSchnur * Math.sin((i / 24) * TAU)]));
   // the cord fills its groove (squeezed against the bore's wall): a circle and the groove's rectangle under it
   const nut = (v) => ring3([[STOPFEN.nut[0], 0, ZA + v * STOPFEN.rNut], [STOPFEN.nut[1], 0, ZA + v * STOPFEN.rNut], [STOPFEN.nut[1], 0, ZA + v * STOPFEN.rAussen], [STOPFEN.nut[0], 0, ZA + v * STOPFEN.rAussen]]);
-  const schnitt = [1, -1].map((v) => `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${nut(v)}"/>`
-    + `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${kreis(ZA + v * O.r, 0)}"/>`
-    + L(kreis(ZA + v * O.r, 0), { tone: "mid" })).join("");
+  const schnitt = [1, -1].map((v) => `<path class="iso-shade" data-shade="0" style="fill:#1a1a1c" d="${nut(v)}"/>`
+    + `<path class="iso-shade" data-shade="0" style="${RUBBER_SCHNITT}" d="${kreis(ZA + v * O.r, 0)}"/>`).join("");
   // the whole ring: a tube round the bore's axis, in pieces so that it can be put in order
   const punkte = Array.from({ length: 33 }, (_, i) => [O.x, O.r * Math.cos((i / 32) * TAU), ZA + O.r * Math.sin((i / 32) * TAU)]);
   const stuecke = tubePieces(punkte, O.rSchnur, P, { maxLength: 14 });
@@ -231,10 +230,12 @@ function oring() {
 }
 
 // --- The rubber body between the seats; it moves with the model (data-hub) -------------------------------------
+/** Rubber in a section: black, with a light edge, in light and dark mode alike (it must stand out of the strong blue and the tan of the plug). */
+const RUBBER_SCHNITT = "fill:#1a1a1c;stroke:#f2f2ee;stroke-width:2.2;stroke-linejoin:round;paint-order:stroke";
 /** A soft highlight on the dark rubber: an open line a little lighter than the rubber (`staerke` 0…1 of the way to the paper). */
 function glanz(punkte3, staerke) {
   const d = punkte3.map((q, i) => `${i ? "L" : "M"}${at(q).map((v) => v.toFixed(1)).join(" ")}`).join("");
-  return `<path d="${d}" fill="none" style="stroke:color-mix(in srgb, var(--anatomy-paper) ${Math.round(staerke * 100)}%, var(--anatomy-strong)); stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round"/>`;
+  return `<path d="${d}" fill="none" style="stroke:color-mix(in srgb, #f2f2ee ${Math.round(staerke * 70)}%, #1a1a1c); stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round"/>`;
 }
 function koerper() {
   gruppe("koerper");
@@ -245,8 +246,8 @@ function koerper() {
   const ganz = PROFIL_KOERPER.map(([r, s], i) => [s, r, i > 0 && i < PROFIL_KOERPER.length - 1 ? 1 : 0]);
   put([KOERPER_X0, 0, ZA], zweiLagen([
     // the rubber is drawn dark, like the black rings of the cutaway, with a lighter highlight along its barrel and its domes
-    `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${ring3(umrissKoerper)}"/>`,
-    L(ring3(umrissKoerper), { tone: "mid" }),
+    // black rubber with a light edge all round, so that the body stands out of the air's strong blue in both modes
+    `<path class="iso-shade" data-shade="0" style="${RUBBER_SCHNITT}" d="${ring3(umrissKoerper)}"/>`,
     glanz(PROFIL_KOERPER.filter(([r]) => r > 0.4).map(([r, sp]) => [KOERPER_X0 + sp, 0, ZA + r * 0.74]), 0.5),
     glanz(PROFIL_KOERPER.filter(([r]) => r > 0.4).map(([r, sp]) => [KOERPER_X0 + sp, 0, ZA - r * 0.78]), 0.22),
   ].join(""), `<g class="gummi">${SV(G.solidOf(ganz, F, P), { tone: "lo" })}</g>`), [
@@ -338,8 +339,16 @@ const LUFTWEGE = [
   [XC - R_HALS, XC + R_HALS, Z_HALS, Z_GEW], [XC - 4, XC + 4, Z_GEW, HOEHE], [XC - R_SCHLAUCH_INNEN, XC + R_SCHLAUCH_INNEN, HOEHE, ENDE_O + 1],   // the neck, the outlet's fitting, the hose
 ];
 
+// Where the browser test reads the drawn colour of each room: a point of air in the cut plane (mm), clear of every part.
+const MESSPUNKTE = {
+  L: [(STOPFEN.xAbsatz + X_SITZ_L - L_FASE) / 2, ZA],
+  R: [(X_SITZ_R + L_FASE + X_GEW_R) / 2, ZA],
+  A: [XC + 1.5, (Z_HALS + Z_GEW) / 2],
+};
+
 const KONSTANTEN = `
 const HUB = ${M.hub};
+const MESSPUNKTE = ${JSON.stringify(MESSPUNKTE)};
 const GEO = ${JSON.stringify({ LAENGE, HOEHE, HUB: M.hub, ZA })};
 const LUFTWEGE = ${JSON.stringify(LUFTWEGE)};
 const P_AUTO = ${P_AUTO};
@@ -437,8 +446,17 @@ figurStarten({
   MASSE: OS_1_4,
   geometrie: GEO,
   luftwege: LUFTWEGE,
+  messpunkte: MESSPUNKTE,
   bahn: (name) => stroeme[name].bahn,
-  fluss: () => JSON.stringify(nachFluss),
+  // where a point of the cut plane (x along the bore, z up, in mm) is on the screen, in client pixels
+  bildPunkt(x, z) {
+    const q = iso([x, 0, z], P);
+    const pt = svg.createSVGPoint();
+    pt.x = q[0];
+    pt.y = q[1];
+    const r = pt.matrixTransform(svg.getScreenCTM());
+    return [r.x, r.y];
+  },
   // the cut plane's millimetres (x along the bore, z up) from a position in the drawing: the inverse of the projection there
   zuMm(x, y) {
     const o = iso([0, 0, 0], P), ex = iso([1, 0, 0], P), ez = iso([0, 0, 1], P);
@@ -484,7 +502,7 @@ const live = SS.lebendSkript({
   VORNE: Object.keys(BAHNEN),                          // the streams run in front of everything: the fittings' bores are painted over the housing
   SKALA: { tempo: 0.25, tempoMax: 160, bezug: M.qn },
   AUTO_TAKT: 0.3,                                      // model seconds: at the start's slow motion 1/10 that is 3 s a step
-  raumDeckung: 0.6,
+  raumDeckung: 0.97,
   modelle: ["figur/ventil.mjs", "figur/wechselventil.mjs"],
   symbole: [WECHSEL_SYMBOL_LAUFZEIT],
   konstanten: KONSTANTEN,
@@ -555,7 +573,7 @@ const TABELLE_CSS = `.lesetext table.wahrheit { border-collapse: collapse; margi
 .lesetext table.wahrheit caption { text-align: left; font-size: 12.5px; padding-bottom: 5px; color: color-mix(in srgb, currentColor 80%, transparent) }
 .lesetext table.wahrheit th, .lesetext table.wahrheit td { border: 1px solid color-mix(in srgb, currentColor 30%, transparent); padding: 6px 12px; text-align: center }
 .lesetext table.wahrheit th { background: var(--anatomy-card); color: var(--anatomy-strong); font-weight: 600; line-height: 1.3 }`;
-const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .6 }\n${WECHSEL_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}\n${TABELLE_CSS}`;
+const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .97 }\n${WECHSEL_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}\n${TABELLE_CSS}`;
 SS.seiteSchreiben({
   ziel: ZIEL,
   css: EIGENES_CSS,

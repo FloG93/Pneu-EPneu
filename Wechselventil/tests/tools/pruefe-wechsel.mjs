@@ -11,6 +11,8 @@
 // the ball and the tones of the symbol, the truth table's text, the slow motion (the body is seen in flight at 1/10),
 // the eight-step cycle with the body's place at each step, the controls, and that taking apart stops everything.
 // No wait is a fixed time: every one waits for a state of the page (or runs inside the page, frame by frame).
+import { inflateSync } from "node:zlib";
+
 export default async function pruefeWechsel({ seite, V, modus }) {
   const GEO = await seite.evaluate(() => window.__figur.geometrie);
   const MASSE = await seite.evaluate(() => window.__figur.MASSE);
@@ -109,6 +111,54 @@ export default async function pruefeWechsel({ seite, V, modus }) {
   V("rechts zuerst, dann beide: der Körper bleibt links", Math.abs(beide2.x - links.x) <= 1 && Math.abs(beide2.y - links.y) <= 1);
   await schalte(6, 3, { s: 1, p2: 6 });
   V("links 6, rechts 3: der niedrigere Eingang (rechts) wird gesperrt", /Körper sperrt: rechts/.test(await text()));
+
+  // --- the drawn colour: pressurised and vented air can be told apart at a glance -------------------------------
+  // Measured on the composited picture: a pixel of the screenshot in the middle of each room (the air's tint over the cut
+  // face and the bore's shading under it), 6 bar against 0 bar. The criterion is the one the throttle check valve's page meets
+  // (measured there: 2,87:1 in the light mode, 2,42:1 at night, strong against pale channel): at least 2,4:1 in both modes.
+  const MESS_MIN = 2.4;
+  const pixel = async ([x, z]) => {
+    const [px, py] = await seite.evaluate(([a, b]) => window.__figur.bildPunkt(a, b), [x, z]);
+    const png = await seite.screenshot({ clip: { x: Math.floor(px), y: Math.floor(py), width: 1, height: 1 }, type: "png" });
+    let o = 8;
+    const idat = [];
+    while (o < png.length) { const len = png.readUInt32BE(o); if (png.toString("ascii", o + 4, o + 8) === "IDAT") idat.push(png.subarray(o + 8, o + 8 + len)); o += 12 + len; }
+    const roh = inflateSync(Buffer.concat(idat));
+    return [roh[1], roh[2], roh[3]];
+  };
+  const leucht = ([r, g, b]) => { const k = (v) => { const t = v / 255; return t <= 0.03928 ? t / 12.92 : ((t + 0.055) / 1.055) ** 2.4; }; return 0.2126 * k(r) + 0.7152 * k(g) + 0.0722 * k(b); };
+  const kontrastVon = (a, b) => (Math.max(leucht(a), leucht(b)) + 0.05) / (Math.min(leucht(a), leucht(b)) + 0.05);
+  const pixelAnClient = async ([px, py]) => {
+    const png = await seite.screenshot({ clip: { x: Math.floor(px), y: Math.floor(py), width: 1, height: 1 }, type: "png" });
+    let o = 8;
+    const idat = [];
+    while (o < png.length) { const len = png.readUInt32BE(o); if (png.toString("ascii", o + 4, o + 8) === "IDAT") idat.push(png.subarray(o + 8, o + 8 + len)); o += 12 + len; }
+    const roh = inflateSync(Buffer.concat(idat));
+    return [roh[1], roh[2], roh[3]];
+  };
+  const punkte = await seite.evaluate(() => window.__figur.messpunkte);
+  const messen = async (l, r) => { await stelle(l, r); return { L: await pixel(punkte.L), R: await pixel(punkte.R), A: await pixel(punkte.A) }; };
+  const m0 = await messen(0, 0), mL = await messen(6, 0), mR = await messen(0, 6);
+  const rLinks = kontrastVon(mL.L, m0.L), rRechts = kontrastVon(mR.R, m0.R), rAusgang = kontrastVon(mL.A, m0.A);
+  V(`6 bar gegen 0 bar, gezeichnet: Eingang links ${rLinks.toFixed(2)}:1, rechts ${rRechts.toFixed(2)}:1, Ausgang ${rAusgang.toFixed(2)}:1 (mindestens ${MESS_MIN}:1)`,
+    rLinks >= MESS_MIN && rRechts >= MESS_MIN && rAusgang >= MESS_MIN);
+  V("kräftig ist die gezeichnete Seite des Drucks: nachts heller, am Tag dunkler als die drucklose", [["L", mL], ["R", mR]].every(([n, m]) => (modus === "light" ? leucht(m[n]) < leucht(m0[n]) : leucht(m[n]) > leucht(m0[n]))));
+  const mH = await messen(3, 0);
+  const lh = leucht(mH.L);
+  V("3 bar liegt gezeichnet zwischen drucklos und 6 bar", lh > Math.min(leucht(m0.L), leucht(mL.L)) && lh < Math.max(leucht(m0.L), leucht(mL.L)));
+  // the body stands out of the strong blue of the air: black rubber with a light edge, so either its fill or its edge differs from the room by 3:1
+  const k = await seite.evaluate(() => {
+    const r = document.querySelector('[data-g="koerper"] [data-lage="schnitt"]').getBoundingClientRect();
+    const rand = getComputedStyle(document.querySelector('[data-g="koerper"] [data-lage="schnitt"] path')).stroke;
+    const srgb = rand.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+    const c = srgb ? [1, 2, 3].map((i) => Math.round(Number(srgb[i]) * 255)) : (rand.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    return { mitte: [r.left + r.width / 2, r.top + r.height / 2], rand: c };
+  });
+  await stelle(6, 6);
+  const kk = await pixelAnClient(k.mitte);
+  const mStark = await messen(6, 6);
+  const kKoerper = Math.max(kontrastVon(kk, mStark.A), kontrastVon(k.rand, mStark.A));
+  V(`der Körper hebt sich vom kräftigen Blau ab (Füllung ${kontrastVon(kk, mStark.A).toFixed(2)}:1, Rand ${kontrastVon(k.rand, mStark.A).toFixed(2)}:1)`, kKoerper >= 3);
 
   // --- rooms: tones follow the pressure, not fixed sides ------------------------------------------------
   await stelle(0, 0);
