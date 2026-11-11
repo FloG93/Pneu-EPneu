@@ -131,11 +131,12 @@ test("Eingang links fällt auf 0, rechts 6: Körper wechselt, p2 bleibt 6 (keine
   assert.ok(tief2 >= b(6) - 1e-9, `p2 fiel auf ${tief2}`);
 });
 
-test("beide aus: p2 entlüftet über den offenen Eingang, innerhalb von 0,5 s unter 0,1 bar", () => {
+test("beide aus: p2 entlüftet über den offenen Eingang, innerhalb von 50 ms unter 0,1 bar", () => {
   const z = lauf(zustand(1, b(0), b(0), b(0)), 0.1, b(6), b(0));   // ball right: the LEFT input is the open one
   nahe(z.p2, b(6), 1e-6);
   let letzt = z.p2;
-  for (let i = 0; i < 500; i += 1) {                  // 0,5 s
+  // the chamber's time constant is 2,6 ms (50 cm³ over 19,5 l/s per bar): 50 ms are 19 of them, 7 bar · e^-19 ≈ 0
+  for (let i = 0; i < 50; i += 1) {                   // 50 ms
     schritt(z, M, 0.001, { pL: b(0), pR: b(0) });
     assert.ok(z.p2 <= letzt + 1e-12, "p2 steigt wieder");
     letzt = z.p2;

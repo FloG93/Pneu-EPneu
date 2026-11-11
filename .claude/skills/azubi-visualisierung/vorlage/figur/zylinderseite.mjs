@@ -155,10 +155,8 @@ function zeichneHub() {
   kammerB.setAttribute("d", kammerPfad(vorn + KB, X_ROHR[1] - 1));
 }
 
-let letzteZeile = "";
 function zeichneAnzeige() {
-  const text = anzeigeText(anzeige(zustand, MASSE, druck));
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+  schreibeAnzeige(anzeigeText(anzeige(zustand, MASSE, druck)));
 }
 
 // The two chambers in the tone of their pressure; returns the colours for the streams.
@@ -182,7 +180,7 @@ function bildZeichnen(dt, offen, bewegt) {
     zeichneLuft(dm);
     zeichneAnzeige();
   } else {
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+    haltStroeme(dt);
   }
   if (typeof nachBild === "function") nachBild(dt, offen);
 }

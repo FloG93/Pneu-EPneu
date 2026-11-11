@@ -64,7 +64,8 @@ export function bahn(punkte3, P, iso) {
 
 /**
  * The runtime. Expects `P`, `FARBEN`, `BAHNEN`, `RB`, `ZC` and the `iso`
- * function from the kit to be defined before it.
+ * function from the kit to be defined before it. `haltStroeme`, `blendeLeereStroeme` and
+ * `setzeRaumFarben` use the page's own `stroeme` and `raeume`.
  */
 export const LAUFZEIT = String.raw`
 const NSL = "http://www.w3.org/2000/svg";
@@ -160,6 +161,28 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
     // pops into being in the middle of a hose.
     const rand = Math.min(1, at / 14, (strom.bahn.gesamt - at) / 14);
     c.setAttribute("opacity", (staerke * Math.max(0, rand) * 0.95).toFixed(2));
+  }
+}
+
+// The streams stand still and fade out (while a machine is taken apart). Uses the page's stroeme.
+function haltStroeme(dt) {
+  for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+}
+
+// A stream whose particles are all transparent is hidden as a whole. Uses the page's stroeme.
+function blendeLeereStroeme() {
+  for (const name in stroeme) {
+    const s = stroeme[name];
+    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    s.g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+// Paint every room of the drawing (the page's raeume, [data-raum]) with the tone its number has in farbe.
+function setzeRaumFarben(farbe) {
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
   }
 }
 `;

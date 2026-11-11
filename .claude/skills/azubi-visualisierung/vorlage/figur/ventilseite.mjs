@@ -27,11 +27,11 @@
 //   raeume, luftLage, stroeme, bed, zeichneLuft(dt), zeichneBedienung()   air and signals
 // It defines `bildZeichnen` and `blende` too: the frame the shared loop (EX.ABLAUF) calls,
 // and the helpers every page's zeichneLuft uses (`luftTon`, `entlueftet`, `luftTempo`,
-// `setzeRaumFarben`, `blendeLeereStroeme`, `steuerStrom`, `steuerRaus`).
+// `steuerStrom`, `steuerRaus`; `setzeRaumFarben` and `blendeLeereStroeme` come from figur/luft.mjs).
 // The functions are embedded as text into the page's classic script, so the
 // text holds no backtick and every top-level name must be unique there.
 
-import { schieber } from "./seite.mjs";
+import { schieber, zeitlupeSchieber, ZEITLUPE_LAUFZEIT } from "./seite.mjs";
 import { CSS as LUFT_CSS, FARBEN } from "./luft.mjs";
 import { SCHNITT_CSS, FEDER_LAUFZEIT } from "./normteile.mjs";
 import { SYMBOL_CSS } from "./schaltzeichen.mjs";
@@ -39,7 +39,7 @@ import { SYMBOL_CSS } from "./schaltzeichen.mjs";
 /** The three sliders as one unit each, so a bar that wraps on a phone keeps label, slider and value together. */
 export function reglerLeiste({ handBeschreibung = "Schieber von Hand: 0 % ist die Ruhestellung, 100 % die betätigte Stellung" } = {}) {
   return [
-    schieber("zeitlupe", "Zeitlupe", { min: 1, max: 50, step: 1, wert: 1, einheit: "×", beschreibung: "Zeitlupe: Modellzeit geteilt durch diesen Wert" }),
+    zeitlupeSchieber(),
     schieber("hand", "Schieber von Hand", { min: 0, max: 100, step: 1, wert: 0, einheit: " %", beschreibung: handBeschreibung }),
     schieber("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Versorgungsdruck in bar" })
       .replace(">6 bar</output>", ">6,0 bar</output>"),
@@ -59,10 +59,9 @@ export const CSS = `${LUFT_CSS}${SCHNITT_CSS}${SYMBOL_CSS}
 .playbtn:disabled { cursor: not-allowed; color: var(--anatomy-text); border-style: dashed; box-shadow: none }
 `;
 
-export const LAUFZEIT = `${FEDER_LAUFZEIT}\n` + String.raw`
+export const LAUFZEIT = `${FEDER_LAUFZEIT}\n${ZEITLUPE_LAUFZEIT}\n` + String.raw`
 const komma = (x) => x.toFixed(1).replace(".", ",");
 let druck = 6;
-let zeitlupe = 1;
 let angehalten = false;
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
@@ -86,7 +85,6 @@ function zeichneHub() {
 // The last measured switching time; until there is one, the time this
 // pressure and this type give, computed once per change.
 let rechenZeit = { druck: null, schluessel: null, wert: null };
-let letzteZeile = "";
 function zeichneAnzeige() {
   let a;
   if (v.schaltzeit === null) {
@@ -99,7 +97,7 @@ function zeichneAnzeige() {
   } else a = ventilAnzeige(v, MASSE, druck);
   const text = ANSCHLUESSE.map((w) => "p" + w + " " + komma(a.drucke[w]) + " bar").join(" · ")
     + " · Schaltzeit " + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+  schreibeAnzeige(text);
 }
 
 // The hand slider follows the spool unless a hand holds it.
@@ -121,14 +119,9 @@ function zeichneSymbol() {
 
 // Slow motion, the spool by hand, the supply pressure.
 function bindeRegler() {
-  const lupeRegler = document.getElementById("zeitlupe");
-  const lupeWert = document.getElementById("zeitlupe-wert");
   const druckRegler = document.getElementById("druck");
   const druckWert = document.getElementById("druck-wert");
-  lupeRegler.addEventListener("input", () => {
-    zeitlupe = lupeRegler.valueAsNumber;
-    lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
-  });
+  zeitlupeBinden();
   handRegler.addEventListener("input", () => {
     stoppeAuto();
     vonHand(v, handRegler.valueAsNumber / 100);
@@ -176,22 +169,6 @@ function steuerStrom(name, dt, an, p, quelle, F, stumm) {
   stromSchritt(stroeme[name], dt, luftTempo(q * STEUER_TEMPO), staerke, an ? F.druck : F.abluft);
 }
 
-// Paint every room with the tone its number has in farbe.
-function setzeRaumFarben(farbe) {
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
-}
-// A stream whose particles are all transparent is hidden as a whole.
-function blendeLeereStroeme() {
-  for (const name in stroeme) {
-    const s = stroeme[name];
-    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    s.g.style.opacity = sichtbar ? "" : "0";
-  }
-}
-
 function blende(sicht) {
   luftLage.style.opacity = String(sicht);
   for (const el of raeume) {
@@ -214,7 +191,7 @@ function bildZeichnen(dt, offen, bewegt) {
     zeichneAnzeige();
     zeichneBedienung();
   } else {
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+    haltStroeme(dt);
   }
   zeichneSymbol();
 }

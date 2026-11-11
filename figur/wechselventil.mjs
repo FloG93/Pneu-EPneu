@@ -72,7 +72,8 @@ export function durchfluss(z, masse = OS_1_4) {
 function wechselSeite(oeffnung, pEingang, p2, zielSitz, masse) {
   const dp = pEingang - p2;
   if (dp < 0 && zielSitz) return 0;
-  return (masse.qn * oeffnung * dp) / masse.bezugsDp || 0;   // `|| 0` drops a negative zero
+  // + 0 turns a negative zero into 0 (and leaves a NaN a NaN, so a broken input shows up)
+  return (masse.qn * oeffnung * dp) / masse.bezugsDp + 0;
 }
 
 /**
@@ -117,9 +118,9 @@ export function anzeige(z, masse = OS_1_4) {
     pR: wechselBar(z.pR - AUSSEN),
     p2: wechselBar(z.p2 - AUSSEN),
     sperrt: sperrSeite(z),
-    links: Math.round(q.links) || 0,
-    rechts: Math.round(q.rechts) || 0,
-    gesamt: Math.round(q.gesamt) || 0,
+    links: Math.round(q.links) + 0,
+    rechts: Math.round(q.rechts) + 0,
+    gesamt: Math.round(q.gesamt) + 0,
   };
 }
 

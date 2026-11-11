@@ -968,6 +968,11 @@ const ISO_CSS = `
 @media (prefers-reduced-motion:reduce){.iso-line[data-flow],.iso-dots circle[data-pulse]{animation:none}}
 `;
 
+// Writes the readout, only when the text has changed (the page's own readout element).
+let anzeigeLetzte = "";
+function schreibeAnzeige(text) {
+  if (text !== anzeigeLetzte) { readout.textContent = text; anzeigeLetzte = text; }
+}
 const kontrast = document.getElementById("kontrast");
 const kontrastWert = document.getElementById("kontrast-wert");
 if (kontrast) {
@@ -1982,6 +1987,28 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
   }
 }
 
+// The streams stand still and fade out (while a machine is taken apart). Uses the page's stroeme.
+function haltStroeme(dt) {
+  for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+}
+
+// A stream whose particles are all transparent is hidden as a whole. Uses the page's stroeme.
+function blendeLeereStroeme() {
+  for (const name in stroeme) {
+    const s = stroeme[name];
+    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    s.g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+// Paint every room of the drawing (the page's raeume, [data-raum]) with the tone its number has in farbe.
+function setzeRaumFarben(farbe) {
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
+}
+
 
 
 const federTeile = Array.from(svg.querySelectorAll("[data-federx]")).map((el) => {
@@ -2090,10 +2117,8 @@ function zeichneHub() {
   kammerB.setAttribute("d", kammerPfad(vorn + KB, X_ROHR[1] - 1));
 }
 
-let letzteZeile = "";
 function zeichneAnzeige() {
-  const text = anzeigeText(anzeige(zustand, MASSE, druck));
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+  schreibeAnzeige(anzeigeText(anzeige(zustand, MASSE, druck)));
 }
 
 // The two chambers in the tone of their pressure; returns the colours for the streams.
@@ -2117,7 +2142,7 @@ function bildZeichnen(dt, offen, bewegt) {
     zeichneLuft(dm);
     zeichneAnzeige();
   } else {
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+    haltStroeme(dt);
   }
   if (typeof nachBild === "function") nachBild(dt, offen);
 }

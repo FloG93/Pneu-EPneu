@@ -8,8 +8,10 @@
 // streams there are, how a frame of its model is drawn and what the readout says.
 //
 // Node side:
-//   leiste(vorn)            the control bar: `vorn` (the page's own buttons and sliders), the
-//                           automatic button, "Zerlegen und zusammenbauen", the house controls
+//   leiste(vorn, { zeitlupe })  the control bar: `vorn` (the page's own buttons and sliders), the
+//                           slow-motion slider (when `zeitlupe`, the start factor, is given), the automatic
+//                           button, "Zerlegen und zusammenbauen", the house controls
+//   regler(html)            one slider as a unit that stays together when the bar wraps
 //   schaltzeichenBlock({ svg, text })   the companion block "Schaltzeichen" beside the card
 //   lebendSkript({...})     the live script as source (see below)
 //   seiteSchreiben({...})   page, style, file
@@ -22,11 +24,13 @@
 // LAUFZEIT expects, defined by the constants: `P MOVE ORDER SPR TAKT KEYS LIFT VIEW0 VIEW1 MITTE
 // STEP FARBEN BAHNEN SEITE_VON ANZAHL VORNE SKALA AUTO_TAKT`, and the elements `stage svg groups
 // readout info still`. It defines `komma`, `angehalten`, `lagen`, `raeume`, `luftLage`, `luftHinten`,
-// `stroeme`, `symbole`, `bed`, `knopfAuto`, `hubAnteil`, `zeichneHub`, `zeichneAnzeige`, `zeichneLagen`,
+// `stroeme`, `symbole`, `bed`, `knopfAuto`, `zeitlupe`, `hubAnteil`, `zeichneHub`, `zeichneAnzeige`, `zeichneLagen`,
 // `setzeRaumFarben`, `luftStroeme`, `zeichneBedienung`, `zeichneModell`, `bildZeichnen`, `stoppeAuto`, `bedient`,
 // `stelleFest`, `vorDemZerlegen` and `figurStarten`.
 // And it expects the page to define, before it calls any of them:
 //   seiteAutoSchritt()        one automatic step (the page flips what the cycle flips)
+//   seiteAutoStart()          optional: the automatic cycle starts (at the load, when the cycle is on, and at every
+//                             click that switches it on): the page puts its cycle back to its first step
 //   seiteBedienung()          the page's own buttons and sliders show the state (the automatic button is drawn here)
 //   modellSchritt(dm)         advance the model by dm s of model time
 //   zeichneLuft(dt)           the rooms' tones and the streams (setzeRaumFarben, luftStroeme)
@@ -45,10 +49,17 @@ import * as LEG from "./legende.mjs";
 import * as LU from "./luft.mjs";
 import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "./bedienung.mjs";
 import { SCHNITT_CSS } from "./normteile.mjs";
-import { seite, knopf, hausBedienung, modulQuelle } from "./seite.mjs";
+import { seite, knopf, hausBedienung, modulQuelle, zeitlupeSchieber, ZEITLUPE_LAUFZEIT } from "./seite.mjs";
 
-/** The control bar: the page's own controls, then automatic, take apart, and the house controls. */
-export const leiste = (vorn) => vorn
+/** One slider as a unit with its label, so a bar that wraps on a phone keeps label, slider and value together. */
+export const regler = (html) => `<span class="regler">${html}</span>`;
+
+/**
+ * The control bar: the page's own controls, the slow-motion slider when `zeitlupe` (the factor the page
+ * starts with) is given, then automatic, take apart, and the house controls.
+ */
+export const leiste = (vorn, { zeitlupe = null } = {}) => vorn
+  + (zeitlupe ? regler(zeitlupeSchieber(zeitlupe)) : "")
   + knopf("btn-auto", "Automatik", { gedrueckt: true })
   + knopf("btn-explode", "Zerlegen und zusammenbauen")
   + `<span class="luecke"></span>` + hausBedienung();
@@ -124,6 +135,7 @@ ${EX.ABLAUF}
 ${LU.LAUFZEIT}
 ${symbole.join("\n")}
 ${BEDIENUNG_LAUFZEIT}
+${ZEITLUPE_LAUFZEIT}
 ${LAUFZEIT}
 ${eigenes}
 `;
@@ -163,6 +175,11 @@ function zeichneBedienung() {
   seiteBedienung();
 }
 const stoppeAuto = () => { bed.autoAus(); };
+// The cycle starts from the page's first step.
+function autoStarten() {
+  bed.autoStart("R");
+  if (typeof seiteAutoStart === "function") seiteAutoStart();
+}
 
 // A hand on a control: optionally stops the cycle, wakes the model, draws the controls, restarts the loop.
 function bedient(autoStoppen) {
@@ -178,7 +195,7 @@ function stelleFest() {
   gezeichnet = "";
 }
 knopfAuto.addEventListener("click", () => {
-  if (bed.auto) bed.autoAus(); else bed.autoStart("R");
+  if (bed.auto) bed.autoAus(); else autoStarten();
   bedient(false);
 });
 
@@ -201,24 +218,14 @@ function zeichneLagen() {
   }
 }
 
-let letzteZeile = "";
 function zeichneAnzeige() {
-  const text = anzeigeText();
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+  schreibeAnzeige(anzeigeText());
 }
 // The model's frame: the moving part, the air, the readout.
 function zeichneModell(dm) {
   zeichneHub();
   zeichneLuft(dm);
   zeichneAnzeige();
-}
-
-// Paint every room of the drawing with the tone its side has in farbe.
-function setzeRaumFarben(farbe) {
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
 }
 
 // Particle speed and strength follow the flow of the way they run on (l/min, signed: a negative flow runs
@@ -231,10 +238,7 @@ function luftStroeme(dt, farbe, strecke, lauf = 1) {
   for (const name in stroeme) {
     stromSchritt(stroeme[name], dt, lauf * tempoVon(strecke[name]), staerkeVon(strecke[name]), farbe[SEITE_VON[name]]);
   }
-  for (const name in stroeme) {
-    const sichtbar = stroeme[name].kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    stroeme[name].g.style.opacity = sichtbar ? "" : "0";
-  }
+  blendeLeereStroeme();
 }
 
 // One frame (the loop itself is EX.ABLAUF).
@@ -249,7 +253,7 @@ function bildZeichnen(dt, offen, bewegt) {
   if (Math.abs(willHub - hubAnteil) > 1e-4) { hubAnteil = willHub; gezeichnet = ""; }
   // The valve stops while it is being taken apart and carries on afterwards.
   if (offen < 0.01 && !bewegt) {
-    const dm = angehalten ? 0 : dt;
+    const dm = angehalten ? 0 : dt / zeitlupe;
     if (dm > 0) {
       bed.takt(dm);
       modellSchritt(dm);
@@ -257,7 +261,7 @@ function bildZeichnen(dt, offen, bewegt) {
     zeichneModell(dm);
   } else {
     zeichneHub();
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+    haltStroeme(dt);
   }
   zeichneLagen();
   zeichneStets();
@@ -269,6 +273,8 @@ function vorDemZerlegen() { stoppeAuto(); }
 // The first picture, once the page has defined its own functions, and the handle for the browser test and
 // for screenshots; eigenes are the page's own entries.
 function figurStarten(eigenes) {
+  zeitlupeBinden();
+  if (bed.auto && typeof seiteAutoStart === "function") seiteAutoStart();
   zeichneBedienung();
   zeichneModell(0);
   zeichneLagen();

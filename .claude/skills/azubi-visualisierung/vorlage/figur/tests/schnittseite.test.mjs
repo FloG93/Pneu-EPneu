@@ -11,9 +11,10 @@ import * as EX from "../explode.mjs";
 import * as LEG from "../legende.mjs";
 import * as LU from "../luft.mjs";
 import { LAUFZEIT as BEDIENUNG } from "../bedienung.mjs";
+import { ZEITLUPE_LAUFZEIT, zeitlupeSchieber } from "../seite.mjs";
 import { SYMBOL_LAUFZEIT, DROSSEL_SYMBOL_LAUFZEIT, WECHSEL_SYMBOL_LAUFZEIT } from "../schaltzeichen.mjs";
 import { LUFTLAGE_HINTEN } from "../schnittteile.mjs";
-import { LAUFZEIT, CSS, leiste, schaltzeichenBlock, lebendSkript, seiteSchreiben } from "../schnittseite.mjs";
+import { LAUFZEIT, CSS, leiste, regler, schaltzeichenBlock, lebendSkript, seiteSchreiben } from "../schnittseite.mjs";
 
 const WURZEL = join(import.meta.dirname, "..", "..");
 
@@ -28,13 +29,13 @@ test("Die Laufzeit nennt jeden Haken, den sie von der Seite erwartet, und jeden 
     assert.ok(LAUFZEIT.includes(haken), `${haken} wird nicht gerufen`);
   }
   for (const name of ["function bildZeichnen", "function vorDemZerlegen", "function figurStarten", "function zeichneBedienung", "function zeichneModell", "function stelleFest",
-    "function bedient", "function zeichneHub", "function zeichneAnzeige", "function zeichneLagen", "function setzeRaumFarben", "function luftStroeme", "const stoppeAuto", "const bed ="]) {
+    "function bedient", "function zeichneHub", "function zeichneAnzeige", "function zeichneLagen", "function luftStroeme", "const stoppeAuto", "const bed ="]) {
     assert.ok(LAUFZEIT.includes(name), `${name} fehlt`);
   }
 });
 
 test("Mit dem Rest der Seite in einem Skript: keine doppelte Definition", () => {
-  const alles = [EX.LAUFZEIT, LEG.LAUFZEIT, EX.ABLAUF, LU.LAUFZEIT, SYMBOL_LAUFZEIT, DROSSEL_SYMBOL_LAUFZEIT, WECHSEL_SYMBOL_LAUFZEIT, BEDIENUNG, LAUFZEIT].join("\n");
+  const alles = [EX.LAUFZEIT, LEG.LAUFZEIT, EX.ABLAUF, LU.LAUFZEIT, SYMBOL_LAUFZEIT, DROSSEL_SYMBOL_LAUFZEIT, WECHSEL_SYMBOL_LAUFZEIT, BEDIENUNG, ZEITLUPE_LAUFZEIT, LAUFZEIT].join("\n");
   assert.doesNotThrow(() => new Function(alles), "Namen doppelt oder Skript ungültig");
 });
 
@@ -113,4 +114,37 @@ test("Die Seite wird geschrieben: Skript, eigene Stilregeln und Schnittton in de
 test("Die Schicht für die Teilchen im Gehäuse hat die Kennung, die die Laufzeit sucht", () => {
   assert.match(LUFTLAGE_HINTEN, /data-luftlage-hinten/);
   assert.ok(LAUFZEIT.includes('"[data-luftlage-hinten]"'));
+});
+
+test("Zeitlupe: der Schieber beginnt mit dem Faktor der Seite, ohne Faktor gibt es keinen", () => {
+  assert.ok(!leiste("").includes('id="zeitlupe"'));
+  const html = leiste("", { zeitlupe: 10 });
+  assert.match(html, /<span class="regler"><label[^>]*for="zeitlupe">Zeitlupe<\/label>/);
+  assert.match(html, /id="zeitlupe"[^>]* value="10"/);
+  assert.match(html, /<output[^>]*id="zeitlupe-wert"[^>]*>1\/10<\/output>/);
+  assert.match(zeitlupeSchieber(), /<output[^>]*>1×<\/output>/);
+  assert.equal(regler("<i/>"), '<span class="regler"><i/></span>');
+});
+
+test("Zeitlupe: die Laufzeit teilt die Modellzeit durch den Faktor und liest den Schieber beim Start", () => {
+  assert.match(LAUFZEIT, /const dm = angehalten \? 0 : dt \/ zeitlupe;/);
+  assert.match(LAUFZEIT, /function figurStarten[^]*zeitlupeBinden\(\);/);
+  const el = { valueAsNumber: 10, listener: null, addEventListener(t, f) { this.listener = f; } };
+  const wert = { textContent: "" };
+  const doc = { getElementById: (id) => (id === "zeitlupe" ? el : wert) };
+  const z = new Function("document", `${ZEITLUPE_LAUFZEIT}; return { binden: zeitlupeBinden, faktor: () => zeitlupe };`)(doc);
+  z.binden();
+  assert.equal(z.faktor(), 10); assert.equal(wert.textContent, "1/10");
+  el.valueAsNumber = 1; el.listener();
+  assert.equal(z.faktor(), 1); assert.equal(wert.textContent, "1×");
+  // a page without the slider keeps real time and does not fail
+  const leer = new Function("document", `${ZEITLUPE_LAUFZEIT}; return { binden: zeitlupeBinden, faktor: () => zeitlupe };`)({ getElementById: () => null });
+  assert.doesNotThrow(() => leer.binden());
+  assert.equal(leer.faktor(), 1);
+});
+
+test("Automatik: der Start ruft den Haken der Seite, am Anfang und bei jedem Einschalten", () => {
+  assert.match(LAUFZEIT, /function autoStarten\(\) \{\s*bed\.autoStart\("R"\);\s*if \(typeof seiteAutoStart === "function"\) seiteAutoStart\(\);/);
+  assert.match(LAUFZEIT, /if \(bed\.auto\) bed\.autoAus\(\); else autoStarten\(\);/);
+  assert.match(LAUFZEIT, /function figurStarten[^]*if \(bed\.auto && typeof seiteAutoStart === "function"\) seiteAutoStart\(\);/);
 });

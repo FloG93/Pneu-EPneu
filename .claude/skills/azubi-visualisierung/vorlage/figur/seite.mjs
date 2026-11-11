@@ -34,6 +34,31 @@ export const schieber = (id, text, { min, max, step, wert, einheit = "", beschre
   + ` value="${wert}" aria-label="${esc(beschreibung ?? text)}" aria-describedby="${esc(id)}-wert">`
   + `<output class="ctrwert" id="${esc(id)}-wert" for="${esc(id)}">${wert}${esc(einheit)}</output>`;
 
+/** The slow-motion slider: 1 = real time, n = model time at 1/n (`start` is the factor the page begins with). */
+export const zeitlupeSchieber = (start = 1) => {
+  const html = schieber("zeitlupe", "Zeitlupe", { min: 1, max: 50, step: 1, wert: start, einheit: "×", beschreibung: "Zeitlupe: Modellzeit geteilt durch diesen Wert" });
+  return start === 1 ? html : html.replace(`>${start}×</output>`, `>1/${start}</output>`);
+};
+
+/**
+ * Runtime of the slow-motion slider, inlined as source: `zeitlupe` is the factor the page divides its model
+ * time by; `zeitlupeBinden()` reads the slider (when the page has one) and follows it.
+ */
+export const ZEITLUPE_LAUFZEIT = String.raw`
+let zeitlupe = 1;
+function zeitlupeBinden() {
+  const regler = document.getElementById("zeitlupe");
+  if (!regler) return;
+  const wert = document.getElementById("zeitlupe-wert");
+  const zeige = () => {
+    zeitlupe = regler.valueAsNumber;
+    wert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
+  };
+  regler.addEventListener("input", zeige);
+  zeige();
+}
+`;
+
 const KN = Math.round(K_DEFAULT * 100);
 
 /** Contrast slider and light/dark button: the two every page of the house has. */
@@ -134,6 +159,11 @@ const bootSkript = () => `<script>
 
 /** Theme and contrast behaviour, shared by every figure. Inlined as source. */
 export const HAUS_LAUFZEIT = `
+// Writes the readout, only when the text has changed (the page's own readout element).
+let anzeigeLetzte = "";
+function schreibeAnzeige(text) {
+  if (text !== anzeigeLetzte) { readout.textContent = text; anzeigeLetzte = text; }
+}
 const kontrast = document.getElementById("kontrast");
 const kontrastWert = document.getElementById("kontrast-wert");
 if (kontrast) {

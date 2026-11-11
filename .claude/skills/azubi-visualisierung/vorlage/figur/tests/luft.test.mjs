@@ -3,7 +3,7 @@
 // black-and-white print. That is a measurement, not a matter of taste.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FARBEN, PAPIER, kontrast, leuchtkraft } from "../luft.mjs";
+import { FARBEN, PAPIER, kontrast, leuchtkraft, LAUFZEIT } from "../luft.mjs";
 
 for (const modus of ["light", "dark"]) {
   test(`${modus}: beide Lufttöne heben sich vom Papier ab`, () => {
@@ -42,4 +42,33 @@ test("Die Kontrastrechnung selbst stimmt", () => {
   // Known values: white against black is 21:1, a colour against itself 1:1.
   assert.ok(Math.abs(kontrast("#ffffff", "#000000") - 21) < 0.01);
   assert.ok(Math.abs(kontrast("#777777", "#777777") - 1) < 1e-9);
+});
+
+// The three helpers every page's runtime shares: run against a stand-in for the page's own `stroeme` and `raeume`.
+const helfer = (stroeme, raeume, stromSchritt = () => {}) =>
+  new Function("stroeme", "raeume", "stromSchritt", `${LAUFZEIT.match(/function haltStroeme[^]*$/)[0]}; return { haltStroeme, blendeLeereStroeme, setzeRaumFarben };`)(stroeme, raeume, stromSchritt);
+
+test("Laufzeit: setzeRaumFarben malt jeden Raum in den Ton seiner Nummer und fasst Gleiches nicht an", () => {
+  const raum = (nr) => ({ dataset: { raum: nr }, f: null, n: 0, getAttribute() { return this.f; }, setAttribute(_, v) { this.f = v; this.n += 1; } });
+  const a = raum("L"), b = raum("R");
+  const h = helfer({}, [a, b]);
+  h.setzeRaumFarben({ L: "#123", R: "none" });
+  assert.deepEqual([a.f, b.f], ["#123", "none"]);
+  h.setzeRaumFarben({ L: "#123", R: "#456" });
+  assert.deepEqual([a.n, b.n], [1, 2], "ein unveränderter Ton wird nicht neu geschrieben");
+});
+
+test("Laufzeit: blendeLeereStroeme blendet einen Strom aus, dessen Teilchen alle durchsichtig sind", () => {
+  const strom = (ops) => ({ kugeln: ops.map((o) => ({ getAttribute: () => o })), g: { style: {} } });
+  const s = { leer: strom(["0", "0"]), voll: strom(["0", "0.5"]) };
+  helfer(s, []).blendeLeereStroeme();
+  assert.equal(s.leer.g.style.opacity, "0");
+  assert.equal(s.voll.g.style.opacity, "");
+});
+
+test("Laufzeit: haltStroeme lässt jeden Strom stillstehen und ausblenden", () => {
+  const aufrufe = [];
+  const h = helfer({ a: { n: 1 }, b: { n: 2 } }, [], (s, dt, tempo, staerke, farbe) => aufrufe.push([s.n, dt, tempo, staerke, farbe]));
+  h.haltStroeme(0.016);
+  assert.deepEqual(aufrufe, [[1, 0.016, 0, 0, "#000"], [2, 0.016, 0, 0, "#000"]]);
 });

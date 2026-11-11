@@ -1034,6 +1034,11 @@ const ISO_CSS = `
 @media (prefers-reduced-motion:reduce){.iso-line[data-flow],.iso-dots circle[data-pulse]{animation:none}}
 `;
 
+// Writes the readout, only when the text has changed (the page's own readout element).
+let anzeigeLetzte = "";
+function schreibeAnzeige(text) {
+  if (text !== anzeigeLetzte) { readout.textContent = text; anzeigeLetzte = text; }
+}
 const kontrast = document.getElementById("kontrast");
 const kontrastWert = document.getElementById("kontrast-wert");
 if (kontrast) {
@@ -1706,6 +1711,28 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
   }
 }
 
+// The streams stand still and fade out (while a machine is taken apart). Uses the page's stroeme.
+function haltStroeme(dt) {
+  for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+}
+
+// A stream whose particles are all transparent is hidden as a whole. Uses the page's stroeme.
+function blendeLeereStroeme() {
+  for (const name in stroeme) {
+    const s = stroeme[name];
+    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    s.g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+// Paint every room of the drawing (the page's raeume, [data-raum]) with the tone its number has in farbe.
+function setzeRaumFarben(farbe) {
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
+}
+
 
 function symbolKlasse(weg, an, rolle) {
   weg.classList.remove("stark");
@@ -1830,9 +1857,22 @@ function federnVerschieben(s, festesEnde) {
 }
 
 
+let zeitlupe = 1;
+function zeitlupeBinden() {
+  const regler = document.getElementById("zeitlupe");
+  if (!regler) return;
+  const wert = document.getElementById("zeitlupe-wert");
+  const zeige = () => {
+    zeitlupe = regler.valueAsNumber;
+    wert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
+  };
+  regler.addEventListener("input", zeige);
+  zeige();
+}
+
+
 const komma = (x) => x.toFixed(1).replace(".", ",");
 let druck = 6;
-let zeitlupe = 1;
 let angehalten = false;
 
 const hubTeile = Array.from(svg.querySelectorAll("[data-hub]"));
@@ -1856,7 +1896,6 @@ function zeichneHub() {
 // The last measured switching time; until there is one, the time this
 // pressure and this type give, computed once per change.
 let rechenZeit = { druck: null, schluessel: null, wert: null };
-let letzteZeile = "";
 function zeichneAnzeige() {
   let a;
   if (v.schaltzeit === null) {
@@ -1869,7 +1908,7 @@ function zeichneAnzeige() {
   } else a = ventilAnzeige(v, MASSE, druck);
   const text = ANSCHLUESSE.map((w) => "p" + w + " " + komma(a.drucke[w]) + " bar").join(" · ")
     + " · Schaltzeit " + (a.schaltzeitMs === null ? "–" : a.schaltzeitMs) + " ms";
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+  schreibeAnzeige(text);
 }
 
 // The hand slider follows the spool unless a hand holds it.
@@ -1891,14 +1930,9 @@ function zeichneSymbol() {
 
 // Slow motion, the spool by hand, the supply pressure.
 function bindeRegler() {
-  const lupeRegler = document.getElementById("zeitlupe");
-  const lupeWert = document.getElementById("zeitlupe-wert");
   const druckRegler = document.getElementById("druck");
   const druckWert = document.getElementById("druck-wert");
-  lupeRegler.addEventListener("input", () => {
-    zeitlupe = lupeRegler.valueAsNumber;
-    lupeWert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
-  });
+  zeitlupeBinden();
   handRegler.addEventListener("input", () => {
     stoppeAuto();
     vonHand(v, handRegler.valueAsNumber / 100);
@@ -1946,22 +1980,6 @@ function steuerStrom(name, dt, an, p, quelle, F, stumm) {
   stromSchritt(stroeme[name], dt, luftTempo(q * STEUER_TEMPO), staerke, an ? F.druck : F.abluft);
 }
 
-// Paint every room with the tone its number has in farbe.
-function setzeRaumFarben(farbe) {
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
-}
-// A stream whose particles are all transparent is hidden as a whole.
-function blendeLeereStroeme() {
-  for (const name in stroeme) {
-    const s = stroeme[name];
-    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    s.g.style.opacity = sichtbar ? "" : "0";
-  }
-}
-
 function blende(sicht) {
   luftLage.style.opacity = String(sicht);
   for (const el of raeume) {
@@ -1984,7 +2002,7 @@ function bildZeichnen(dt, offen, bewegt) {
     zeichneAnzeige();
     zeichneBedienung();
   } else {
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+    haltStroeme(dt);
   }
   zeichneSymbol();
 }

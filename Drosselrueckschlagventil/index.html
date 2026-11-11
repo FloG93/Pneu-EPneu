@@ -1023,6 +1023,11 @@ const ISO_CSS = `
 @media (prefers-reduced-motion:reduce){.iso-line[data-flow],.iso-dots circle[data-pulse]{animation:none}}
 `;
 
+// Writes the readout, only when the text has changed (the page's own readout element).
+let anzeigeLetzte = "";
+function schreibeAnzeige(text) {
+  if (text !== anzeigeLetzte) { readout.textContent = text; anzeigeLetzte = text; }
+}
 const kontrast = document.getElementById("kontrast");
 const kontrastWert = document.getElementById("kontrast-wert");
 if (kontrast) {
@@ -1508,6 +1513,28 @@ function stromSchritt(strom, dt, tempo, staerke, farbe) {
   }
 }
 
+// The streams stand still and fade out (while a machine is taken apart). Uses the page's stroeme.
+function haltStroeme(dt) {
+  for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+}
+
+// A stream whose particles are all transparent is hidden as a whole. Uses the page's stroeme.
+function blendeLeereStroeme() {
+  for (const name in stroeme) {
+    const s = stroeme[name];
+    const sichtbar = s.kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    s.g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+// Paint every room of the drawing (the page's raeume, [data-raum]) with the tone its number has in farbe.
+function setzeRaumFarben(farbe) {
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
+}
+
 
 function drosselSymbolStellen(svgEl, offen) {
   var zweige = svgEl.querySelectorAll("[data-weg]");
@@ -1606,6 +1633,20 @@ function bedienungSignale(opt) {
 }
 
 
+let zeitlupe = 1;
+function zeitlupeBinden() {
+  const regler = document.getElementById("zeitlupe");
+  if (!regler) return;
+  const wert = document.getElementById("zeitlupe-wert");
+  const zeige = () => {
+    zeitlupe = regler.valueAsNumber;
+    wert.textContent = zeitlupe === 1 ? "1×" : "1/" + zeitlupe;
+  };
+  regler.addEventListener("input", zeige);
+  zeige();
+}
+
+
 const komma = (x) => String(x).replace(".", ",");
 let angehalten = false;
 let hubAnteil = 1;                    // goes to 0 while the valve is taken apart: the moving parts stand home
@@ -1639,6 +1680,11 @@ function zeichneBedienung() {
   seiteBedienung();
 }
 const stoppeAuto = () => { bed.autoAus(); };
+// The cycle starts from the page's first step.
+function autoStarten() {
+  bed.autoStart("R");
+  if (typeof seiteAutoStart === "function") seiteAutoStart();
+}
 
 // A hand on a control: optionally stops the cycle, wakes the model, draws the controls, restarts the loop.
 function bedient(autoStoppen) {
@@ -1654,7 +1700,7 @@ function stelleFest() {
   gezeichnet = "";
 }
 knopfAuto.addEventListener("click", () => {
-  if (bed.auto) bed.autoAus(); else bed.autoStart("R");
+  if (bed.auto) bed.autoAus(); else autoStarten();
   bedient(false);
 });
 
@@ -1677,24 +1723,14 @@ function zeichneLagen() {
   }
 }
 
-let letzteZeile = "";
 function zeichneAnzeige() {
-  const text = anzeigeText();
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+  schreibeAnzeige(anzeigeText());
 }
 // The model's frame: the moving part, the air, the readout.
 function zeichneModell(dm) {
   zeichneHub();
   zeichneLuft(dm);
   zeichneAnzeige();
-}
-
-// Paint every room of the drawing with the tone its side has in farbe.
-function setzeRaumFarben(farbe) {
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
 }
 
 // Particle speed and strength follow the flow of the way they run on (l/min, signed: a negative flow runs
@@ -1707,10 +1743,7 @@ function luftStroeme(dt, farbe, strecke, lauf = 1) {
   for (const name in stroeme) {
     stromSchritt(stroeme[name], dt, lauf * tempoVon(strecke[name]), staerkeVon(strecke[name]), farbe[SEITE_VON[name]]);
   }
-  for (const name in stroeme) {
-    const sichtbar = stroeme[name].kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    stroeme[name].g.style.opacity = sichtbar ? "" : "0";
-  }
+  blendeLeereStroeme();
 }
 
 // One frame (the loop itself is EX.ABLAUF).
@@ -1725,7 +1758,7 @@ function bildZeichnen(dt, offen, bewegt) {
   if (Math.abs(willHub - hubAnteil) > 1e-4) { hubAnteil = willHub; gezeichnet = ""; }
   // The valve stops while it is being taken apart and carries on afterwards.
   if (offen < 0.01 && !bewegt) {
-    const dm = angehalten ? 0 : dt;
+    const dm = angehalten ? 0 : dt / zeitlupe;
     if (dm > 0) {
       bed.takt(dm);
       modellSchritt(dm);
@@ -1733,7 +1766,7 @@ function bildZeichnen(dt, offen, bewegt) {
     zeichneModell(dm);
   } else {
     zeichneHub();
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+    haltStroeme(dt);
   }
   zeichneLagen();
   zeichneStets();
@@ -1745,6 +1778,8 @@ function vorDemZerlegen() { stoppeAuto(); }
 // The first picture, once the page has defined its own functions, and the handle for the browser test and
 // for screenshots; eigenes are the page's own entries.
 function figurStarten(eigenes) {
+  zeitlupeBinden();
+  if (bed.auto && typeof seiteAutoStart === "function") seiteAutoStart();
   zeichneBedienung();
   zeichneModell(0);
   zeichneLagen();
