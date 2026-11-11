@@ -21,7 +21,8 @@
 //   ST.gehaeuseBlock({...})  the whole housing block: cut face, hollows, round walls, rooms of air, edges
 //   ST.loecher({ x, z, r })  the two mounting holes as hollows
 //   ST.raumPfade({...}), ST.rahmen(x0, x1, z0, z1)   the rooms of air as empty paths; a rectangle's outline
-//   ST.schnittFlaeche(punkte, richtung)   a cut face in the section tone with 45° hatching
+//   ST.schnittFlaeche(punkte, richtung, {ton, strich})   a cut face in the section tone with 45° hatching (`ton`: a variant of the tone for a neighbouring part)
+//   ST.hohlraumUmriss({...}), ST.materialKeil(punkte)   the walls of the hollows as lines over the air; a wedge of material
 //   ST.zweiLagen(schnitt, ganz)   the two drawings of a turned part, blended by the page
 //   ST.drehachse({ richtung, mitte })     (radius, s) profile → both sides of the axis
 //   ST.obenFlaeche(punkte)   the top face of a part that stands above the housing
@@ -186,10 +187,62 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
    * A cut face in the section tone with the hatching of technical drawings: parallel lines at 45° in the
    * cut plane, clipped to the face, so the cut parts that lie one against the other can be told apart.
    */
-  function schnittFlaeche(punkte, richtung = 1) {
+  function schnittFlaeche(punkte, richtung = 1, { ton = null, strich = "faint" } = {}) {
     const d = hatchSegmente(punkte.map((p) => [p[0], p[2]]), richtung)
       .map(([a, b]) => `M${at([a[0], 0, a[1]]).map((v) => v.toFixed(1)).join(" ")}L${at([b[0], 0, b[1]]).map((v) => v.toFixed(1)).join(" ")}`);
-    return NT.schnitt(punkte) + L(d.join(""), { tone: "faint" });
+    // `ton` gives the face its own variant of the section tone (data-schnitt="ton"), so that two parts that lie one against the other differ
+    const flaeche = ton ? NT.schnitt(punkte).replace('data-schnitt=""', `data-schnitt="${ton}"`) : NT.schnitt(punkte);
+    return flaeche + L(d.join(""), { tone: strich });
+  }
+
+  /**
+   * The walls of the hollows on the cut face as lines: the outline of the union of all hollows (the round
+   * holes left out) where it borders material of the block, no line across a junction of two hollows and none
+   * along the block's own edge. Drawn over the rooms of air, so that the bores, the chamber and the seats read
+   * through the air's tint.
+   */
+  function hohlraumUmriss({ hohlraeume, laenge, hoehe, ton = "mid" }) {
+    const eckig = hohlraeume.filter(([, art]) => art !== "loch");
+    const xs = [...new Set([0, laenge, ...eckig.flatMap(([[a, b]]) => [a, b])])].sort((a, b) => a - b);
+    const zs = [...new Set([0, hoehe, ...eckig.flatMap(([[, , c, d]]) => [c, d])])].sort((a, b) => a - b);
+    const hohl = (i, j) => i >= 0 && j >= 0 && i < xs.length - 1 && j < zs.length - 1
+      && eckig.some(([[a, b, c, d]]) => (xs[i] + xs[i + 1]) / 2 > a && (xs[i] + xs[i + 1]) / 2 < b && (zs[j] + zs[j + 1]) / 2 > c && (zs[j] + zs[j + 1]) / 2 < d);
+    const innen = (i, j) => i >= 0 && j >= 0 && i < xs.length - 1 && j < zs.length - 1;
+    const waagerecht = new Map(), senkrecht = new Map();       // by z (or x): the [from, to] pieces
+    const merke = (karte, schluessel, a, b) => { if (!karte.has(schluessel)) karte.set(schluessel, []); karte.get(schluessel).push([a, b]); };
+    for (let i = 0; i < xs.length - 1; i += 1) {
+      for (let j = 0; j < zs.length - 1; j += 1) {
+        if (!hohl(i, j)) continue;
+        if (innen(i, j - 1) && !hohl(i, j - 1)) merke(waagerecht, zs[j], xs[i], xs[i + 1]);
+        if (innen(i, j + 1) && !hohl(i, j + 1)) merke(waagerecht, zs[j + 1], xs[i], xs[i + 1]);
+        if (innen(i - 1, j) && !hohl(i - 1, j)) merke(senkrecht, xs[i], zs[j], zs[j + 1]);
+        if (innen(i + 1, j) && !hohl(i + 1, j)) merke(senkrecht, xs[i + 1], zs[j], zs[j + 1]);
+      }
+    }
+    const verbinden = (stuecke) => {
+      const sortiert = stuecke.slice().sort((a, b) => a[0] - b[0]);
+      const aus = [];
+      for (const [a, b] of sortiert) {
+        const letztes = aus[aus.length - 1];
+        if (letztes && a <= letztes[1] + 1e-9) letztes[1] = Math.max(letztes[1], b); else aus.push([a, b]);
+      }
+      return aus;
+    };
+    const strecken = [];
+    for (const [z, stuecke] of waagerecht) for (const [a, b] of verbinden(stuecke)) strecken.push([[a, 0, z], [b, 0, z]]);
+    for (const [x, stuecke] of senkrecht) for (const [a, b] of verbinden(stuecke)) strecken.push([[x, 0, a], [x, 0, b]]);
+    const d = strecken.map(([a, b]) => `M${at(a).map((v) => v.toFixed(1)).join(" ")}L${at(b).map((v) => v.toFixed(1)).join(" ")}`).join("");
+    return L(d, { tone: ton });
+  }
+
+  /**
+   * A wedge of material in the cut plane (a seat's cone, a shoulder) drawn over the rooms: the section tone
+   * and its outline. `punkte` are (x, z) pairs.
+   */
+  function materialKeil(punkte, { ton = null } = {}) {
+    const p3 = punkte.map(([x, z]) => [x, 0, z]);
+    const flaeche = ton ? NT.schnitt(p3).replace('data-schnitt=""', `data-schnitt="${ton}"`) : NT.schnitt(p3);
+    return flaeche + L(ring3(p3), { tone: "mid" });
   }
 
   // --- Turned parts, cut in half --------------------------------------------------------------------
@@ -264,11 +317,11 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
    *        second edge) that lies between s0 and s1 along the port axis (s from the housing's face outward)
    *        and between q0 and q1 across it; the port knows where its axis runs
    *   hohl     [[x0, x1, z0, z1], art]  the bore outside the block, with its far wall; `raum` its room of air
-   *   teile    [[[s0, s1], rIn, rAus, richtung], ...]  the walls of the fitting (rIn/rAus radii, richtung of the hatching); default: the standard fitting `STECKVERSCHRAUBUNG_G14` of normteile.mjs
+   *   teile    [[[s0, s1], rIn, rAus, richtung], ...]  the walls of the fitting (rIn/rAus radii, richtung of the hatching); default: the walls of `fitting` (the standard fitting `STECKVERSCHRAUBUNG_G14` or its compact variant, both of normteile.mjs)
    *   schlauch { s: [s0, s1], rIn, rAus }  the hose stub; default: the standard one, `schlauchLaenge` long
    *   traeger  name of the fitting's first item
    */
-  function anschlussSchnitt({ streifen, hohl, raum, traeger, teile = G14.schnitt, schlauchLaenge = G14.schlauchLaenge, schlauch = { s: [G14.masse.ring[1], G14.masse.ring[1] + schlauchLaenge], rIn: G14.rSchlauchInnen, rAus: G14.rSchlauch } }) {
+  function anschlussSchnitt({ streifen, hohl, raum, traeger, fitting = G14, teile = fitting.schnitt, schlauchLaenge = fitting.schlauchLaenge, schlauch = { s: [fitting.masse.ring[1], fitting.masse.ring[1] + schlauchLaenge], rIn: fitting.rSchlauchInnen, rAus: fitting.rSchlauch } }) {
     const b = hohl[0];
     const flaechen = [`<g data-hohl="">${hohlraum(hohl)}`, `<path class="kammer" data-raum="${raum}" fill="none" d="${ring3([[b[0], 0, b[2]], [b[1], 0, b[2]], [b[1], 0, b[3]], [b[0], 0, b[3]]])}"/></g>`];
     const linien = [];
@@ -371,7 +424,7 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
   }
 
   return {
-    R, at, L, SV, ring3, umriss, flaeche, rahmen, loecher, hohlraum, materialKoerper, raumPfade, gehaeuseBlock, schnittFlaeche, drehachse, zweiLagen, obenFlaeche,
+    R, at, L, SV, ring3, umriss, flaeche, rahmen, loecher, hohlraum, hohlraumUmriss, materialKeil, materialKoerper, raumPfade, gehaeuseBlock, schnittFlaeche, drehachse, zweiLagen, obenFlaeche,
     schnittEnde, schlaeuche, anschlussSchnitt, schnittLage, pruefeBaugruppen, anordnen, ansicht, figur, ende,
   };
 }

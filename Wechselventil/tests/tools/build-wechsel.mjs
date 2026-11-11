@@ -24,49 +24,55 @@ import { OS_1_4 as M, neuerZustand, anzeige, anzeigeZeilen } from "../../../figu
 import { wechselventilSymbol, WECHSEL_SYMBOL_CSS, WECHSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
 import { TAU } from "../../../figur/schnitt.mjs";
 import { zeichner, ort, MOVE_BASIS } from "../../../figur/zylinderteile.mjs";
-import { normteile, stummel, STECKVERSCHRAUBUNG_G14 as G14 } from "../../../figur/normteile.mjs";
+import { normteile, stummel, STECKVERSCHRAUBUNG_G14_KURZ as G14 } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-wechsel.mjs";
 
 const { ZIEL, WURZEL } = ort(import.meta.url);
 const { W, H } = LEINWAND;
 
 // --- Dimensions ----------------------------------------------------------
-const LAENGE = 60, TIEFE = 14, HOEHE = 34;       // housing block; the half y in [-14, 0] is kept
+const LAENGE = 60, TIEFE = 14, HOEHE = 35;       // housing block; the half y in [-14, 0] is kept
 const XC = LAENGE / 2;                           // the outlet's axis
 const ZA = 14;                                   // height of the through bore's axis
 const { rPort: R_PORT } = G14;                   // G1/4 thread bore, outside Ø 13.2
-const R_KAM = 6;                                 // chamber Ø 12 (spec)
+const R_KAM = 6.6;                               // chamber: Ø 13,2 (the spec's Ø 12, drawn wider so that the gap round the body can be seen)
 const R_SITZ = M.nennweite / 2;                  // seat bore Ø 6,5 (catalogue: nominal width)
-const R_KOERPER = 4.5, L_KOERPER = 13;           // the rubber body Ø 9 × 13 (spec)
-const R_KAPPE = 7;                               // radius of the body's domed ends
-// The dome meets the seat's edge (radius R_SITZ) at this distance from the body's tip: the tip itself reaches into the seat bore.
-const T_KAPPE = R_KAPPE - Math.sqrt(R_KAPPE ** 2 - R_SITZ ** 2);
-const X_SITZ_L = XC - (L_KOERPER - 2 * T_KAPPE + M.hub) / 2;   // the left seat's face: the chamber is as long as the body, less the tips in the bores, plus its travel
-const X_SITZ_R = XC + (L_KOERPER - 2 * T_KAPPE + M.hub) / 2;
+const R_KOERPER = 4.4, L_KOERPER = 13;           // the rubber body Ø 8,8 × 13 (the spec's Ø 9, a little thinner for the same reason)
+// The body's domes are spherical caps. A cap of radius R_KAPPE sits tangent in the seat's cone where it has the radius R_KONTAKT;
+// the cone's slope there is the cap's, so the body touches the cone along a circle and never cuts into it.
+const R_KAPPE = 7, R_KONTAKT = 3.9, R_FASE = 4.7;
+const STEIGUNG = Math.sqrt(R_KAPPE ** 2 - R_KONTAKT ** 2) / R_KONTAKT;        // dr/dx of the cone
+const L_FASE = (R_FASE - R_SITZ) / STEIGUNG;                                     // the cone's length along the axis
+const S_KONTAKT = -L_KOERPER / 2 + R_KAPPE - Math.sqrt(R_KAPPE ** 2 - R_KONTAKT ** 2);   // the contact circle's place on the body, from its middle
+const KX_ABSTAND = -S_KONTAKT - (L_FASE - (R_KONTAKT - R_SITZ) / STEIGUNG);     // from the seat's face to the body's middle, body on the seat
+const HALB = M.hub / 2 + KX_ABSTAND;                                             // half the chamber's length: the body's travel is the hub
+const X_SITZ_L = XC - HALB;                      // the left seat's face (where the cone meets the chamber's wall)
+const X_SITZ_R = XC + HALB;
 const X_GEW_R = LAENGE - 12;                     // the right thread bore starts here
 const Z_HALS = ZA + R_KAM;                       // the chamber's top, where the outlet's neck starts
-const Z_GEW = ZA + 8;                            // the outlet's thread bore starts here
+const Z_GEW = ZA + 8.5;                          // the outlet's thread bore starts here
 const R_HALS = 4;                                // the neck between chamber and outlet thread
-const LOCH = { x: [8, LAENGE - 8], z: 27, r: 2.15 };   // the two mounting holes across the block (Ø 4,3, spec)
+const LOCH = { x: [8, LAENGE - 8], z: 28, r: 2.15 };   // the two mounting holes across the block (Ø 4,3, spec)
 // The plug (Verschlussstück): outer thread, an O-ring groove, internal thread for the left fitting, the seat at its inner end.
-const STOPFEN = { x0: -4, rAussen: 8.5, rGewinde: R_PORT, xAbsatz: 8, nut: [11, 13], rNut: 7.4 };
+const STOPFEN = { x0: -4, rAussen: 8.5, rGewinde: R_PORT, xAbsatz: 8, nut: [10.75, 13.25], rNut: 7.2 };
 const PROFIL_STOPFEN = [                         // (radius, x) of the upper half of its wall
   [STOPFEN.rGewinde, STOPFEN.x0], [STOPFEN.rAussen, STOPFEN.x0], [STOPFEN.rAussen, STOPFEN.nut[0]], [STOPFEN.rNut, STOPFEN.nut[0]],
-  [STOPFEN.rNut, STOPFEN.nut[1]], [STOPFEN.rAussen, STOPFEN.nut[1]], [STOPFEN.rAussen, X_SITZ_L], [R_SITZ, X_SITZ_L],
+  [STOPFEN.rNut, STOPFEN.nut[1]], [STOPFEN.rAussen, STOPFEN.nut[1]], [STOPFEN.rAussen, X_SITZ_L], [R_FASE, X_SITZ_L], [R_SITZ, X_SITZ_L - L_FASE],
   [R_SITZ, STOPFEN.xAbsatz], [STOPFEN.rGewinde, STOPFEN.xAbsatz],
 ];
-const ORING = { x: (STOPFEN.nut[0] + STOPFEN.nut[1]) / 2, r: 8.4, rSchnur: 1.05 };   // centre line of the ring, radius of its cord
+// The O-ring: its cord (radius 1,25, drawn a little thicker than a Ø 14 ring would be) lies on the groove's bottom
+const ORING = { x: (STOPFEN.nut[0] + STOPFEN.nut[1]) / 2, r: STOPFEN.rNut + 1.25, rSchnur: 1.25 };
 // The rubber body, barrel-shaped with domed sealing faces: (radius, s) of its upper edge, s from its middle.
-const KOERPER_X0 = X_SITZ_L + L_KOERPER / 2 - T_KAPPE;     // its middle at rest: its left dome on the left seat
+const KOERPER_X0 = X_SITZ_L + KX_ABSTAND;        // its middle at rest: its left dome on the left seat
 const PROFIL_KOERPER = (() => {
   const kappe = [0, 1, 2, 3, 3.6, 4.1].map((r) => [r, -L_KOERPER / 2 + R_KAPPE - Math.sqrt(R_KAPPE ** 2 - r * r)]);
-  const links = [...kappe, [4.4, -4.5], [4.5, -3.8]];
+  const links = [...kappe, [4.3, -L_KOERPER / 2 + 1.95], [R_KOERPER, -L_KOERPER / 2 + 2.6]];
   const rechts = links.slice().reverse().map(([r, sp]) => [r, -sp]);
   return [...links, ...rechts].map(([r, sp]) => [Math.round(r * 1000) / 1000, Math.round(sp * 1000) / 1000]);
 })();
 
 // Fittings and hoses along each port axis, s from the face outward.
-const VERSCHRAUBUNG = G14.masse;
+const VERSCHRAUBUNG = G14.masse;   // the compact fitting: the fittings frame the valve and do not dominate it
 const { rSchlauch: R_SCHLAUCH, rSchlauchInnen: R_SCHLAUCH_INNEN, schlauchLaenge: SCHLAUCH_LAENGE } = G14;   // the hose stubs drawn in the section
 // The three ports: face position, direction, name of the assembly.
 const ANSCHLUESSE = {
@@ -123,7 +129,8 @@ const FX = (x0) => G.frameOf([x0, 0, ZA], [1, 0, 0], [0, 1, 0], [0, 0, 1]);   //
 const HOHLRAUM = [
   [[0, X_SITZ_L, ZA - STOPFEN.rAussen, ZA + STOPFEN.rAussen], "h"],            // the plug's thread bore (the plug fills it)
   [[X_SITZ_L, X_SITZ_R, ZA - R_KAM, ZA + R_KAM], "h"],                         // the chamber
-  [[X_SITZ_R, X_GEW_R, ZA - R_SITZ, ZA + R_SITZ], "h"],                        // the right seat's bore
+  [[X_SITZ_R, X_SITZ_R + L_FASE, ZA - R_FASE, ZA + R_FASE], "h"],              // the right seat's cone (a wedge of material goes over it)
+  [[X_SITZ_R + L_FASE, X_GEW_R, ZA - R_SITZ, ZA + R_SITZ], "h"],               // the right seat's bore
   [[X_GEW_R, LAENGE, ZA - R_PORT, ZA + R_PORT], "h"],                          // port 1 right (thread bore)
   [[XC - R_HALS, XC + R_HALS, Z_HALS, Z_GEW], "v"],                            // the outlet's neck
   [[XC - R_PORT, XC + R_PORT, Z_GEW, HOEHE], "v"],                             // port 2 (thread bore)
@@ -140,10 +147,17 @@ const AUSSEN_HOHL = {
 // L is the left input (the plug's interior), R the right input, A the output: chamber, neck and outlet.
 // The page paints them by their pressure; the outer bores of the fittings belong to the same rooms.
 const RAUM_RECHTECKE = [
-  ["L", [STOPFEN.x0, STOPFEN.xAbsatz, ZA - R_PORT, ZA + R_PORT]], ["L", [STOPFEN.xAbsatz, X_SITZ_L, ZA - R_SITZ, ZA + R_SITZ]],
+  ["L", [STOPFEN.x0, STOPFEN.xAbsatz, ZA - R_PORT, ZA + R_PORT]], ["L", [STOPFEN.xAbsatz, X_SITZ_L - L_FASE, ZA - R_SITZ, ZA + R_SITZ]],
+  ["L", [X_SITZ_L - L_FASE, X_SITZ_L, ZA - R_FASE, ZA + R_FASE]],               // the left seat's cone (the plug's wall covers its upper part)
   ["A", [X_SITZ_L, X_SITZ_R, ZA - R_KAM, ZA + R_KAM]], ["A", [XC - R_HALS, XC + R_HALS, Z_HALS, Z_GEW]], ["A", [XC - R_PORT, XC + R_PORT, Z_GEW, HOEHE]],
-  ["R", [X_SITZ_R, X_GEW_R, ZA - R_SITZ, ZA + R_SITZ]], ["R", [X_GEW_R, LAENGE, ZA - R_PORT, ZA + R_PORT]],
+  ["R", [X_SITZ_R, X_SITZ_R + L_FASE, ZA - R_FASE, ZA + R_FASE]], ["R", [X_SITZ_R + L_FASE, X_GEW_R, ZA - R_SITZ, ZA + R_SITZ]],
+  ["R", [X_GEW_R, LAENGE, ZA - R_PORT, ZA + R_PORT]],
 ];
+
+/** The right seat: the wedges of material that make the cone, above and below the axis. */
+function rechterSitz() {
+  return [1, -1].map((v) => ST.materialKeil([[X_SITZ_R, ZA + v * R_FASE], [X_SITZ_R + L_FASE, ZA + v * R_FASE], [X_SITZ_R + L_FASE, ZA + v * R_SITZ]]));
+}
 
 /** The thread of the two bores that carry one, as faint rings on their far wall (the fittings' stubs hide them while the valve is together). */
 function gewindeStriche() {
@@ -167,7 +181,8 @@ function gehaeuse() {
     // the round walls behind the cut inside the plug: the far half of its thread bore and of its seat bore
     rundeWaende: [[[0, STOPFEN.xAbsatz, ZA - R_PORT, ZA + R_PORT], "h"], [[STOPFEN.xAbsatz, X_SITZ_L, ZA - R_SITZ, ZA + R_SITZ], "h"]],
     raeume: ST.raumPfade({ rechtecke: RAUM_RECHTECKE, beideSeiten }),
-    oben: gewindeStriche(),
+    // over the air: the threads' rings, the walls of every bore and of the chamber, the right seat's cone
+    oben: [...gewindeStriche(), ST.hohlraumUmriss({ hohlraeume: HOHLRAUM, laenge: LAENGE, hoehe: HOEHE }), ...rechterSitz()],
   });
 }
 
@@ -180,8 +195,8 @@ function stopfen() {
   const ringe = [];
   for (let x = S.x0 + 1; x < S.nut[0] - 0.4; x += 1.3) ringe.push(G.arcOf(F, x, S.rAussen, P));
   put([(S.x0 + X_SITZ_L) / 2, 0, ZA], zweiLagen([
-    ...flaechen.map((f) => schnittFlaeche(f, 1)),
-    L(flaechen.map(umriss).join(""), { tone: "mid" }),
+    ...flaechen.map((f) => schnittFlaeche(f, -1, { ton: "b", strich: "mid" })),
+    L(flaechen.map(umriss).join(""), { tone: "hi" }),
   ].join(""), [
     SV(G.ringBand(S.x0, S.xAbsatz, S.rGewinde, S.rAussen, F, P), { tone: "mid", inner: L(ringe.join(""), { tone: "faint" }) }),
     SV(G.ringBand(S.xAbsatz, S.nut[0], R_SITZ, S.rAussen, F, P), { tone: "mid" }),
@@ -192,7 +207,8 @@ function stopfen() {
     rec(A.ring(F, S.x0, S.xAbsatz, S.rGewinde, S.rAussen, { name: "stopfen.gewinde" })),
     rec(A.ring(F, S.xAbsatz, S.nut[0], R_SITZ, S.rAussen, { name: "stopfen.boden" })),
     rec(A.ring(F, S.nut[0], S.nut[1], R_SITZ, S.rNut, { name: "stopfen.nut" })),
-    rec(A.ring(F, S.nut[1], X_SITZ_L, R_SITZ, S.rAussen, { name: "stopfen.bund" })),
+    rec(A.ring(F, S.nut[1], X_SITZ_L - L_FASE, R_SITZ, S.rAussen, { name: "stopfen.bund" })),
+    rec(A.ring(F, X_SITZ_L - L_FASE, X_SITZ_L, R_FASE - 0.1, S.rAussen, { name: "stopfen.sitz" })),   // the cone, taken as a step of the face
   ], { name: "stopfen.gewinde" });
 }
 
@@ -201,8 +217,11 @@ function oring() {
   gruppe("oring");
   const O = ORING;
   const kreis = (cz, dz) => ring3(Array.from({ length: 25 }, (_, i) => [O.x + O.rSchnur * Math.cos((i / 24) * TAU), 0, cz + dz + O.rSchnur * Math.sin((i / 24) * TAU)]));
-  const schnitt = [ZA + O.r, ZA - O.r].map((z) => `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${kreis(z, 0)}"/>`
-    + L(kreis(z, 0), { tone: "mid" })).join("");
+  // the cord fills its groove (squeezed against the bore's wall): a circle and the groove's rectangle under it
+  const nut = (v) => ring3([[STOPFEN.nut[0], 0, ZA + v * STOPFEN.rNut], [STOPFEN.nut[1], 0, ZA + v * STOPFEN.rNut], [STOPFEN.nut[1], 0, ZA + v * STOPFEN.rAussen], [STOPFEN.nut[0], 0, ZA + v * STOPFEN.rAussen]]);
+  const schnitt = [1, -1].map((v) => `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${nut(v)}"/>`
+    + `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${kreis(ZA + v * O.r, 0)}"/>`
+    + L(kreis(ZA + v * O.r, 0), { tone: "mid" })).join("");
   // the whole ring: a tube round the bore's axis, in pieces so that it can be put in order
   const punkte = Array.from({ length: 33 }, (_, i) => [O.x, O.r * Math.cos((i / 32) * TAU), ZA + O.r * Math.sin((i / 32) * TAU)]);
   const stuecke = tubePieces(punkte, O.rSchnur, P, { maxLength: 14 });
@@ -211,6 +230,11 @@ function oring() {
 }
 
 // --- The rubber body between the seats; it moves with the model (data-hub) -------------------------------------
+/** A soft highlight on the dark rubber: an open line a little lighter than the rubber (`staerke` 0…1 of the way to the paper). */
+function glanz(punkte3, staerke) {
+  const d = punkte3.map((q, i) => `${i ? "L" : "M"}${at(q).map((v) => v.toFixed(1)).join(" ")}`).join("");
+  return `<path d="${d}" fill="none" style="stroke:color-mix(in srgb, var(--anatomy-paper) ${Math.round(staerke * 100)}%, var(--anatomy-strong)); stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round"/>`;
+}
 function koerper() {
   gruppe("koerper");
   const F = FX(KOERPER_X0);
@@ -219,9 +243,11 @@ function koerper() {
   const umrissKoerper = [...obere, ...untere.slice(1, -1)];
   const ganz = PROFIL_KOERPER.map(([r, s], i) => [s, r, i > 0 && i < PROFIL_KOERPER.length - 1 ? 1 : 0]);
   put([KOERPER_X0, 0, ZA], zweiLagen([
-    // the rubber is drawn dark, like the black rings of the cutaway
+    // the rubber is drawn dark, like the black rings of the cutaway, with a lighter highlight along its barrel and its domes
     `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${ring3(umrissKoerper)}"/>`,
     L(ring3(umrissKoerper), { tone: "mid" }),
+    glanz(PROFIL_KOERPER.filter(([r]) => r > 0.4).map(([r, sp]) => [KOERPER_X0 + sp, 0, ZA + r * 0.74]), 0.5),
+    glanz(PROFIL_KOERPER.filter(([r]) => r > 0.4).map(([r, sp]) => [KOERPER_X0 + sp, 0, ZA - r * 0.78]), 0.22),
   ].join(""), `<g class="gummi">${SV(G.solidOf(ganz, F, P), { tone: "lo" })}</g>`), [
     rec(A.solid(F, PROFIL_KOERPER.map(([r, s]) => [s, r]), { name: "koerper.rumpf" })),
   ], { name: "koerper.rumpf", hub: true });
@@ -247,6 +273,7 @@ function anschlussSchnitte() {
       },
       hohl: AUSSEN_HOHL[nr],
       raum: a.raum,
+      fitting: G14,
       traeger: `${a.piece}.gewinde`,
     });
   }
@@ -334,6 +361,7 @@ const live = SS.lebendSkript({
   wurzel: WURZEL, P, MOVE, STAGGER, ansicht: ANSICHT, LEGENDE, BAHNEN: {}, SEITE_VON: {}, ANZAHL: {}, VORNE: [],
   SKALA: { tempo: 0.25, tempoMax: 160, bezug: M.qn },
   AUTO_TAKT: 3,
+  raumDeckung: 0.5,
   modelle: ["figur/ventil.mjs", "figur/wechselventil.mjs"],
   symbole: [WECHSEL_SYMBOL_LAUFZEIT],
   konstanten: KONSTANTEN,
@@ -356,7 +384,7 @@ const LESETEXT = `<div class="lesetext">
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 
-const EIGENES_CSS = `${VS.CSS}\n${WECHSEL_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}`;
+const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .5 }\n${WECHSEL_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}`;
 SS.seiteSchreiben({
   ziel: ZIEL,
   css: EIGENES_CSS,

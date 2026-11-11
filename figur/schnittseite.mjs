@@ -22,7 +22,7 @@
 // figur/bedienung.mjs, LAUFZEIT below, then the page's own code (`eigenes`).
 //
 // LAUFZEIT expects, defined by the constants: `P MOVE ORDER SPR TAKT KEYS LIFT VIEW0 VIEW1 MITTE
-// STEP FARBEN BAHNEN SEITE_VON ANZAHL VORNE SKALA AUTO_TAKT`, and the elements `stage svg groups
+// STEP FARBEN BAHNEN SEITE_VON ANZAHL VORNE SKALA AUTO_TAKT RAUM_DECKUNG`, and the elements `stage svg groups
 // readout info still`. It defines `komma`, `angehalten`, `lagen`, `raeume`, `luftLage`, `luftHinten`,
 // `stroeme`, `symbole`, `bed`, `knopfAuto`, `zeitlupe`, `hubAnteil`, `zeichneHub`, `zeichneAnzeige`, `zeichneLagen`,
 // `setzeRaumFarben`, `luftStroeme`, `zeichneBedienung`, `zeichneModell`, `bildZeichnen`, `stoppeAuto`, `bedient`,
@@ -70,7 +70,11 @@ export const schaltzeichenBlock = ({ svg, text }) => `<p class="beifigur-titel">
   + `<p class="beifigur-text">${text}</p>`;
 
 /** The readout of two lines, and the two views of a turned part: the half section blends out when it has left. */
-export const CSS = `[data-readout] { white-space: pre-line; text-align: left }\n[data-lage="ganz"] { opacity: 0; pointer-events: none }`;
+export const CSS = `[data-readout] { white-space: pre-line; text-align: left }
+[data-lage="ganz"] { opacity: 0; pointer-events: none }
+.iso { --schnitt-b: #9a8e78 }
+.iso[data-theme="light"] { --schnitt-b: #968a74 }
+.iso-svg .iso-shade[data-schnitt="b"][data-shade] { fill: var(--schnitt-b) }`;
 
 /**
  * A part of rubber, drawn whole (a ring, a body): every shade of the solid takes the strong ink colour
@@ -92,11 +96,12 @@ const runde = (v) => Math.round(v * 10) / 10;
  * The live script as source. `ansicht` is what `schnittTeile().ansicht` returned; `modelle` the model
  * files the page computes with (as for `modulQuelle`), `symbole` the runtimes of its symbols,
  * `konstanten` its own constants as source, `eigenes` its own code.
+ *   raumDeckung  how opaque the air in a room is (default 0,82; the page's style says the same)
  *   SKALA  { tempo, tempoMax, bezug }: a stream's speed is `tempo` per l/min up to `tempoMax`, its
  *          strength 0,3 … 1 reaches full at `bezug` l/min
  */
 export function lebendSkript({
-  wurzel, P, MOVE, STAGGER, ansicht, LEGENDE, BAHNEN, SEITE_VON, ANZAHL, VORNE, SKALA, AUTO_TAKT,
+  wurzel, P, MOVE, STAGGER, ansicht, LEGENDE, BAHNEN, SEITE_VON, ANZAHL, VORNE, SKALA, AUTO_TAKT, raumDeckung = 0.82,
   modelle, symbole = [], konstanten = "", eigenes,
 }) {
   const { KEYS, LIFT, VIEW0, VIEW1, MITTE } = ansicht;
@@ -119,6 +124,7 @@ const ANZAHL = ${JSON.stringify(ANZAHL)};
 const VORNE = ${JSON.stringify(VORNE)};
 const SKALA = ${JSON.stringify(SKALA)};
 const AUTO_TAKT = ${AUTO_TAKT};    // s between two automatic steps
+const RAUM_DECKUNG = ${raumDeckung};    // how opaque the air in a room is
 ${konstanten}
 
 const stage = document.querySelector(".iso-stage");
@@ -246,7 +252,7 @@ function bildZeichnen(dt, offen, bewegt) {
   luftLage.style.opacity = String(Math.max(0, 1 - offen * 3));
   luftHinten.style.opacity = String(Math.max(0, 1 - offen * 3));
   for (const el of raeume) {
-    if (offen > 0.001) el.style.opacity = (0.82 * Math.max(0, 1 - offen * 3)).toFixed(3);
+    if (offen > 0.001) el.style.opacity = (RAUM_DECKUNG * Math.max(0, 1 - offen * 3)).toFixed(3);
     else el.style.removeProperty("opacity");
   }
   const willHub = Math.max(0, 1 - offen * 2);

@@ -180,3 +180,31 @@ test("Gehäuseblock: Schnittfläche mit Maßmarke, Hohlräume, Luftlage hinten u
   assert.ok(R.solids.length >= 6);
   assert.ok(!svg.includes("NaN"));
 });
+
+test("Umriss der Hohlräume: nur die Grenze zum Material, keine Linie über eine Verbindung, keine am Blockrand", () => {
+  const { ST } = neu();
+  const zaehle = (svg) => (svg.match(/M[\d.\-]+ [\d.\-]+L/g) || []).length;
+  // one bore through the whole block: two lines (top and bottom wall), none at the block's two ends
+  assert.equal(zaehle(ST.hohlraumUmriss({ hohlraeume: [[[0, 30, 5, 10], "h"]], laenge: 30, hoehe: 20 })), 2);
+  // a bore with a junction upwards: the junction opens the bore's top wall into two pieces and adds the two side walls
+  const t = zaehle(ST.hohlraumUmriss({ hohlraeume: [[[0, 30, 5, 10], "h"], [[12, 18, 10, 20], "v"]], laenge: 30, hoehe: 20 }));
+  assert.equal(t, 5);   // bottom wall, two top pieces, two side walls of the branch
+  // a hole across the block gets no line here (it has its own outline)
+  assert.equal(zaehle(ST.hohlraumUmriss({ hohlraeume: [[[5, 10, 5, 10], "loch"]], laenge: 30, hoehe: 20 })), 0);
+});
+
+test("Schnittfläche mit eigenem Ton: die Fläche trägt data-schnitt=\"b\", ohne Ton bleibt sie wie sie war", () => {
+  const { ST } = neu();
+  const p = [[0, 0, 0], [10, 0, 0], [10, 0, 10], [0, 0, 10]];
+  assert.match(ST.schnittFlaeche(p, -1, { ton: "b", strich: "mid" }), /data-schnitt="b"/);
+  assert.match(ST.schnittFlaeche(p, 1), /data-schnitt=""/);
+  assert.match(ST.materialKeil([[0, 0], [4, 0], [4, 3]]), /<path class="iso-shade" data-shade="3" data-schnitt=""/);
+});
+
+test("Die kompakte Verschraubung ist kürzer als die Standardverschraubung, das Gewinde im Gehäuse gleich lang", async () => {
+  const { STECKVERSCHRAUBUNG_G14: N, STECKVERSCHRAUBUNG_G14_KURZ: K } = await import("../normteile.mjs");
+  assert.ok(K.masse.ring[1] < N.masse.ring[1] && K.schlauchLaenge < N.schlauchLaenge);
+  assert.deepEqual(K.masse.gewinde, N.masse.gewinde);
+  assert.equal(K.schnitt.length, 4);
+  assert.deepEqual(K.schnitt[3][0], [K.masse.koerper[1], K.masse.ring[1]]);
+});
