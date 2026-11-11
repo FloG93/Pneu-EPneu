@@ -76,7 +76,9 @@ export const CSS = `[data-readout] { white-space: pre-line; text-align: left }
 [data-lage="ganz"] { opacity: 0; pointer-events: none }
 .iso { --schnitt-b: #9a8e78 }
 .iso[data-theme="light"] { --schnitt-b: #968a74 }
-.iso-svg .iso-shade[data-schnitt="b"][data-shade] { fill: var(--schnitt-b) }`;
+.iso-svg .iso-shade[data-schnitt="b"][data-shade] { fill: var(--schnitt-b) }
+/* The readout has two lines and wraps on a phone: it grows upwards from the corner and would lie on the hint there */
+@media (max-width: 640px) { .iso-plate-corner[data-corner="hint"] { display: none } }`;
 
 /**
  * A part of rubber, drawn whole (a ring, a body): every shade of the solid takes the strong ink colour

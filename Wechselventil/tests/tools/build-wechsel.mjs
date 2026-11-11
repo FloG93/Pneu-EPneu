@@ -520,7 +520,7 @@ const INFO = "Stelle die beiden Eingänge ein oder lass die Automatik laufen: De
 const BEIFIGUR = SS.schaltzeichenBlock({
   svg: wechselventilSymbol({ feld: 60 }).svg,
   text: "Das Rechteck ist das Gehäuse, die Leitung die durchgehende Bohrung, die Kugel der Schaltkörper zwischen zwei Sitzen: Sie liegt am gesperrten Eingang. "
-    + "Beide Eingänge tragen die 1, der Ausgang die 2. Jeder Teil der Leitung hat den Ton seines Drucks; eine Seite, die gesperrt ist, kann trotzdem unter Druck stehen.",
+    + "Beide Eingänge tragen die 1, der Ausgang die 2. Die Teile der Leitung zeigen nur zwei Töne: kräftig ab 0,5 bar, sonst blass; die Zeichnung daneben mischt die Töne nach dem Druck, darum sieht 3 bar dort anders aus als 6 bar. Eine Seite, die gesperrt ist, kann trotzdem unter Druck stehen.",
 });
 
 // --- The prose underneath ---------------------------------------------------------------------------
@@ -534,7 +534,7 @@ const LESETEXT = `<div class="lesetext">
 Ein Block aus Aluminium hat eine <strong>durchgehende Bohrung</strong>. An ihren beiden Enden sitzen die zwei <strong>Eingänge</strong>, beide mit der Ziffer <strong>1</strong>; in der Mitte zweigt nach oben der <strong>Ausgang 2</strong> ab.
 Links steckt ein eingeschraubtes <strong>Verschlussstück</strong> mit einem <strong>O-Ring</strong> in der Bohrung (in der Schnittfläche bräunlich, anders schraffiert als der Block); es trägt den linken Sitz, den rechten Sitz bildet das Gehäuse selbst.
 Zwischen den Sitzen liegt lose der <strong>Schaltkörper</strong> aus Gummi, und um ihn herum bleibt ein Ringspalt frei, durch den die Luft zum Ausgang strömt.
-Quer durch den Block gehen zwei Bohrungen zur Befestigung. Das Gewinde G1/4 an allen drei Anschlüssen ist Katalogwert; die Maße der Zeichnung sind geschätzt und nachgezeichnet, die Kammer ist etwas weiter, der Körper etwas schlanker als im Entwurf, damit man den Spalt sieht.</p>
+Quer durch den Block gehen zwei Bohrungen zur Befestigung. Das Gewinde G1/4 an allen drei Anschlüssen ist Katalogwert; die Maße der Zeichnung sind geschätzt und nachgezeichnet, die Kammer ist etwas weiter, der Körper etwas schlanker als beim Original, damit man den Spalt sieht.</p>
 
 <h2>ODER: die Wahrheitstabelle</h2>
 <p>Luft an <em>einem</em> Eingang oder an <em>beiden</em> kommt am Ausgang an; sind beide Eingänge drucklos, bleibt der Ausgang drucklos. „1“ heißt unter Druck, „0“ drucklos.</p>
@@ -564,8 +564,8 @@ Offener Eingang, ${komma(1, 0)} bar Druckabfall zum Ausgang: <strong>${Q1} l/min
 gesperrter Eingang: <strong>0 l/min</strong> in beide Richtungen
 </p>
 <p class="hinweis">Alle Zahlen kommen aus dem Modell, das auch den Körper und die Farben bewegt. Katalogwerte sind nur ${M.qn} l/min bei ${komma(M.bezugsDp, 0)} bar Druckabfall, G1/4, ${komma(M.nennweite, 1)} mm Nennweite und 1 bis 10 bar Betriebsdruck (die Regler gehen bis ${P_MAX} bar).
-Alles andere ist angenommen: Der Durchfluss wächst im Modell linear mit dem Druckabfall (bei 6 bar wären das ${durchfluss({ s: 0, pL: bar(0), pR: bar(6), p2: bar(0) }, M).gesamt} l/min, ein echtes Ventil drosselt dann ab), die ${komma(M.volumen2 / 1000, 0)} cm³ hinter dem Ausgang, der Schaltdruck und die Schaltzeit.
-Ein echtes Wechselventil zeigt beim Umschalten einen kleinen Druckstoß, den das Modell nicht hat. Die Teilchen sind nur beim Füllen und Entlüften zu sehen, das im Modell nach wenigen Millisekunden vorbei ist; die Zeichnung lässt sie ${komma(0.5, 1)} s nachleuchten. Die Anleitung zur Figur nennt alles einzeln.</p>
+Alles andere ist angenommen: Der Durchfluss wächst im Modell linear mit dem Druckabfall (bei 6 bar Druckabfall wären das ${durchfluss({ s: 0, pL: bar(0), pR: bar(6), p2: bar(0) }, M).gesamt} l/min, ein echtes Ventil drosselt dann ab), die ${komma(M.volumen2 / 1000, 0)} cm³ hinter dem Ausgang, der Schaltdruck und die Schaltzeit.
+Ein echtes Wechselventil kann beim Umschalten einen kleinen Druckstoß zeigen (nicht belegt); das Modell hat keinen. Die Teilchen sind nur beim Füllen und Entlüften zu sehen, das im Modell nach wenigen Millisekunden vorbei ist; die Zeichnung lässt sie ${komma(0.5, 1)} s nachleuchten. Die Anleitung zur Figur nennt alles einzeln.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 

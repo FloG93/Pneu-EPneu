@@ -150,6 +150,8 @@ body{margin:0;background:var(--anatomy-page);color:var(--anatomy-text);font:14px
 .iso { --schnitt-b: #9a8e78 }
 .iso[data-theme="light"] { --schnitt-b: #968a74 }
 .iso-svg .iso-shade[data-schnitt="b"][data-shade] { fill: var(--schnitt-b) }
+/* The readout has two lines and wraps on a phone: it grows upwards from the corner and would lie on the hint there */
+@media (max-width: 640px) { .iso-plate-corner[data-corner="hint"] { display: none } }
 .beifigur-lupe .lupe { display: block; width: 100%; height: auto; margin: 10px 0 12px; color: var(--anatomy-strong); overflow: hidden }
 .lupe .lupe-pfeil { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0 }
 .lupe-titel { margin-top: 20px }

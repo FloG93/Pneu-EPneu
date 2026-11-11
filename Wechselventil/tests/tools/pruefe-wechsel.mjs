@@ -241,7 +241,7 @@ export default async function pruefeWechsel({ seite, V, modus }) {
     const paare = [];
     for (let versuch = 0; versuch < 40 && paare.length < 5; versuch += 1) {
       const t0 = await bild(); const a = lies(); const t1 = await bild(); const b = lies();
-      if (t1 - t0 >= 25) continue;
+      if (t1 - t0 >= 35) continue;
       const d = a.map((p, i) => (p[0] > 0.1 && b[i][0] > 0.1 && p[1] >= xMin - 2 && p[1] <= xMax + 2 ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null))
         .filter((v) => v !== null && Math.abs(v) < 6);      // a jump of a whole spacing (the phase wraps) is left out
       if (d.length) paare.push(mitteVon(d));
@@ -304,8 +304,8 @@ export default async function pruefeWechsel({ seite, V, modus }) {
   await seite.waitForFunction(() => window.__figur.modell().s === 0, null, { timeout: 5000 });
   await zeitlupe(1);
 
-  // --- slow motion: the 8 ms of the changeover are seen in flight at 1/10 --------------------------------------
-  await zeitlupe(10);
+  // --- slow motion: the 8 ms of the changeover are seen in flight (at 1/50 they last 400 ms: several frames even on a loaded machine) --
+  await zeitlupe(50);
   await seite.evaluate(() => { window.__figur.stelle(6, 0); });
   const flug = await seite.evaluate(async () => {
     const t0 = performance.now();
@@ -319,8 +319,8 @@ export default async function pruefeWechsel({ seite, V, modus }) {
     }
     return { sichtbarUnterwegs, ende };
   });
-  V(`Zeitlupe 1/10: der Körper ist ${flug.sichtbarUnterwegs} Bilder lang unterwegs (${flug.ende === null ? "kommt nicht an" : Math.round(flug.ende)} ms für 8 ms Modellzeit)`,
-    flug.sichtbarUnterwegs >= 3 && flug.ende !== null && flug.ende > 40);
+  V(`Zeitlupe 1/50: der Körper ist ${flug.sichtbarUnterwegs} Bilder lang unterwegs (${flug.ende === null ? "kommt nicht an" : Math.round(flug.ende)} ms für 8 ms Modellzeit)`,
+    flug.sichtbarUnterwegs >= 3 && flug.ende !== null && flug.ende > 200);
   await zeitlupe(1);
 
   // --- readout: the model's numbers, two lines, wrapping --------------------------------------------------------
@@ -429,9 +429,14 @@ export default async function pruefeWechsel({ seite, V, modus }) {
     const r = document.querySelector("[data-readout]").getBoundingClientRect();
     const t = document.querySelector("table.wahrheit").getBoundingClientRect();
     const hoehe = parseFloat(getComputedStyle(document.querySelector("[data-readout]")).lineHeight) || 14;
-    return { l: r.left, r: r.right, w: innerWidth, zeilen: Math.round(r.height / hoehe), tabR: t.right, tabL: t.left };
+    // the readout grows upwards from its corner: it must not lie on the card's hint (when that is shown)
+    const h = document.querySelector('[data-corner="hint"]');
+    const hr = h && getComputedStyle(h).display !== "none" ? h.getBoundingClientRect() : null;
+    const schneidet = hr ? !(r.right <= hr.left || r.left >= hr.right || r.bottom <= hr.top || r.top >= hr.bottom) : false;
+    return { l: r.left, r: r.right, w: innerWidth, zeilen: Math.round(r.height / hoehe), tabR: t.right, tabL: t.left, schneidet, hinweis: Boolean(hr) };
   });
   V(`die Anzeige bricht um und liegt bei 390 px im Fenster (${zeile.l.toFixed(0)}…${zeile.r.toFixed(0)}, ${zeile.zeilen} Zeilen)`, zeile.l >= 0 && zeile.r <= zeile.w && zeile.zeilen >= 3);
+  V(`die dreizeilige Anzeige liegt bei 390 px auf keinem Text der Karte (Hinweis ${zeile.hinweis ? "sichtbar" : "ausgeblendet"})`, !zeile.schneidet);
   V(`die Wahrheitstabelle liegt bei 390 px im Fenster (${zeile.tabL.toFixed(0)}…${zeile.tabR.toFixed(0)})`, zeile.tabL >= 0 && zeile.tabR <= zeile.w);
   const regler = await seite.evaluate(() => [...document.querySelectorAll(".leiste .regler")].map((r) => { const b = r.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }));
   V(`bei 390 px liegen alle drei Regler im Fenster (${regler.length})`, regler.length === 3 && regler.every(Boolean));

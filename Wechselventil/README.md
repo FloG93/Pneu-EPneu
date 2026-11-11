@@ -61,7 +61,7 @@ blass. **Gesperrt ist nicht drucklos:** Ein gesperrter Eingang kann unter Druck 
 behält dann ihren Ton; der Körper zeigt nur, dass er nichts zum Ausgang durchlässt.
 
 **Gemessen:** Im Browsertest ist das gezeichnete Bild eines 6-bar-Raums gegen einen 0-bar-Raum mindestens 2,4 : 1 verschieden
-(Pixel des Bildschirmfotos; die Drosselseite erreicht 2,87 : 1 hell und 2,42 : 1 dunkel), in beiden Modi.
+(Pixel des Bildschirmfotos), in beiden Modi; **gemessen: 2,76 : 1 hell, 2,49 : 1 dunkel** (die Drosselseite erreicht mit demselben Verfahren 2,87 : 1 und 2,42 : 1).
 
 **Teilchen** laufen nur auf einem Weg, durch den das Modell Luft strömen lässt, in Strömungsrichtung (beim Entlüften über den
 offenen Eingang rückwärts) und nie über Material; am gesperrten Sitz steht keines. Das Füllen der 50 cm³ hinter dem Ausgang
