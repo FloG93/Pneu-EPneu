@@ -72,7 +72,7 @@ export function durchfluss(z, masse = OS_1_4) {
 function wechselSeite(oeffnung, pEingang, p2, zielSitz, masse) {
   const dp = pEingang - p2;
   if (dp < 0 && zielSitz) return 0;
-  // + 0 turns a negative zero into 0 (and leaves a NaN a NaN, so a broken input shows up)
+  // + 0 turns a negative zero into 0 and leaves a broken input broken, so that a test sees it
   return (masse.qn * oeffnung * dp) / masse.bezugsDp + 0;
 }
 

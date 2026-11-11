@@ -25,7 +25,7 @@ test("Die Laufzeit steht ohne Backtick im klassischen Skript", () => {
 });
 
 test("Die Laufzeit nennt jeden Haken, den sie von der Seite erwartet, und jeden Namen, den sie bereitstellt", () => {
-  for (const haken of ["seiteAutoSchritt()", "seiteBedienung()", "modellSchritt(dm)", "zeichneLuft(dm)", "zeichneStets()", "hubMarke(hubAnteil)", "hubStellen(hubAnteil)", "anzeigeText()"]) {
+  for (const haken of ["seiteAutoSchritt()", "seiteBedienung()", "modellSchritt(dm)", "zeichneLuft(dm, dt)", "zeichneStets()", "hubMarke(hubAnteil)", "hubStellen(hubAnteil)", "anzeigeText()"]) {
     assert.ok(LAUFZEIT.includes(haken), `${haken} wird nicht gerufen`);
   }
   for (const name of ["function bildZeichnen", "function vorDemZerlegen", "function figurStarten", "function zeichneBedienung", "function zeichneModell", "function stelleFest",

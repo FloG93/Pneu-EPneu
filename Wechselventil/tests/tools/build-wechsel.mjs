@@ -20,9 +20,10 @@ import * as LU from "../../../figur/luft.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
 import * as SS from "../../../figur/schnittseite.mjs";
 import { schnittTeile, LEINWAND } from "../../../figur/schnittteile.mjs";
-import { OS_1_4 as M, neuerZustand, anzeige, anzeigeZeilen } from "../../../figur/wechselventil.mjs";
+import { OS_1_4 as M, neuerZustand, anzeige, anzeigeZeilen, durchfluss, absolut } from "../../../figur/wechselventil.mjs";
 import { wechselventilSymbol, WECHSEL_SYMBOL_CSS, WECHSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
 import { TAU } from "../../../figur/schnitt.mjs";
+import { schieber } from "../../../figur/seite.mjs";
 import { zeichner, ort, MOVE_BASIS } from "../../../figur/zylinderteile.mjs";
 import { normteile, stummel, STECKVERSCHRAUBUNG_G14_KURZ as G14 } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-wechsel.mjs";
@@ -304,24 +305,69 @@ const svg = ST.figur({
     + "zwei Bohrungen quer durch den Block dienen der Befestigung.",
 });
 
+// --- Air: the ways the particles take, in the cut plane -----------------------------------------------------------
+// One route for each input: through the plug or the thread bore, the seat bore, a little curve out of the seat into the gap round the
+// body (the body is Ø 8,8, the chamber Ø 13,2: the gap lies between them), along the gap to the middle, up the neck and the outlet bore
+// to the hose end of port 2. A route carries the flow of its own input (signed: when the outlet vents through an open input the
+// particles run backwards); a shut seat carries none, so no particle stands at it. The routes run through free space only.
+const GAP_Z = ZA + (R_KOERPER + R_KAM) / 2;
+const ENDE_L = punktAn("1l", VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE)[0] + 1;
+const ENDE_R = punktAn("1r", VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE)[0] - 1;
+const ENDE_O = HOEHE + VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE - 1;
+const ROUTEN = {
+  l: [[ENDE_L, 0, ZA], [X_SITZ_L - 0.3, 0, ZA], [X_SITZ_L + 1, 0, ZA + 1.6], [X_SITZ_L + 2.4, 0, GAP_Z], [XC, 0, GAP_Z], [XC, 0, ZA + R_KAM + 1], [XC, 0, ENDE_O]],
+  r: [[ENDE_R, 0, ZA], [X_SITZ_R + 0.3, 0, ZA], [X_SITZ_R - 1, 0, ZA + 1.6], [X_SITZ_R - 2.4, 0, GAP_Z], [XC, 0, GAP_Z], [XC, 0, ZA + R_KAM + 1], [XC, 0, ENDE_O]],
+};
+const BAHNEN = Object.fromEntries(Object.entries(ROUTEN).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
+
 // --- The page ------------------------------------------------------------------------
-// The state at the start of the page and what the browser needs of the model. The air (the streams in the
-// hoses and the passages), the controls and the explanation follow in the next steps.
 const ANZEIGE = anzeigeZeilen(anzeige(neuerZustand(), M)).join("\n");
+const P_AUTO = 6;                                    // bar: what the automatic cycle gives an input that is on
+const P_MAX = 8;                                     // bar: the sliders' top
+const P_VOLL = 6;                                    // bar: from here on a room shows the full strong blue
+// The automatic cycle, eight steps (the spec's order): [left, right] in bar. Whoever comes first keeps the output.
+const AUTO_SCHRITTE = [[1, 0], [1, 1], [0, 1], [0, 0], [0, 1], [1, 1], [1, 0], [0, 0]];
 
 const KONSTANTEN = `
 const HUB = ${M.hub};
-`;
+const P_AUTO = ${P_AUTO};
+const P_VOLL = ${P_VOLL};
+const AUTO_SCHRITTE = ${JSON.stringify(AUTO_SCHRITTE)};
+const NACHLEUCHTEN = 0.5;   // s: a stream that has fallen silent fades out in this time, so that the short filling of the 50 cm³ can be seen`;
 
-// What only the shuttle valve knows: the body's slide, the tones of the three rooms. The frame, the readout,
-// the automatic cycle, the half sections and the handle of the browser test are figur/schnittseite.mjs.
+// What only the shuttle valve knows: the body's slide, the tones of the three rooms, the two routes of the particles, the
+// two sliders and the eight-step cycle. The frame, the readout, the automatic button, the slow motion, the half sections and
+// the handle of the browser test are figur/schnittseite.mjs.
 const eigenes = `
 // --- the model drives everything -------------------------------------------
 const zustand = neuerZustand();
+let wunschL = 0;                      // bar, what the sliders say
+let wunschR = 0;
+let autoIndex = 0;
 
 const koerperTeile = Array.from(svg.querySelectorAll("[data-hub]"));
-function seiteAutoSchritt() {}
-function seiteBedienung() {}
+const reglerL = document.getElementById("druck-links");
+const reglerR = document.getElementById("druck-rechts");
+const wertL = document.getElementById("druck-links-wert");
+const wertR = document.getElementById("druck-rechts-wert");
+
+// The automatic cycle: step 0 is "left on"; every click that switches it on starts there.
+function autoSetzen(i) {
+  autoIndex = i;
+  wunschL = AUTO_SCHRITTE[i][0] * P_AUTO;
+  wunschR = AUTO_SCHRITTE[i][1] * P_AUTO;
+}
+function seiteAutoStart() { autoSetzen(0); }
+function seiteAutoSchritt() { autoSetzen((autoIndex + 1) % AUTO_SCHRITTE.length); zeichneBedienung(); }
+
+function seiteBedienung() {
+  if (reglerL.value !== String(wunschL)) reglerL.value = String(wunschL);
+  if (reglerR.value !== String(wunschR)) reglerR.value = String(wunschR);
+  wertL.textContent = komma(wunschL.toFixed(1)) + " bar";
+  wertR.textContent = komma(wunschR.toFixed(1)) + " bar";
+}
+reglerL.addEventListener("input", () => { wunschL = reglerL.valueAsNumber; bedient(true); });
+reglerR.addEventListener("input", () => { wunschR = reglerR.valueAsNumber; bedient(true); });
 
 // The body slides between the seats; it stands home while the valve is taken apart.
 const hubMarke = (anteil) => (zustand.s * HUB * anteil).toFixed(3);
@@ -331,74 +377,158 @@ function hubStellen(anteil) {
   for (const el of koerperTeile) { if (t) el.setAttribute("transform", t); else el.removeAttribute("transform"); }
 }
 
-// A room is strong blue under pressure, pale blue when it is vented.
-const raumTon = (F, p) => (p - AUSSEN > 0.5 ? F.druck : F.abluft);
-function zeichneLuft(dt) {
+// A room's tone follows its pressure: pale blue when it is vented, the strong blue from P_VOLL on, a mixture between.
+const rauTon = (F, p) => mische(F.abluft, F.druck, Math.min(1, Math.max(0, (p - AUSSEN) / P_VOLL)));
+const nachFluss = { l: 0, r: 0 };       // l/min, signed, with the afterglow
+const nachGlanz = (alt, q, dt) => {
+  const abgeklungen = alt * Math.exp(-dt / NACHLEUCHTEN);
+  return Math.abs(q) >= Math.abs(abgeklungen) ? q : abgeklungen;
+};
+function zeichneLuft(dm, dt) {
   const F = luftFarben();
-  setzeRaumFarben({ L: raumTon(F, zustand.pL), R: raumTon(F, zustand.pR), A: raumTon(F, zustand.p2) });
+  const q = durchfluss(zustand, OS_1_4);
+  nachFluss.l = nachGlanz(nachFluss.l, q.links, dt);
+  nachFluss.r = nachGlanz(nachFluss.r, q.rechts, dt);
+  const ton = { L: rauTon(F, zustand.pL), R: rauTon(F, zustand.pR), A: rauTon(F, zustand.p2) };
+  // a stream shows the pressure of where its air comes from: its input, or the chamber while the outlet vents through the input
+  setzeRaumFarben(Object.assign({}, ton, { l: nachFluss.l >= 0 ? ton.L : ton.A, r: nachFluss.r >= 0 ? ton.R : ton.A }));
+  luftStroeme(dt, { L: ton.L, R: ton.R, A: ton.A, l: nachFluss.l >= 0 ? ton.L : ton.A, r: nachFluss.r >= 0 ? ton.R : ton.A }, nachFluss);
 }
 
 const anzeigeText = () => anzeigeZeilen(anzeige(zustand, OS_1_4)).join("\\n");
-function modellSchritt(dm) {}
-function zeichneStets() {}
+function modellSchritt(dm) { schritt(zustand, OS_1_4, dm, { pL: absolut(wunschL), pR: absolut(wunschR) }); }
 
+// The symbol beside the card: the ball, and every part in the tone of its pressure.
+const symbolTon = (p) => (p - AUSSEN > 0.5 ? "stark" : "blass");
+function zeichneStets() {
+  for (const sym of symbole) wechselSymbolStellen(sym, { s: zustand.s, links: symbolTon(zustand.pL), rechts: symbolTon(zustand.pR), ausgang: symbolTon(zustand.p2) });
+}
+
+// A handle for the browser test and for screenshots.
 figurStarten({
   MASSE: OS_1_4,
+  P_AUTO,
   modell: () => zustand,
-  // the two input pressures in bar (gauge), the model settled at once
+  wunsch: () => [wunschL, wunschR],
+  zeitlupe: () => zeitlupe,
+  autoSchritt: () => autoIndex,
+  // the two input pressures in bar (gauge), the model settled at once: the picture of a state at rest, no particles
   stelle(pL, pR) {
     stelleFest();
-    zustand.pL = AUSSEN + pL;
-    zustand.pR = AUSSEN + pR;
+    wunschL = pL;
+    wunschR = pR;
+    zustand.pL = absolut(pL);
+    zustand.pR = absolut(pR);
     for (let i = 0; i < 60; i += 1) schritt(zustand, OS_1_4, 0.05, { pL: zustand.pL, pR: zustand.pR });
-    zeichneModell(0);
+    nachFluss.l = 0;
+    nachFluss.r = 0;
+    zeichneBedienung();
+    zeichneModell(0, 0);
+    zeichneStets();
     run();
+  },
+  // the same as the sliders do: the pressures change and the model runs on (the cycle stops)
+  schalte(pL, pR) {
+    stoppeAuto();
+    wunschL = pL;
+    wunschR = pR;
+    bedient(false);
   },
 });
 `;
 
 const live = SS.lebendSkript({
-  wurzel: WURZEL, P, MOVE, STAGGER, ansicht: ANSICHT, LEGENDE, BAHNEN: {}, SEITE_VON: {}, ANZAHL: {}, VORNE: [],
+  wurzel: WURZEL, P, MOVE, STAGGER, ansicht: ANSICHT, LEGENDE, BAHNEN, SEITE_VON: { l: "l", r: "r" },
+  ANZAHL: Object.fromEntries(Object.entries(BAHNEN).map(([name, b]) => [name, Math.max(6, Math.round(b.gesamt / 24))])),
+  VORNE: Object.keys(BAHNEN),                          // the streams run in front of everything: the fittings' bores are painted over the housing
   SKALA: { tempo: 0.25, tempoMax: 160, bezug: M.qn },
-  AUTO_TAKT: 3,
-  raumDeckung: 0.5,
+  AUTO_TAKT: 0.3,                                      // model seconds: at the start's slow motion 1/10 that is 3 s a step
+  raumDeckung: 0.6,
   modelle: ["figur/ventil.mjs", "figur/wechselventil.mjs"],
   symbole: [WECHSEL_SYMBOL_LAUFZEIT],
   konstanten: KONSTANTEN,
   eigenes,
 });
 
-const LEISTE = SS.leiste("");
+const regler = (id, text, beschreibung) => SS.regler(schieber(id, text, { min: 0, max: P_MAX, step: 0.5, wert: 0, einheit: " bar", beschreibung }).replace(">0 bar</output>", ">0,0 bar</output>"));
+const LEISTE = SS.leiste(
+  regler("druck-links", "Eingang links", "Druck am linken Eingang 1 in bar") + regler("druck-rechts", "Eingang rechts", "Druck am rechten Eingang 1 in bar"),
+  { zeitlupe: 10 });
 
-const INFO = "Der Schnitt zeigt, was im Wechselventil sitzt: den Gummikörper zwischen den beiden Sitzen, das Verschlussstück mit dem O-Ring und die Ausgangsbohrung. "
-  + "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
+const INFO = "Stelle die beiden Eingänge ein oder lass die Automatik laufen: Der Gummikörper wandert zum Sitz des Eingangs mit dem niedrigeren Druck und sperrt ihn. "
+  + "Das kräftige Blau steht unter Druck, das blasse ist drucklos. Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
 
 const BEIFIGUR = SS.schaltzeichenBlock({
   svg: wechselventilSymbol({ feld: 60 }).svg,
-  text: "Das Rechteck ist das Gehäuse, die Leitung die durchgehende Bohrung, die Kugel der Schaltkörper zwischen zwei Sitzen. Die beiden Eingänge tragen die 1, der Ausgang die 2.",
+  text: "Das Rechteck ist das Gehäuse, die Leitung die durchgehende Bohrung, die Kugel der Schaltkörper zwischen zwei Sitzen: Sie liegt am gesperrten Eingang. "
+    + "Beide Eingänge tragen die 1, der Ausgang die 2. Jeder Teil der Leitung hat den Ton seines Drucks; eine Seite, die gesperrt ist, kann trotzdem unter Druck stehen.",
 });
 
+// --- The prose underneath ---------------------------------------------------------------------------
+const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
+const bar = (x) => absolut(x);
+const Q1 = durchfluss({ s: 0, pL: bar(0), pR: bar(6), p2: bar(5) }, M).gesamt;      // 1 bar over the open input: the catalogue's point
+const ms = Math.round(M.schaltzeit * 1000);
 const LESETEXT = `<div class="lesetext">
 <h2>Was man sieht</h2>
-<p>Der Text folgt mit der Bedienung.</p>
+<p>Das Wechselventil ist durch seine Mitte aufgeschnitten, nach dem Vorbild eines Schnittmodells von Bosch und mit den Daten des Festo-Ventils OS-1/4-B.
+Ein Block aus Aluminium hat eine <strong>durchgehende Bohrung</strong>. An ihren beiden Enden sitzen die zwei <strong>Eingänge</strong>, beide mit der Ziffer <strong>1</strong>; in der Mitte zweigt nach oben der <strong>Ausgang 2</strong> ab.
+Links steckt ein eingeschraubtes <strong>Verschlussstück</strong> mit einem <strong>O-Ring</strong> in der Bohrung (in der Schnittfläche bräunlich, anders schraffiert als der Block); es trägt den linken Sitz, den rechten Sitz bildet das Gehäuse selbst.
+Zwischen den Sitzen liegt lose der <strong>Schaltkörper</strong> aus Gummi, und um ihn herum bleibt ein Ringspalt frei, durch den die Luft zum Ausgang strömt.
+Quer durch den Block gehen zwei Bohrungen zur Befestigung. Das Gewinde G1/4 an allen drei Anschlüssen ist Katalogwert; die Maße der Zeichnung sind geschätzt und nachgezeichnet, die Kammer ist etwas weiter, der Körper etwas schlanker als im Entwurf, damit man den Spalt sieht.</p>
+
+<h2>ODER: die Wahrheitstabelle</h2>
+<p>Luft an <em>einem</em> Eingang oder an <em>beiden</em> kommt am Ausgang an; sind beide Eingänge drucklos, bleibt der Ausgang drucklos. „1“ heißt unter Druck, „0“ drucklos.</p>
+<table class="wahrheit">
+<caption>Wahrheitstabelle des Wechselventils (ODER)</caption>
+<thead><tr><th scope="col">Eingang links 1</th><th scope="col">Eingang rechts 1</th><th scope="col">Ausgang 2</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>1</td><td>0</td><td>1</td></tr>
+<tr><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>1</td><td>1</td><td>1</td></tr>
+</tbody>
+</table>
+<p>Die Automatik spielt diese vier Fälle in acht Schritten durch: links an, beide an, links aus, beide aus, rechts an, beide an, rechts aus, beide aus. Mit den zwei Reglern stellst du jeden Fall selbst ein.</p>
+
+<h2>Der Schaltkörper: wer zuerst kommt</h2>
+<p>Der höhere Druck schiebt den Körper auf den Sitz des <strong>anderen</strong> Eingangs und sperrt ihn. So kann die Luft nur zum Ausgang und nicht in die andere Leitung entweichen. Im Modell wechselt der Körper erst ab ${komma(M.schaltdruck, 2)} bar Druckunterschied
+(angenommen: Haftreibung und Trägheit) und braucht ${ms} ms von Sitz zu Sitz (angenommen); in der Zeichnung ist sein Weg mit ${M.hub} mm größer als er ist, und die Zeitlupe, die mit ${komma(1 / 10, 1)}-facher Geschwindigkeit beginnt, macht die ${ms} ms sichtbar.</p>
+<p>Liegt an beiden Eingängen derselbe Druck an, bleibt der Körper, wo er ist: Das Signal, das <strong>zuerst</strong> kam, hat den anderen Eingang gesperrt und behält den Ausgang. Bei verschiedenem Druck sperrt der niedrigere Eingang. <strong>„Gesperrt“ heißt nicht „drucklos“:</strong> Ein gesperrter Eingang kann unter Druck stehen, zum Beispiel links 6 bar und rechts 3 bar; die Farbe der Leitung zeigt seinen Druck, der Körper zeigt, dass er nichts zum Ausgang durchlässt.
+Fallen beide Eingänge auf null, entlüftet der Ausgang über den offenen Eingang, der an einer drucklosen Leitung hängt.</p>
+
+<h2>Wozu das gut ist</h2>
+<p>Ein Zylinder soll oft von zwei Stellen aus bedient werden (zwei Taster) oder wahlweise von Hand und automatisch. Das Wechselventil führt die zwei Signalleitungen in eine zusammen, <strong>ohne dass sie sich gegenseitig belüften</strong>: Der gesperrte Eingang verhindert, dass Druckluft in die andere Leitung und von dort zurück in deren Taster oder Ventil strömt.
+Mit dem Zweidruckventil (UND, kommt später in dieser Sammlung) bildet es die Grundverknüpfungen der Pneumatik; wie ein Ventil von einem Signal geschaltet wird, zeigt die Seite zum <a href="../Wegeventil-3-2/">3/2-Wegeventil</a>, und was am Ausgang meist hängt, ein Zylinder, die Seite zum <a href="../Zylinder-Doppeltwirkend/">doppeltwirkenden Zylinder</a>.</p>
+<p class="formel">
+Offener Eingang, ${komma(1, 0)} bar Druckabfall zum Ausgang: <strong>${Q1} l/min</strong> (Katalog: Normnenndurchfluss)<br>
+gesperrter Eingang: <strong>0 l/min</strong> in beide Richtungen
+</p>
+<p class="hinweis">Alle Zahlen kommen aus dem Modell, das auch den Körper und die Farben bewegt. Katalogwerte sind nur ${M.qn} l/min bei ${komma(M.bezugsDp, 0)} bar Druckabfall, G1/4, ${komma(M.nennweite, 1)} mm Nennweite und 1 bis 10 bar Betriebsdruck (die Regler gehen bis ${P_MAX} bar).
+Alles andere ist angenommen: Der Durchfluss wächst im Modell linear mit dem Druckabfall (bei 6 bar wären das ${durchfluss({ s: 0, pL: bar(0), pR: bar(6), p2: bar(0) }, M).gesamt} l/min, ein echtes Ventil drosselt dann ab), die ${komma(M.volumen2 / 1000, 0)} cm³ hinter dem Ausgang, der Schaltdruck und die Schaltzeit.
+Ein echtes Wechselventil zeigt beim Umschalten einen kleinen Druckstoß, den das Modell nicht hat. Die Teilchen sind nur beim Füllen und Entlüften zu sehen, das im Modell nach wenigen Millisekunden vorbei ist; die Zeichnung lässt sie ${komma(0.5, 1)} s nachleuchten. Die Anleitung zur Figur nennt alles einzeln.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 
-const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .5 }\n${WECHSEL_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}`;
+const TABELLE_CSS = `.lesetext table.wahrheit { border-collapse: collapse; margin: 0 0 11px; max-width: 100%; font-variant-numeric: tabular-nums }
+.lesetext table.wahrheit caption { text-align: left; font-size: 12.5px; padding-bottom: 5px; color: color-mix(in srgb, currentColor 80%, transparent) }
+.lesetext table.wahrheit th, .lesetext table.wahrheit td { border: 1px solid color-mix(in srgb, currentColor 30%, transparent); padding: 6px 12px; text-align: center }
+.lesetext table.wahrheit th { background: var(--anatomy-card); color: var(--anatomy-strong); font-weight: 600; line-height: 1.3 }`;
+const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .6 }\n${WECHSEL_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}\n${TABELLE_CSS}`;
 SS.seiteSchreiben({
   ziel: ZIEL,
   css: EIGENES_CSS,
   titel: "Wechselventil – Pneumatik",
   kartenTitel: "Wechselventil",
-  hinweis: "Eingänge, Automatik, zerlegen",
+  hinweis: "Eingänge, Automatik, Zeitlupe, zerlegen",
   anzeige: ANZEIGE,
   schluessel: [
     { mark: "blue", label: "Kräftiges Blau: Druckluft unter Druck" },
-    { mark: "dotted", label: "Blasses Blau: drucklose Luft" },
-    { mark: "lit", label: "Schaltkörper – was sich bewegt" },
-    { mark: "dim", label: "Alle Teile sind durch die Mitte aufgeschnitten; der Hub ist überhöht" },
+    { mark: "dotted", label: "Blasses Blau: drucklos; dazwischen Mischtöne nach dem Druck" },
+    { mark: "lit", label: "Schaltkörper – er liegt am gesperrten Eingang" },
+    { mark: "dim", label: "Alle Teile sind durch die Mitte aufgeschnitten; Hub, Spalt und O-Ring sind überhöht" },
   ],
-  caption: "Wechselventil, G1/4 (Vorbild Festo OS-1/4-B), im Schnitt durch die Mitte: Der Gummikörper liegt lose zwischen zwei Sitzen. Der höhere Druck an einem Eingang schiebt ihn auf den Sitz des anderen und sperrt ihn.",
+  caption: "Wechselventil, G1/4 (Vorbild Festo OS-1/4-B), im Schnitt durch die Mitte: Der Gummikörper liegt lose zwischen zwei Sitzen. Der höhere Druck an einem Eingang schiebt ihn auf den Sitz des anderen und sperrt ihn; die Luft des anderen Eingangs strömt durch den Spalt um den Körper zum Ausgang.",
   svg,
   leiste: LEISTE,
   legende: LEGENDE,

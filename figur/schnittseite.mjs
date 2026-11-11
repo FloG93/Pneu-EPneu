@@ -33,7 +33,9 @@
 //                             click that switches it on): the page puts its cycle back to its first step
 //   seiteBedienung()          the page's own buttons and sliders show the state (the automatic button is drawn here)
 //   modellSchritt(dm)         advance the model by dm s of model time
-//   zeichneLuft(dt)           the rooms' tones and the streams (setzeRaumFarben, luftStroeme)
+//   zeichneLuft(dm, dt)       the rooms' tones and the streams (setzeRaumFarben, luftStroeme): dm is the model's time of
+//                             this frame (0 while it stands), dt the frame's real time (a page that wants its particles to
+//                             run in slow motion uses dm, one that wants them to be seen uses dt)
 //   zeichneStets()            what is drawn in every frame, apart or together (symbol, detail panel)
 //   hubMarke(anteil)          a string that changes when the moving part has to be drawn again;
 //                             `anteil` 0…1 is how much of its travel it still shows (0 while apart)
@@ -228,9 +230,9 @@ function zeichneAnzeige() {
   schreibeAnzeige(anzeigeText());
 }
 // The model's frame: the moving part, the air, the readout.
-function zeichneModell(dm) {
+function zeichneModell(dm, dt = dm) {
   zeichneHub();
-  zeichneLuft(dm);
+  zeichneLuft(dm, dt);
   zeichneAnzeige();
 }
 
@@ -264,7 +266,7 @@ function bildZeichnen(dt, offen, bewegt) {
       bed.takt(dm);
       modellSchritt(dm);
     }
-    zeichneModell(dm);
+    zeichneModell(dm, dt);
   } else {
     zeichneHub();
     haltStroeme(dt);

@@ -1731,9 +1731,9 @@ function zeichneAnzeige() {
   schreibeAnzeige(anzeigeText());
 }
 // The model's frame: the moving part, the air, the readout.
-function zeichneModell(dm) {
+function zeichneModell(dm, dt = dm) {
   zeichneHub();
-  zeichneLuft(dm);
+  zeichneLuft(dm, dt);
   zeichneAnzeige();
 }
 
@@ -1767,7 +1767,7 @@ function bildZeichnen(dt, offen, bewegt) {
       bed.takt(dm);
       modellSchritt(dm);
     }
-    zeichneModell(dm);
+    zeichneModell(dm, dt);
   } else {
     zeichneHub();
     haltStroeme(dt);
