@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, zylinderSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT,
   drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT,
+  wechselventilSymbol, WECHSEL_SYMBOL_CSS, WECHSEL_SYMBOL_LAUFZEIT,
 } from "../schaltzeichen.mjs";
 
 test("5/2 hat zwei Felder mit je zwei Wegen", () => {
@@ -289,4 +290,132 @@ test("Drosselrückschlagventil ohne Feder: Kugel auf dem V-Sitz, kein Anschlag, 
   const mit = drosselRueckschlagSymbol().svg;
   assert.ok(mit.includes("sz-feder") && mit.includes("sz-anschlag"));
   assert.equal(drosselRueckschlagSymbol({ feder: true }).svg, mit);
+});
+
+// --- Wechselventil (ISO 1219-1) --------------------------------------------
+// Drawn after the SMC symbol table (DIN ISO 1219-1): a rectangle, a straight line through it
+// with a ball between two V seats that face each other, a dot on the line and the branch
+// to port 2. The SMC table numbers 1 / 3 / 2 with 2 below; this page follows Wikipedia and
+// the Festo catalogue: 1 – 1 and 2 on top.
+
+test("Wechselventil: Rechteck, eine Kugel, zwei einander zugewandte V-Sitze, ein Knotenpunkt", () => {
+  const { svg, breite, hoehe } = wechselventilSymbol();
+  assert.ok(!svg.includes("NaN"));
+  assert.match(svg, new RegExp(`viewBox="0 0 ${breite} ${hoehe}"`));
+  assert.match(svg, /role="img"/);
+  assert.match(svg, /aria-label="Schaltzeichen Wechselventil/);
+  assert.equal((svg.match(/<rect class="sz-rahmen"/g) || []).length, 1);
+  assert.equal((svg.match(/<circle class="sz-kugel"/g) || []).length, 1);
+  assert.equal((svg.match(/<path class="sz-sitz"/g) || []).length, 2);
+  assert.equal((svg.match(/<circle class="sz-knoten"/g) || []).length, 1);
+  // seats face each other: the left apex lies left of its arms, the right apex right of its arms
+  const sitze = [...svg.matchAll(/<path class="sz-sitz" d="M([\d.]+) ([\d.]+)L([\d.]+) ([\d.]+)L([\d.]+) ([\d.]+)"/g)].map((m) => m.slice(1).map(Number));
+  assert.equal(sitze.length, 2);
+  const [links, rechts] = sitze.sort((a, b) => a[2] - b[2]);
+  assert.ok(links[0] > links[2] && links[4] > links[2], "linker Sitz: Spitze links, Schenkel nach rechts");
+  assert.ok(rechts[0] < rechts[2] && rechts[4] < rechts[2], "rechter Sitz: Spitze rechts, Schenkel nach links");
+  assert.equal(links[3], rechts[3], "beide Spitzen auf der Leitungshöhe");
+  // the ball sits in the left seat at rest: its centre is right of the left apex, the seat's arms reach past it
+  const kugel = svg.match(/<circle class="sz-kugel" cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/).map(Number);
+  assert.ok(kugel[1] > links[2] && kugel[1] < rechts[2]);
+  assert.equal(kugel[2], links[3]);
+});
+
+test("Wechselventil: nur die Texte 1, 1 und 2; 1 links und rechts, 2 über dem Rechteck", () => {
+  const { svg } = wechselventilSymbol({ feld: 90 });
+  const texte = [...svg.matchAll(/<text[^>]*x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]*)<\/text>/g)].map((m) => ({ x: +m[1], y: +m[2], t: m[3] }));
+  assert.deepEqual(texte.map((t) => t.t).sort(), ["1", "1", "2"]);
+  const rahmen = svg.match(/<rect class="sz-rahmen" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)"/).map(Number);
+  const einsen = texte.filter((t) => t.t === "1").sort((a, b) => a.x - b.x);
+  assert.ok(einsen[0].x < rahmen[1] && einsen[1].x > rahmen[1] + rahmen[3], "die Ziffern 1 stehen außerhalb links und rechts");
+  assert.ok(texte.find((t) => t.t === "2").y < rahmen[2], "die 2 steht über dem Rechteck");
+  for (const nr of ["1", "2"]) assert.match(svg, new RegExp(`data-anschluss="${nr}"`));
+});
+
+test("Wechselventil: die vier Teile für die Laufzeit tragen data-teil", () => {
+  const { svg } = wechselventilSymbol();
+  for (const t of ["kugel", "links", "rechts", "ausgang"]) {
+    assert.equal((svg.match(new RegExp(`data-teil="${t}"`, "g")) || []).length, 1, t);
+  }
+  const ausgang = svg.slice(svg.indexOf('data-teil="ausgang"'));
+  assert.match(ausgang, /class="sz-knoten"/);                        // dot and branch are the output
+});
+
+test("Wechselventil: alle Koordinaten liegen in der viewBox, die Kugel in beiden Sitzen", () => {
+  for (const feld of [60, 90]) {
+    const { svg, breite, hoehe } = wechselventilSymbol({ feld });
+    for (const m of svg.matchAll(/ d="([^"]+)"/g)) {
+      for (const p of m[1].matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)) {
+        assert.ok(+p[1] >= 0 && +p[1] <= breite && +p[2] >= 0 && +p[2] <= hoehe, `${feld}: ${p[0]}`);
+      }
+    }
+    const k = svg.match(/<circle class="sz-kugel" cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/).map(Number);
+    const weg = Number(svg.match(/data-kugelweg="([\d.]+)"/)[1]);
+    assert.ok(k[1] - k[3] >= 0 && k[1] + weg + k[3] <= breite, "Kugel bleibt auch am rechten Sitz im Bild");
+  }
+});
+
+// A tiny stand-in for the DOM: just what the runtime touches.
+function wechselDom(svg) {
+  const klassen = () => { const set = new Set(); return { set, add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) }; };
+  const attrs = Object.fromEntries([...svg.match(/<svg[^>]*>/)[0].matchAll(/ (data-[a-z0-9-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
+  const teile = ["kugel", "links", "rechts", "ausgang"].map((t) => ({ t, attrs: {}, classList: klassen(),
+    getAttribute(n) { return n === "data-teil" ? t : this.attrs[n] ?? null; }, setAttribute(n, v) { this.attrs[n] = v; } }));
+  const mitten = ["links", "rechts"].map((m) => ({ m, attrs: {}, getAttribute(n) { return n === "data-mitte" ? m : this.attrs[n] ?? null; }, setAttribute(n, v) { this.attrs[n] = v; } }));
+  return {
+    teile, mitten,
+    getAttribute: (n) => attrs[n] ?? null,
+    querySelectorAll: (s) => (s === "[data-teil]" ? teile : s === "[data-mitte]" ? mitten : []),
+  };
+}
+
+test("Wechselventil: Laufzeit stellt die Kugel und färbt links, rechts und Ausgang nach dem gegebenen Ton", () => {
+  const { svg } = wechselventilSymbol({ feld: 60 });
+  const el = wechselDom(svg);
+  const stellen = new Function(`${WECHSEL_SYMBOL_LAUFZEIT}; return wechselSymbolStellen;`)();
+  const weg = Number(svg.match(/data-kugelweg="([\d.]+)"/)[1]);
+  const kugel = el.teile[0];
+  const ton = (t) => [...el.teile.find((x) => x.t === t).classList.set].join(" ");
+  stellen(el, { s: 0, links: null, rechts: "blass", ausgang: "stark" });
+  assert.match(kugel.attrs.transform, /translate\(0 0\)/);
+  assert.equal(ton("links"), ""); assert.equal(ton("rechts"), "blass"); assert.equal(ton("ausgang"), "stark");
+  stellen(el, { s: 1, links: "stark", rechts: null, ausgang: "stark" });
+  assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 100) / 100} 0)`);
+  assert.equal(ton("links"), "stark"); assert.equal(ton("rechts"), ""); assert.equal(ton("ausgang"), "stark");
+  stellen(el, { s: 0.5, links: "blass", rechts: "blass", ausgang: "blass" });
+  assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 50) / 100} 0)`);
+  stellen(el, { s: 7, links: "stark" });                        // out of range is clamped, missing tones clear
+  assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 100) / 100} 0)`);
+  assert.equal(ton("rechts"), "");
+  stellen(el, { s: Number.NaN });
+  assert.match(kugel.attrs.transform, /translate\(0 0\)/);
+});
+
+test("Wechselventil: die Leitung links und rechts von der Kugel entsteht erst, wenn sie den Sitz verlassen hat", () => {
+  const { svg } = wechselventilSymbol({ feld: 60 });
+  const el = wechselDom(svg);
+  const stellen = new Function(`${WECHSEL_SYMBOL_LAUFZEIT}; return wechselSymbolStellen;`)();
+  const stueck = (m) => el.mitten.find((x) => x.m === m).attrs.d;
+  stellen(el, { s: 0 });
+  assert.equal(stueck("links"), "", "am linken Sitz: keine Leitung zwischen Spitze und Kugel");
+  assert.match(stueck("rechts"), /^M[\d.]+ [\d.]+L[\d.]+ [\d.]+$/);
+  stellen(el, { s: 1 });
+  assert.match(stueck("links"), /^M/); assert.equal(stueck("rechts"), "");
+  stellen(el, { s: 0.5 });
+  assert.match(stueck("links"), /^M/); assert.match(stueck("rechts"), /^M/);
+});
+
+test("Wechselventil: Laufzeit und Stil ohne Backtick, Laufzeit gültig, Namen kollidieren nicht mit den anderen Laufzeiten", () => {
+  assert.ok(!WECHSEL_SYMBOL_LAUFZEIT.includes("`") && !WECHSEL_SYMBOL_CSS.includes("`"));
+  assert.doesNotThrow(() => new Function(WECHSEL_SYMBOL_LAUFZEIT));
+  assert.doesNotThrow(() => new Function(`${SYMBOL_LAUFZEIT}\n${DROSSEL_SYMBOL_LAUFZEIT}\n${WECHSEL_SYMBOL_LAUFZEIT}`));
+});
+
+test("Das Wechselventil-Symbol ändert die anderen Symbole nicht: Ausgaben byte-gleich", async () => {
+  const { createHash } = await import("node:crypto");
+  const h = (s) => createHash("sha256").update(s).digest("hex");
+  assert.equal(h(drosselRueckschlagSymbol().svg), "2accc274edc18de7d68066ec356a28231b165bfa10469b9c03f7ffa2df534274");
+  assert.equal(h(drosselRueckschlagSymbol({ feder: false, feld: 90 }).svg), "34d9394e4f1a3dde1d7d3027d4a1127c5199564ef82af6e9f3b5031713564c0e");
+  assert.equal(h(zylinderSymbol().svg), "ea6d02816f27cc00ff1ee42b9fe10a0548aecbd43bd35c74cafeb1beba322e56");
+  assert.equal(h(SYMBOL_CSS + DROSSEL_SYMBOL_CSS + SYMBOL_LAUFZEIT + DROSSEL_SYMBOL_LAUFZEIT), "5b19288f6a576f50d1f8bdb45dc4627b3d4d91abf96e788a3b634fbd2e1506d9");
 });

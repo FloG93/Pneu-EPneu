@@ -349,3 +349,100 @@ function drosselSymbolStellen(svgEl, offen) {
   }
 }
 `;
+
+/**
+ * The symbol of a shuttle valve (OR element, ISO 1219-1), after the DIN ISO 1219-1
+ * table of the SMC catalogue: a rectangle, a straight line through it, between two V
+ * seats that face each other a ball, a dot on the line and the branch to output 2.
+ * Ports are numbered as the Festo catalogue and Wikipedia do: both inputs "1" (left and
+ * right), output "2" on top. (SMC numbers 1 / 3 / 2 with the output below.)
+ * Parts for the runtime: `data-teil` = "links" / "rechts" (the line of an input),
+ * "ausgang" (dot, branch and the two pieces of line inside the housing, all at the
+ * pressure of the chamber) and "kugel" (the ball, slid by `data-kugelweg` px).
+ * At rest the ball sits in the left seat. `feld` is the height of the rectangle in px.
+ */
+export function wechselventilSymbol({ feld = 60 } = {}) {
+  const f = feld;
+  const rand = 4, tH = f * 0.2;
+  const stummel = f * 0.28;                       // port stub length outside the rectangle
+  const x0 = rand + stummel, br = f * 2;          // rectangle: 2 : 1
+  const yAnschluss = rand;                        // free end of the output branch
+  const yOben = yAnschluss + stummel, yMitte = yOben + f / 2, yUnten = yOben + f;
+  const xMitte = x0 + f;
+  const d = f * 0.235;                            // arm of a seat (45°)
+  const apexL = x0 + f * 0.31, apexR = x0 + br - f * 0.31;
+  const r = f * 0.16;                             // ball
+  const kx0 = apexL + r * Math.SQRT2;             // ball centre in the left seat: the arms touch it
+  const weg = (apexR - r * Math.SQRT2) - kx0;     // travel to the right seat
+  const strich = `fill="none" stroke="currentColor" stroke-width="${STRICH}"`;
+  const sitz = (xs, xe) => `<path class="sz-sitz" d="M${zahl(xe)} ${zahl(yMitte - d)}L${zahl(xs)} ${zahl(yMitte)}L${zahl(xe)} ${zahl(yMitte + d)}" ${strich} stroke-linejoin="miter"/>`;
+  const rechtsSitz = `<path class="sz-sitz" d="M${zahl(apexR - d)} ${zahl(yMitte - d)}L${zahl(apexR)} ${zahl(yMitte)}L${zahl(apexR - d)} ${zahl(yMitte + d)}" ${strich} stroke-linejoin="miter"/>`;
+  // Line inside the housing between a seat apex and the ball: only where the ball is away from it.
+  const stueck = (von, bis) => `M${zahl(von)} ${zahl(yMitte)}L${zahl(bis)} ${zahl(yMitte)}`;
+  const rechtsStueck = stueck(kx0 + r, apexR);
+
+  const links = `<g data-teil="links" class="sz-teil"><path class="sz-leitung" d="${stueck(x0 - stummel, apexL)}" ${strich}/></g>`;
+  const rechts = `<g data-teil="rechts" class="sz-teil"><path class="sz-leitung" d="${stueck(apexR, x0 + br + stummel)}" ${strich}/></g>`;
+  const ausgang = `<g data-teil="ausgang" class="sz-teil">`
+    + `<path class="sz-leitung" data-mitte="links" d="" ${strich}/>`
+    + `<path class="sz-leitung" data-mitte="rechts" d="${rechtsStueck}" ${strich}/>`
+    + `<path class="sz-leitung" d="M${zahl(xMitte)} ${zahl(yAnschluss)}L${zahl(xMitte)} ${zahl(yMitte)}" ${strich}/>`
+    + `<circle class="sz-knoten" cx="${zahl(xMitte)}" cy="${zahl(yMitte)}" r="${zahl(f * 0.055)}" fill="currentColor" stroke="none"/></g>`;
+  const kugel = `<g data-teil="kugel" transform="translate(0 0)"><circle class="sz-kugel" cx="${zahl(kx0)}" cy="${zahl(yMitte)}" r="${zahl(r)}" ${strich}/></g>`;
+  const rahmen = `<rect class="sz-rahmen" x="${zahl(x0)}" y="${zahl(yOben)}" width="${zahl(br)}" height="${zahl(f)}" ${strich}/>`;
+  const text = (nr, x, y, anker) => `<text class="sz-text" x="${zahl(x)}" y="${zahl(y)}" text-anchor="${anker}" font-size="${zahl(tH)}" fill="currentColor">${nr}</text>`;
+  const ziffern = `<g data-anschluss="1">${text(1, x0 - stummel / 2, yMitte - 3, "middle")}</g>`
+    + `<g data-anschluss="1">${text(1, x0 + br + stummel / 2, yMitte - 3, "middle")}</g>`
+    + `<g data-anschluss="2">${text(2, xMitte - 4, yAnschluss + tH, "end")}</g>`;
+
+  const breite = Math.ceil(x0 + br + stummel + rand);
+  const hoehe = Math.ceil(yUnten + rand);
+  const beschr = "Schaltzeichen Wechselventil (ODER): in einem Rechteck eine Leitung von Eingang 1 links nach Eingang 1 rechts, dazwischen eine Kugel zwischen zwei Sitzen, in der Mitte der Abzweig nach oben zum Ausgang 2";
+  const attr = `data-kugelweg="${zahl(weg)}" data-kugel-x0="${zahl(kx0)}" data-kugel-r="${zahl(r)}" data-apex-l="${zahl(apexL)}" data-apex-r="${zahl(apexR)}" data-ym="${zahl(yMitte)}" data-luecke="${zahl(f * 0.08)}"`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" ${attr} color="currentColor">`
+    + rahmen + sitz(apexL, apexL + d) + rechtsSitz + links + rechts + ausgang + kugel + ziffern + "</svg>";
+  return { svg, breite, hoehe };
+}
+
+/** Styles for the shuttle valve symbol; add to SYMBOL_CSS on the page. */
+export const WECHSEL_SYMBOL_CSS = `
+.sz-symbol .sz-teil { color: var(--sz-strich, currentColor); }
+.sz-symbol .sz-teil.stark { color: var(--sz-stark, #123f87); }
+.sz-symbol .sz-teil.blass { color: var(--sz-blass, #5a8cbf); }
+.sz-symbol [data-teil="kugel"] { color: var(--sz-strich, currentColor); }
+`;
+
+/**
+ * Runtime, inlined as a classic script. `wechselSymbolStellen(svgEl, { s, links, rechts, ausgang })`
+ * slides the ball: `s` 0 = in the left seat, 1 = in the right seat (as the model's `s`).
+ * The line of an input and the output take the tone given: "stark", "blass", or nothing
+ * (null) for the ink colour. The pieces of line inside the housing appear only where the
+ * ball is away from the seat apex, so a shut seat shows its gap as in the standard symbol.
+ */
+export const WECHSEL_SYMBOL_LAUFZEIT = String.raw`
+function wechselSymbolStellen(svgEl, zustand) {
+  var num = function (n) { return Number(svgEl.getAttribute(n)) || 0; };
+  var s = Number(zustand && zustand.s);
+  s = s > 1 ? 1 : s >= 0 ? s : 0;                 // also catches a value that is not a number
+  var weg = num("data-kugelweg");
+  var schub = Math.round(s * weg * 100) / 100;
+  var teile = svgEl.querySelectorAll("[data-teil]");
+  for (var i = 0; i < teile.length; i += 1) {
+    var t = teile[i];
+    var name = t.getAttribute("data-teil");
+    if (name === "kugel") { t.setAttribute("transform", "translate(" + schub + " 0)"); continue; }
+    t.classList.remove("stark");
+    t.classList.remove("blass");
+    var ton = zustand && zustand[name];
+    if (ton === "stark" || ton === "blass") t.classList.add(ton);
+  }
+  var cx = num("data-kugel-x0") + s * weg, r = num("data-kugel-r"), ym = num("data-ym");
+  var apexL = num("data-apex-l"), apexR = num("data-apex-r"), luecke = num("data-luecke");
+  var stuecke = svgEl.querySelectorAll("[data-mitte]");
+  for (var j = 0; j < stuecke.length; j += 1) {
+    var links = stuecke[j].getAttribute("data-mitte") === "links";
+    var von = links ? apexL : cx + r, bis = links ? cx - r : apexR;
+    stuecke[j].setAttribute("d", bis - von > luecke ? "M" + von + " " + ym + "L" + bis + " " + ym : "");
+  }
+}
+`;
