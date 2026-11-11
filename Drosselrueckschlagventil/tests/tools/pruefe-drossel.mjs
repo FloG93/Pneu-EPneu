@@ -133,6 +133,39 @@ export default async function pruefeDrossel({ seite, V, modus }) {
   V(`2 → 1 mit eingeklappter Lippe: BEIDE Seiten kräftig (${f1.toFixed(2)} / ${f2.toFixed(2)}, kräftig = ${starkRef.toFixed(2)})`,
     Math.abs(f1 - starkRef) < 0.02 && Math.abs(f2 - starkRef) < 0.02);
 
+  // --- the detail panel follows the same state --------------------------------------------------
+  const lupe = () => seite.evaluate(() => {
+    const dichte = (art) => Number(getComputedStyle(document.querySelector(`[data-lupe-lippe="${art}"]`)).opacity);
+    const breite = (art) => document.querySelector(`[data-lupe-lippe="${art}"]`).getBoundingClientRect().width;
+    const farbe = (sel) => getComputedStyle(document.querySelector(sel)).fill;
+    const rahmen = document.querySelector("[data-lupe-mass]").getBoundingClientRect();
+    return {
+      zu: dichte("zu"), auf: dichte("auf"), breiteZu: breite("zu"), breiteAuf: breite("auf"),
+      zapfen: document.querySelector("[data-lupe-zapfen]").getBoundingClientRect().top,
+      pxProMm: rahmen.width / 38,
+      s1: farbe('[data-lupe-raum="s1"]'), s2: farbe('[data-lupe-raum="s2"]'),
+      haupt1: farbe('[data-raum="s1"]'), haupt2: farbe('[data-raum="s2"]'),
+      pfeilDrossel: Number(getComputedStyle(document.querySelector('[data-lupe-pfeil="drossel"]')).opacity),
+      pfeilLippe: Number(getComputedStyle(document.querySelector('[data-lupe-pfeil="lippe"]')).opacity),
+      text: document.querySelector("[data-lupe-text]").textContent,
+    };
+  });
+  await stelle("drossel", 3);
+  const l12 = await lupe();
+  await stelle("frei", 3);
+  const l21 = await lupe();
+  V(`Lupe: die Lippe ist in 1 → 2 gespreizt, in 2 → 1 eingeklappt (Breite ${l12.breiteZu.toFixed(0)} px gegen ${l21.breiteAuf.toFixed(0)} px)`,
+    l12.zu > 0.95 && l12.auf < 0.05 && l21.zu < 0.05 && l21.auf > 0.95 && l12.breiteZu - l21.breiteAuf > 2 * (GEO.LIPPE_ZU - GEO.LIPPE_AUF) * l12.pxProMm * 0.5);
+  V("Lupe: die Töne der Räume sind dieselben wie im Schnitt", l12.s1 === l12.haupt1 && l12.s2 === l12.haupt2 && l21.s1 === l21.haupt1 && l21.s2 === l21.haupt2);
+  V("Lupe: die Pfeile folgen den Wegen (1 → 2 nur durch den Spalt, 2 → 1 auch an der Lippe vorbei)", l12.pfeilDrossel === 1 && l12.pfeilLippe === 0 && l21.pfeilDrossel === 1 && l21.pfeilLippe === 1);
+  V("Lupe: der Text nennt die Richtung", /Von 1 nach 2/.test(l12.text) && /Von 2 nach 1/.test(l21.text));
+  await stelle("drossel", 0);
+  const p0 = await lupe();
+  await stelle("drossel", 6);
+  const p6 = await lupe();
+  V(`Lupe: der Zapfen fährt mit dem Regler (${(p0.zapfen - p6.zapfen).toFixed(1)} px für 6 Umdrehungen, erwartet ${(6 * MASSE.steigung * p0.pxProMm).toFixed(1)})`,
+    Math.abs((p0.zapfen - p6.zapfen) - 6 * MASSE.steigung * p0.pxProMm) <= 1);
+
   // --- the symbol colours the branch that carries air -----------------------------------
   await stelle("drossel", 3);
   V("Schaltzeichen 1 → 2: nur der Drosselzweig ist gefärbt", (await zweig("drossel")) && !(await zweig("rueckschlag")));

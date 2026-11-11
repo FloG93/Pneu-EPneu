@@ -91,3 +91,12 @@ test("Die Seite zeigt die echte Bauform: Lippe und Ringspalt, keine Kugel, keine
   assert.ok(!/class="sz-feder"/.test(html), "das Schaltzeichen zeichnet eine Feder");
   assert.match(html, /Eine zweite Kammer, einen zweiten Kanal oder eine Feder gibt es nicht/);
 });
+
+test("Die Lupe ist da: ein flacher Schnitt des Kerns neben dem Schaltzeichen, mit Text für beide Richtungen", () => {
+  assert.match(html, /<svg class="lupe iso-svg"/);
+  for (const marke of ["data-lupe-zapfen", 'data-lupe-lippe="zu"', 'data-lupe-lippe="auf"', 'data-lupe-raum="s1"', 'data-lupe-raum="s2"', 'data-lupe-pfeil="drossel"', 'data-lupe-pfeil="lippe"']) {
+    assert.ok(html.includes(marke), `${marke} fehlt in der Lupe`);
+  }
+  assert.match(html, /Von 1 nach 2 spreizt der Druck die Lippe/);
+  assert.match(html, /Von 2 nach 1 klappt der Druck die Lippe nach innen/);
+});

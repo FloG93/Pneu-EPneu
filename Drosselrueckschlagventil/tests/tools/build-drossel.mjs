@@ -72,6 +72,18 @@ const BUCHSE = { z0: Z_KAV, bund: [HOEHE + 2, HOEHE + 7], hals: [HOEHE + 7, HOEH
 const MUTTER = { z: [HOEHE + 10, HOEHE + 18], rIn: 13, rHex: 20 };
 const R_KOPF = 12, Z_KOPF = [HOEHE + 28, HOEHE + 40];
 const Z_SCHAFT_OBEN = Z_KOPF[0];
+// The half profiles (radius, z) of the turned parts: the section in the figure and the detail panel are drawn from the same ones.
+const PROFIL_EINSATZ = [
+  [[R_BOHRUNG, BODEN], [R_FUSS, BODEN], [R_FUSS, Z_FUSS], [R_EIN, Z_FUSS], [R_EIN, FENSTER[0]], [R_BOHRUNG, FENSTER[0]]],      // foot with the lower wall
+  [[R_BOHRUNG, FENSTER[1]], [R_EIN, FENSTER[1]], [R_EIN, ZM], [R_BOHRUNG, ZM]],                                       // the tube above the cross holes
+];
+const PROFIL_LIPPE = {
+  zu: [[R_EIN, LIPPE.wurzel[0]], [R_EIN + 0.5, LIPPE.wurzel[0]], [LIPPE.rMundInnen, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [LIPPE.rWurzel, LIPPE.wurzel[1]], [R_EIN, LIPPE.wurzel[1]]],
+  auf: [[R_EIN, LIPPE.wurzel[0]], [LIPPE.rMundInnenAuf, LIPPE.wurzel[0]], [LIPPE.rMundInnenAuf, LIPPE.mund], [LIPPE.rAuf, LIPPE.mund], [LIPPE.rWurzel, LIPPE.wurzel[1]], [R_EIN, LIPPE.wurzel[1]]],
+};
+const PROFIL_SCHEIBE = [[SCHEIBE.r[0], SCHEIBE.z[0]], [SCHEIBE.r[1], SCHEIBE.z[0]], [SCHEIBE.r[1], SCHEIBE.z[1]], [SCHEIBE.r[0], SCHEIBE.z[1]]];
+const PROFIL_BUCHSE = [[BUCHSE.rTasche, BUCHSE.z0], [R_GEW, BUCHSE.z0], [R_GEW, BUCHSE.bund[0]], [BUCHSE.rBund, BUCHSE.bund[0]], [BUCHSE.rBund, BUCHSE.bund[1]], [BUCHSE.rHals, BUCHSE.bund[1]],
+  [BUCHSE.rHals, BUCHSE.hals[1]], [BUCHSE.rInnen, BUCHSE.hals[1]], [BUCHSE.rInnen, BUCHSE.zTasche], [BUCHSE.rTasche, BUCHSE.zTasche]];
 const LOCH = { x: [9, 61], z: 47, r: 4 };        // the two mounting holes, across the block
 
 // Fittings and hoses along the port axis, s from the housing's face outward.
@@ -196,11 +208,11 @@ let hatchNr = 0;
  * cut plane, clipped to the face, so the cut parts that lie one against the other can be told apart.
  * `richtung` 1 or -1 turns the lines the other way for the neighbouring part.
  */
-function schnittFlaeche(punkte, richtung = 1) {
-  const poly = punkte.map((p) => [p[0], p[2]]);
+/** The hatching of a polygon of (x, z) points: parallel 45° lines, each cut with the polygon's edges and kept between pairs of crossings. */
+function hatchSegmente(poly, richtung = 1) {
   const xs = poly.map((p) => p[0]), zs = poly.map((p) => p[1]);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
-  const d = [];
+  const segmente = [];
   // every line x - r·z = c (r = ±1) is cut with the polygon's edges; between each pair of crossings it lies inside the face
   for (let c = x0 - richtung * (richtung > 0 ? z1 : z0) - 1; c <= x1 - richtung * (richtung > 0 ? z0 : z1) + 1; c += 2.2) {
     const treffer = [];
@@ -212,11 +224,13 @@ function schnittFlaeche(punkte, richtung = 1) {
       treffer.push(az + (bz - az) * t);
     }
     treffer.sort((u, v) => u - v);
-    for (let i = 0; i + 1 < treffer.length; i += 2) {
-      const pa = at([c + richtung * treffer[i], 0, treffer[i]]), pb = at([c + richtung * treffer[i + 1], 0, treffer[i + 1]]);
-      d.push(`M${pa.map((v) => v.toFixed(1)).join(" ")}L${pb.map((v) => v.toFixed(1)).join(" ")}`);
-    }
+    for (let i = 0; i + 1 < treffer.length; i += 2) segmente.push([[c + richtung * treffer[i], treffer[i]], [c + richtung * treffer[i + 1], treffer[i + 1]]]);
   }
+  return segmente;
+}
+function schnittFlaeche(punkte, richtung = 1) {
+  const d = hatchSegmente(punkte.map((p) => [p[0], p[2]]), richtung)
+    .map(([a, b]) => `M${at([a[0], 0, a[1]]).map((v) => v.toFixed(1)).join(" ")}L${at([b[0], 0, b[1]]).map((v) => v.toFixed(1)).join(" ")}`);
   return NT.schnitt(punkte) + L(d.join(""), { tone: "faint" });
 }
 const umriss = (punkte) => ring3(punkte);
@@ -300,10 +314,7 @@ function gehaeuse() {
 function einsatz() {
   gruppe("einsatz");
   const F = FZ();
-  const profil = [
-    [[R_BOHRUNG, BODEN], [R_FUSS, BODEN], [R_FUSS, Z_FUSS], [R_EIN, Z_FUSS], [R_EIN, FENSTER[0]], [R_BOHRUNG, FENSTER[0]]],      // foot with the lower wall
-    [[R_BOHRUNG, FENSTER[1]], [R_EIN, FENSTER[1]], [R_EIN, ZM], [R_BOHRUNG, ZM]],                                       // the tube above the cross holes
-  ];
+  const profil = PROFIL_EINSATZ;
   const flaechen = profil.flatMap(beideSeiten);
   put([XC, 0, (BODEN + ZM) / 2], zweiLagen([
     ...flaechen.map((f) => schnittFlaeche(f, 1)),
@@ -330,8 +341,7 @@ function manschette() {
   gruppe("manschette");
   const F = FZ();
   const [w0, w1] = LIPPE.wurzel;
-  const zu = [[R_EIN, w0], [R_EIN + 0.5, w0], [LIPPE.rMundInnen, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [LIPPE.rWurzel, w1], [R_EIN, w1]];
-  const auf = [[R_EIN, w0], [LIPPE.rMundInnenAuf, w0], [LIPPE.rMundInnenAuf, LIPPE.mund], [LIPPE.rAuf, LIPPE.mund], [LIPPE.rWurzel, w1], [R_EIN, w1]];
+  const { zu, auf } = PROFIL_LIPPE;
   // the rubber is drawn dark, like the black rings of the catalogue
   const lage = (profil, art) => `<g data-lippe="${art}">${beideSeiten(profil).map((f) => `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${umriss(f)}"/>`).join("")}${L(beideSeiten(profil).map(umriss).join(""), { tone: "mid" })}</g>`;
   put([XC, 0, (LIPPE.mund + w1) / 2], zweiLagen([
@@ -347,7 +357,7 @@ function manschette() {
 function scheibe() {
   gruppe("scheibe");
   const F = FZ();
-  const profil = [[SCHEIBE.r[0], SCHEIBE.z[0]], [SCHEIBE.r[1], SCHEIBE.z[0]], [SCHEIBE.r[1], SCHEIBE.z[1]], [SCHEIBE.r[0], SCHEIBE.z[1]]];
+  const profil = PROFIL_SCHEIBE;
   put([XC, 0, (SCHEIBE.z[0] + SCHEIBE.z[1]) / 2], zweiLagen([
     ...beideSeiten(profil).map((f) => schnittFlaeche(f, -1)),
     L(beideSeiten(profil).map(umriss).join(""), { tone: "mid" }),
@@ -361,8 +371,7 @@ function buchse() {
   gruppe("buchse");
   const F = FZ();
   const B = BUCHSE;
-  const profil = [[B.rTasche, B.z0], [R_GEW, B.z0], [R_GEW, B.bund[0]], [B.rBund, B.bund[0]], [B.rBund, B.bund[1]], [B.rHals, B.bund[1]],
-    [B.rHals, B.hals[1]], [B.rInnen, B.hals[1]], [B.rInnen, B.zTasche], [B.rTasche, B.zTasche]];
+  const profil = PROFIL_BUCHSE;
   const oring = [[R_GEW + 0.3, HOEHE], [R_GEW + 1.7, HOEHE], [R_GEW + 1.7, B.bund[0]], [R_GEW + 0.3, B.bund[0]]];
   put([XC, 0, (B.z0 + B.hals[1]) / 2], zweiLagen([
     ...beideSeiten(profil).map((f) => schnittFlaeche(f, 1)),
@@ -610,6 +619,50 @@ const START = { richtung: DROSSELRICHTUNG, umdrehungen: M.umdrehungen / 2 };
 const ANZEIGE = anzeigeZeile(anzeige(neuerZustand(M, START.umdrehungen), M, { richtung: START.richtung, dpBar: DP }), START.richtung, DP);
 const q = (richtung, u) => durchfluss(richtung, u, DP, M);
 
+// --- The detail panel ("Lupe"): a flat section of the core, drawn from the same profiles ----------------------
+// The pin, the lip, the tones of the rooms and the arrows follow the same model state as the isometric figure.
+const LUPE = { sx: 10, x0: XC - 19, x1: XC + 19, zUnten: BODEN - 2, zOben: Z_KAV + 12 };
+const lupeP = (x, z) => `${((x - LUPE.x0) * LUPE.sx).toFixed(1)} ${((LUPE.zOben - z) * LUPE.sx).toFixed(1)}`;
+const lupePfad = (pts) => `M${pts.map(([x, z]) => lupeP(x, z)).join("L")}Z`;
+const lupeSeiten = (profil) => [profil.map(([r, z]) => [XC - r, z]), profil.map(([r, z]) => [XC + r, z])];
+const lupeFlaeche = (pts, richtung) => `<path class="iso-shade" data-shade="3" data-schnitt="" d="${lupePfad(pts)}"/>`
+  + (richtung ? L(hatchSegmente(pts, richtung).map(([a, b]) => `M${lupeP(...a)}L${lupeP(...b)}`).join(""), { tone: "faint" }) : "");
+const lupeRahmen = (x0, x1, z0, z1) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+function lupeSvg() {
+  const gehaeuse = lupeRahmen(LUPE.x0, LUPE.x1, LUPE.zUnten, LUPE.zOben);
+  const hohl = [
+    lupeRahmen(XC - R_KAV, XC + R_KAV, BODEN, Z_KAV), lupeRahmen(XC - R_GEW, XC + R_GEW, Z_KAV, LUPE.zOben),
+    lupeRahmen(LUPE.x0, XC - R_KAV, Z1 - 4.5, Z1 + 4.5), lupeRahmen(XC + R_KAV, LUPE.x1, Z2 - 3.5, Z2 + 3.5),
+  ];
+  const raeume = [
+    ...RAUM_RECHTECKE.filter(([, [x0, x1, z0, z1]]) => x1 > LUPE.x0 && x0 < LUPE.x1 && z1 > LUPE.zUnten && z0 < LUPE.zOben)
+      .map(([seite, [x0, x1, z0, z1]]) => `<path class="kammer" data-lupe-raum="${seite}" fill="none" d="${lupePfad(lupeRahmen(Math.max(x0, LUPE.x0), Math.min(x1, LUPE.x1), z0, Math.min(z1, LUPE.zOben)))}"/>`),
+    ...RAUM_KEILE.flatMap(([seite, pt]) => lupeSeiten(pt).map((q) => `<path class="kammer" data-lupe-raum="${seite}" fill="none" d="${lupePfad(q)}"/>`)),
+  ];
+  const lage = (profil, art) => `<g data-lupe-lippe="${art}">${lupeSeiten(profil).map((f) => `<path class="iso-shade" data-shade="0" style="fill:var(--anatomy-strong)" d="${lupePfad(f)}"/>`).join("")}</g>`;
+  const zapfen = schraubenProfil(ZT0);
+  const zapfenPunkte = [...zapfen.map(([r, z]) => [XC - r, z]), ...zapfen.slice().reverse().map(([r, z]) => [XC + r, z])];
+  return `<svg class="lupe iso-svg" viewBox="0 0 ${(LUPE.x1 - LUPE.x0) * LUPE.sx} ${(LUPE.zOben - LUPE.zUnten) * LUPE.sx}" role="img" `
+    + `aria-label="Ausschnitt aus dem Schnitt, groß: der Zapfen der Regulierschraube in der Drosselbohrung des Einsatzes, die Dichtmanschette mit ihrer Lippe und der Stützscheibe, die Gehäusewand und die Luftwege">`
+    + `<defs><marker id="lupe-spitze" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"/></marker></defs>`
+    + `<path data-lupe-mass="" class="iso-shade" data-shade="3" data-schnitt="" d="${lupePfad(gehaeuse)}"/>`
+    + hohl.map((q) => `<path class="iso-shade" data-shade="1" d="${lupePfad(q)}"/>`).join("")
+    + raeume.join("")
+    + lupeSeiten(PROFIL_BUCHSE).map((f) => lupeFlaeche(f, 1)).join("")
+    + PROFIL_EINSATZ.flatMap(lupeSeiten).map((f) => lupeFlaeche(f, 1)).join("")
+    + lupeSeiten(PROFIL_SCHEIBE).map((f) => lupeFlaeche(f, -1)).join("")
+    + lage(PROFIL_LIPPE.zu, "zu") + lage(PROFIL_LIPPE.auf, "auf")
+    + `<g data-lupe-zapfen="">${lupeFlaeche(zapfenPunkte, -1)}</g>`
+    + L(`${[gehaeuse, ...hohl].map(lupePfad).join("")}`, { tone: "mid" })
+    + `<path class="lupe-pfeil" data-lupe-pfeil="drossel" d="" marker-end="url(#lupe-spitze)"/>`
+    + `<path class="lupe-pfeil" data-lupe-pfeil="lippe" d="" marker-end="url(#lupe-spitze)"/>`
+    + `</svg>`;
+}
+const LUPE_TEXT = {
+  [DROSSELRICHTUNG]: "Von 1 nach 2 spreizt der Druck die Lippe an die Gehäusewand: Der Weg außen herum ist dicht. Die Luft muss durch den Ringspalt am Zapfen und wird dort entspannt.",
+  [FREIE_RICHTUNG]: "Von 2 nach 1 klappt der Druck die Lippe nach innen: Die Luft strömt außen an ihr vorbei. Auch durch den Spalt fließt ein Teil, und beide Seiten bleiben unter Druck.",
+};
+
 const live = `
 const P = ${JSON.stringify(P)};
 const MOVE = ${JSON.stringify(MOVE)};
@@ -629,6 +682,8 @@ const DP = ${DP};
 const U0 = ${M.umdrehungen / 2};
 const AUTO_TAKT = 3;    // s between two automatic changes of direction
 // what the ring gap's routes need to follow the pin
+const LUPE = ${JSON.stringify(LUPE)};
+const LUPE_TEXT = ${JSON.stringify(LUPE_TEXT)};
 const SPALT = ${JSON.stringify(SPALT)};
 const SPALT_GEO = ${JSON.stringify(SPALT_GEO)};
 
@@ -665,6 +720,14 @@ const stroeme = {};
 const ANZAHL = { z1: 8, k1: 6, w: 8, b: 9, bl: 6, g: 11, gl: 6, l: 8, z2: 8 };
 for (const name in BAHNEN) stroeme[name] = stromBauen(/^(z1|z2)$/.test(name) ? luftLage : luftHinten, name, BAHNEN[name], ANZAHL[name]);
 const symbole = Array.from(document.querySelectorAll(".beifigur-symbol svg"));
+// the detail panel
+const lupeRaeume = Array.from(document.querySelectorAll("[data-lupe-raum]"));
+const lupeZapfen = document.querySelector("[data-lupe-zapfen]");
+const lupeLippeZu = document.querySelector('[data-lupe-lippe="zu"]');
+const lupeLippeAuf = document.querySelector('[data-lupe-lippe="auf"]');
+const lupeDrossel = document.querySelector('[data-lupe-pfeil="drossel"]');
+const lupeLippePfeil = document.querySelector('[data-lupe-pfeil="lippe"]');
+const lupeText = document.querySelector("[data-lupe-text]");
 
 const knopfRichtung = document.getElementById("btn-richtung");
 const knopfAuto = document.getElementById("btn-auto");
@@ -740,6 +803,10 @@ function setzeRaumFarben(farbe) {
     const f = farbe[el.dataset.raum];
     if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
   }
+  for (const el of lupeRaeume) {
+    const f = farbe[el.dataset.lupeRaum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
 }
 
 // Particle speed and strength follow the flow of the way they run on (l/min at the catalogue's pressure drop).
@@ -767,6 +834,31 @@ let letzteZeile = "";
 function zeichneAnzeige() {
   const text = anzeigeZeile(anzeige(zustand, GRA_1_4, { richtung, dpBar: DP }), richtung, DP);
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+
+// The detail panel follows the same state: the pin, the lip, the arrows of the ways (the panel does not fly apart).
+function lupePunkt(p) { return ((p[0] - LUPE.x0) * LUPE.sx).toFixed(1) + " " + ((LUPE.zOben - p[2]) * LUPE.sx).toFixed(1); }
+function lupeWeg(punkte) { return "M" + punkte.map(lupePunkt).join("L"); }
+let lupeStand = "";
+function zeichneLupe() {
+  const dz = (zustand.zapfen - U0) * GRA_1_4.steigung;
+  const q = durchfluss(richtung, zustand.zapfen, DP, GRA_1_4);
+  const rueck = richtung === FREIE_RICHTUNG && zustand.lippe > 0.05 ? q.rueckschlag * zustand.lippe : 0;
+  const stand = dz.toFixed(3) + "|" + zustand.lippe.toFixed(3) + "|" + richtung + "|" + (q.drossel > 0) + "|" + (rueck > 0);
+  if (stand === lupeStand) return;
+  lupeStand = stand;
+  lupeZapfen.setAttribute("transform", "translate(0 " + (-dz * LUPE.sx).toFixed(2) + ")");
+  lupeLippeZu.style.opacity = String(1 - zustand.lippe);
+  lupeLippeAuf.style.opacity = String(zustand.lippe);
+  // the way through the ring gap: from channel 1 through the cross holes, up the bore, through the gap, over the insert to channel 2
+  const bahnen = spaltBahnen(SPALT, SPALT.ZT0 + dz);
+  const drossel = [[LUPE.x0, 0, SPALT.Z1], ...bahnen.b, ...bahnen.g.slice(1), [LUPE.x1, 0, SPALT.Z2]];
+  lupeDrossel.setAttribute("d", lupeWeg(richtung === FREIE_RICHTUNG ? drossel.slice().reverse() : drossel));
+  lupeDrossel.style.opacity = q.drossel > 0 ? "1" : "0";
+  // round the lip: only in the free direction, down the ring space, across at the height of the cross holes
+  lupeLippePfeil.setAttribute("d", lupeWeg([[LUPE.x1, 0, SPALT.Z2], [SPALT.XC + SPALT.X_RING, 0, SPALT.Z2], [SPALT.XC + SPALT.X_RING, 0, SPALT.Z1], [LUPE.x0, 0, SPALT.Z1]]));
+  lupeLippePfeil.style.opacity = rueck > 0 ? "1" : "0";
+  if (lupeText.textContent !== LUPE_TEXT[richtung]) lupeText.textContent = LUPE_TEXT[richtung];
 }
 
 // The symbol beside the card: the branch that carries air takes the strong tone.
@@ -812,6 +904,7 @@ function bildZeichnen(dt, offen, bewegt) {
   }
   zeichneLagen();
   zeichneSymbol();
+  zeichneLupe();
 }
 
 // --- controls -------------------------------------------------------------
@@ -846,6 +939,7 @@ zeichneLuft(0);
 zeichneAnzeige();
 zeichneSymbol();
 zeichneLagen();
+zeichneLupe();
 poseExplode();
 
 // A handle for the browser test and for screenshots: it puts the figure into a known state.
@@ -874,6 +968,7 @@ window.__figur = {
     zeichneLuft(0.016);
     zeichneAnzeige();
     zeichneSymbol();
+    zeichneLupe();
     run();
   },
   weiter: () => { angehalten = false; run(); },
@@ -897,7 +992,10 @@ const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
   + `<div class="beifigur-symbol">${drosselRueckschlagSymbol({ feld: 60, feder: false }).svg}</div>`
   + `<p class="beifigur-text">Oben die einstellbare Drossel (zwei Bögen, vom Schrägpfeil durchkreuzt), darunter parallel das Rückschlagventil. `
   + `Es hat keine Feder: Die Lippe der Manschette braucht keine. Von 1 nach 2 sperrt es, von 2 nach 1 gibt es den Weg frei. Der Zweig, durch den gerade Luft strömt, färbt sich. `
-  + `Für die Abluftdrosselung zeigt Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil.</p>`;
+  + `Für die Abluftdrosselung zeigt Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil.</p>`
+  + `<p class="beifigur-titel lupe-titel">Lupe: der Kern</p>`
+  + `<div class="beifigur-lupe">${lupeSvg()}</div>`
+  + `<p class="beifigur-text" data-lupe-text>${LUPE_TEXT[DROSSELRICHTUNG]}</p>`;
 
 const LESETEXT = `<div class="lesetext">
 <h2>Was man sieht</h2>
@@ -947,7 +1045,7 @@ Der Katalog gibt von der Bauform nur den Schnitt mit den Nummern 1 bis 3 an: Die
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 
-const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n[data-readout] { white-space: pre-line; text-align: left }\n[data-lage="ganz"] { opacity: 0; pointer-events: none }`;
+const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n[data-readout] { white-space: pre-line; text-align: left }\n[data-lage="ganz"] { opacity: 0; pointer-events: none }\n.beifigur-lupe .lupe { display: block; width: 100%; height: auto; margin: 10px 0 12px; color: var(--anatomy-strong); overflow: hidden }\n.lupe .lupe-pfeil { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0 }\n.lupe-titel { margin-top: 20px }`;
 const ZIEL = join(HIER, "..", "..", "index.html");
 mkdirSync(dirname(ZIEL), { recursive: true });
 const html = seite({
