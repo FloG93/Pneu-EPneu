@@ -63,7 +63,7 @@ for (const [kopie, original] of PAARE) {
 
 test("Jeder Verweis in SKILL.md und den Referenzen zeigt auf eine Datei, die es gibt", () => {
   const texte = ["SKILL.md", "references/auftrag.md", "references/farben.md", "references/modell.md",
-    "references/zeichnen.md", "references/pruefen.md", "references/veroeffentlichen.md", "beispiel/README.md"];
+    "references/zeichnen.md", "references/pruefen.md", "references/veroeffentlichen.md", "references/schnittseite.md", "beispiel/README.md"];
   for (const t of texte) {
     const md = readFileSync(join(SKILL, t), "utf8");
     for (const [, ziel] of md.matchAll(/\]\(((?!https?:)[^)#]+)\)/g)) {

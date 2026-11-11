@@ -51,6 +51,8 @@ Reihenfolge ist verbindlich – jeder Schritt hat ein Prüftor.
 | 8 | **Kachel** in `figur/kacheln.mjs` auf `fertig`, `npm run bau:uebersicht`, Bauteil in `package.json` und `tests.yml` | `npm test` |
 | 9 | **Veröffentlichen**: Push auf den Standard-Branch ([references/veroeffentlichen.md](references/veroeffentlichen.md)) | HTTP 200 **und** Browsertest gegen die Live-Adresse |
 
+**Weiteres Ventil der Schnitt-Familie** (`figur/schnittteile.mjs`, z. B. Rückschlag-, Schnellentlüftungs-, Zweidruckventil): statt der neun Schritte den günstigeren Ablauf aus [references/schnittseite.md](references/schnittseite.md) nehmen – Quellenkarte vor dem Entwurf, drei Pakete, messbare Abnahmekriterien, ein Abschluss-Review. Gleiche Qualität, deutlich weniger Schleifen.
+
 Das ausgearbeitete Beispiel liegt in `beispiel/zylinder-doppeltwirkend/` (Zylinder ISO 15552 mit 5/2-Wegeventil, ~1000 Zeilen Geometrie, Modell mit 34 Tests). **Lesen, bevor das erste eigene Bauteil entsteht**; die Importpfade stimmen erst, wenn die Dateien wie im Ordner-README beschrieben im Projekt liegen.
 
 ## Die Naht

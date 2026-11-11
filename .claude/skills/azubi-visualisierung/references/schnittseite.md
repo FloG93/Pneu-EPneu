@@ -1,6 +1,6 @@
-# Prozess: ein weiteres Ventil als Schnittseite – günstig, gleiche Qualität
+# Ablauf für eine weitere Schnittseite – günstig, gleiche Qualität
 
-Stand: 2026-11-11, nach Drosselrückschlagventil und Wechselventil. Gilt für Bauteile der **Schnitt-Familie** (`figur/schnittteile.mjs`, `figur/schnittseite.mjs`): Rückschlagventil, Schnellentlüftungsventil, Zweidruckventil, weitere Stromventile. Nicht für neue Familien (Zylinder, Schieberventil: eigene Familien, dort gilt der alte Ablauf).
+Gelernt am Drosselrückschlagventil und am Wechselventil (Stand 2026-11-11). Gilt für Bauteile der **Schnitt-Familie** (`figur/schnittteile.mjs`, `figur/schnittseite.mjs`): Rückschlagventil, Schnellentlüftungsventil, Zweidruckventil, weitere Stromventile. Nicht für neue Familien (Zylinder, Schieberventil: eigene Familien, dort gilt der alte Ablauf).
 
 ## Wo das Geld bisher geblieben ist (Näherung aus den Meldungen der Agenten, keine Abrechnung)
 
@@ -24,7 +24,7 @@ Ergebnis: eine Datei `Quellenkarte` im Entwurf (Tabelle „belegt / abgeleitet /
 Zugriffsfallen: `festo.com/net/…`, `pdf_flip` und `didacticonline` liefern 403/503; `ftp.festo.com` und `commons.wikimedia.org/wiki/Special:FilePath/<Datei>?width=900` gehen.
 
 **Phase 1 – Entwurf und Plan aus der Vorlage (Controller)**
-`docs/superpowers/specs/2026-11-11-wechselventil-design.md` und der zugehörige Plan sind die Vorlage: Abschnitte lassen, Inhalte ersetzen. Der Entwurf enthält vorab **Abnahmekriterien**, die später gemessen werden (siehe unten), keine Adjektive.
+`docs/superpowers/specs/2026-11-11-wechselventil-design.md` und `docs/superpowers/plans/2026-11-11-wechselventil.md` sind die Vorlage: Abschnitte lassen, Inhalte ersetzen. Der Entwurf enthält vorab **Abnahmekriterien**, die später gemessen werden (siehe unten), keine Adjektive.
 
 **Phase 2 – ein Implementer (Sonnet), drei Pakete statt sieben Aufgaben**
 - **Paket A:** Modell + Tests (RED mit echten Assertions), Symbol; ein Review nur, wenn das Modell neu denkt (Logik, nicht nur Zahlen).
