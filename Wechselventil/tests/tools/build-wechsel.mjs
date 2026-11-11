@@ -328,8 +328,20 @@ const P_VOLL = 6;                                    // bar: from here on a room
 // The automatic cycle, eight steps (the spec's order): [left, right] in bar. Whoever comes first keeps the output.
 const AUTO_SCHRITTE = [[1, 0], [1, 1], [0, 1], [0, 0], [0, 1], [1, 1], [1, 0], [0, 0]];
 
+// Where there is air, in mm in the cut plane (x0, x1, z0, z1): what the particles may run through. The browser test reads it.
+const LUFTWEGE = [
+  [ENDE_L, STOPFEN.x0, ZA - R_SCHLAUCH_INNEN, ZA + R_SCHLAUCH_INNEN], [STOPFEN.x0, STOPFEN.xAbsatz, ZA - 4, ZA + 4],        // the left hose and fitting, the thread's bore
+  [STOPFEN.xAbsatz, X_SITZ_L - L_FASE, ZA - R_SITZ, ZA + R_SITZ], [X_SITZ_L - L_FASE, X_SITZ_L, ZA - R_FASE, ZA + R_FASE],   // the plug's seat bore and its cone
+  [X_SITZ_L, X_SITZ_R, ZA - R_KAM, ZA + R_KAM],                                                                             // the chamber
+  [X_SITZ_R, X_SITZ_R + L_FASE, ZA - R_FASE, ZA + R_FASE], [X_SITZ_R + L_FASE, X_GEW_R, ZA - R_SITZ, ZA + R_SITZ],         // the right seat
+  [X_GEW_R, LAENGE, ZA - 4, ZA + 4], [LAENGE, ENDE_R, ZA - R_SCHLAUCH_INNEN, ZA + R_SCHLAUCH_INNEN],                        // the right fitting's bore and hose
+  [XC - R_HALS, XC + R_HALS, Z_HALS, Z_GEW], [XC - 4, XC + 4, Z_GEW, HOEHE], [XC - R_SCHLAUCH_INNEN, XC + R_SCHLAUCH_INNEN, HOEHE, ENDE_O + 1],   // the neck, the outlet's fitting, the hose
+];
+
 const KONSTANTEN = `
 const HUB = ${M.hub};
+const GEO = ${JSON.stringify({ LAENGE, HOEHE, HUB: M.hub, ZA })};
+const LUFTWEGE = ${JSON.stringify(LUFTWEGE)};
 const P_AUTO = ${P_AUTO};
 const P_VOLL = ${P_VOLL};
 const AUTO_SCHRITTE = ${JSON.stringify(AUTO_SCHRITTE)};
@@ -379,24 +391,40 @@ function hubStellen(anteil) {
 
 // A room's tone follows its pressure: pale blue when it is vented, the strong blue from P_VOLL on, a mixture between.
 const rauTon = (F, p) => mische(F.abluft, F.druck, Math.min(1, Math.max(0, (p - AUSSEN) / P_VOLL)));
-const nachFluss = { l: 0, r: 0 };       // l/min, signed, with the afterglow
-const nachGlanz = (alt, q, dt) => {
-  const abgeklungen = alt * Math.exp(-dt / NACHLEUCHTEN);
-  return Math.abs(q) >= Math.abs(abgeklungen) ? q : abgeklungen;
+// A stream is shown by the model's flow through its input (u: its share of the catalogue flow, vz: its direction); when the flow has
+// died away the picture lets it fade out in NACHLEUCHTEN, because the 50 cm³ fill within a few milliseconds.
+const nachFluss = { l: { u: 0, vz: 1 }, r: { u: 0, vz: 1 } };
+const nachGlanz = (a, q, dt) => {
+  const abgeklungen = Math.max(0, a.u - dt / NACHLEUCHTEN);
+  const u = Math.min(1, Math.abs(q) / OS_1_4.qn);
+  if (u > 0 && u >= abgeklungen) { a.u = u; a.vz = q < 0 ? -1 : 1; } else a.u = abgeklungen;
 };
 function zeichneLuft(dm, dt) {
   const F = luftFarben();
   const q = durchfluss(zustand, OS_1_4);
-  nachFluss.l = nachGlanz(nachFluss.l, q.links, dt);
-  nachFluss.r = nachGlanz(nachFluss.r, q.rechts, dt);
+  // the largest flow of this frame's slices counts: the chamber fills within 2,6 ms, a frame is longer
+  nachGlanz(nachFluss.l, Math.abs(spitze.l) > Math.abs(q.links) ? spitze.l : q.links, dt);
+  nachGlanz(nachFluss.r, Math.abs(spitze.r) > Math.abs(q.rechts) ? spitze.r : q.rechts, dt);
+  spitze.l = 0;
+  spitze.r = 0;
   const ton = { L: rauTon(F, zustand.pL), R: rauTon(F, zustand.pR), A: rauTon(F, zustand.p2) };
   // a stream shows the pressure of where its air comes from: its input, or the chamber while the outlet vents through the input
-  setzeRaumFarben(Object.assign({}, ton, { l: nachFluss.l >= 0 ? ton.L : ton.A, r: nachFluss.r >= 0 ? ton.R : ton.A }));
-  luftStroeme(dt, { L: ton.L, R: ton.R, A: ton.A, l: nachFluss.l >= 0 ? ton.L : ton.A, r: nachFluss.r >= 0 ? ton.R : ton.A }, nachFluss);
+  const farbe = Object.assign({}, ton, { l: nachFluss.l.vz >= 0 ? ton.L : ton.A, r: nachFluss.r.vz >= 0 ? ton.R : ton.A });
+  setzeRaumFarben(farbe);
+  luftStroeme(dt, farbe, { l: nachFluss.l.vz * OS_1_4.qn * nachFluss.l.u, r: nachFluss.r.vz * OS_1_4.qn * nachFluss.r.u });
 }
 
 const anzeigeText = () => anzeigeZeilen(anzeige(zustand, OS_1_4)).join("\\n");
-function modellSchritt(dm) { schritt(zustand, OS_1_4, dm, { pL: absolut(wunschL), pR: absolut(wunschR) }); }
+const spitze = { l: 0, r: 0 };         // l/min, signed: the largest flow through each input in the frame's slices
+function modellSchritt(dm) {
+  const teile = 8;
+  for (let i = 0; i < teile; i += 1) {
+    schritt(zustand, OS_1_4, dm / teile, { pL: absolut(wunschL), pR: absolut(wunschR) });
+    const q = durchfluss(zustand, OS_1_4);
+    if (Math.abs(q.links) > Math.abs(spitze.l)) spitze.l = q.links;
+    if (Math.abs(q.rechts) > Math.abs(spitze.r)) spitze.r = q.rechts;
+  }
+}
 
 // The symbol beside the card: the ball, and every part in the tone of its pressure.
 const symbolTon = (p) => (p - AUSSEN > 0.5 ? "stark" : "blass");
@@ -407,6 +435,17 @@ function zeichneStets() {
 // A handle for the browser test and for screenshots.
 figurStarten({
   MASSE: OS_1_4,
+  geometrie: GEO,
+  luftwege: LUFTWEGE,
+  bahn: (name) => stroeme[name].bahn,
+  fluss: () => JSON.stringify(nachFluss),
+  // the cut plane's millimetres (x along the bore, z up) from a position in the drawing: the inverse of the projection there
+  zuMm(x, y) {
+    const o = iso([0, 0, 0], P), ex = iso([1, 0, 0], P), ez = iso([0, 0, 1], P);
+    const a = ex[0] - o[0], b = ez[0] - o[0], c = ex[1] - o[1], d = ez[1] - o[1];
+    const det = a * d - b * c;
+    return [((x - o[0]) * d - b * (y - o[1])) / det, (a * (y - o[1]) - (x - o[0]) * c) / det];
+  },
   P_AUTO,
   modell: () => zustand,
   wunsch: () => [wunschL, wunschR],
@@ -420,8 +459,10 @@ figurStarten({
     zustand.pL = absolut(pL);
     zustand.pR = absolut(pR);
     for (let i = 0; i < 60; i += 1) schritt(zustand, OS_1_4, 0.05, { pL: zustand.pL, pR: zustand.pR });
-    nachFluss.l = 0;
-    nachFluss.r = 0;
+    nachFluss.l.u = 0;
+    nachFluss.r.u = 0;
+    spitze.l = 0;
+    spitze.r = 0;
     zeichneBedienung();
     zeichneModell(0, 0);
     zeichneStets();
