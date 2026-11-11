@@ -23,13 +23,13 @@
 // STEP FARBEN BAHNEN SEITE_VON ANZAHL VORNE SKALA AUTO_TAKT`, and the elements `stage svg groups
 // readout info still`. It defines `komma`, `angehalten`, `lagen`, `raeume`, `luftLage`, `luftHinten`,
 // `stroeme`, `symbole`, `bed`, `knopfAuto`, `hubAnteil`, `zeichneHub`, `zeichneAnzeige`, `zeichneLagen`,
-// `setzeRaumFarben`, `luftStroeme`, `bildZeichnen`, `stoppeAuto`, `bedient`, `stelleFest`,
-// `vorDemZerlegen`, `schnittStart` and `figurGrundstock`.
+// `setzeRaumFarben`, `luftStroeme`, `zeichneBedienung`, `zeichneModell`, `bildZeichnen`, `stoppeAuto`, `bedient`,
+// `stelleFest`, `vorDemZerlegen` and `figurStarten`.
 // And it expects the page to define, before it calls any of them:
 //   seiteAutoSchritt()        one automatic step (the page flips what the cycle flips)
-//   zeichneBedienung()        buttons and sliders show the state
+//   seiteBedienung()          the page's own buttons and sliders show the state (the automatic button is drawn here)
 //   modellSchritt(dm)         advance the model by dm s of model time
-//   zeichneModell(dm)         draw the model's frame: moving part, air, readout (calls zeichneHub etc.)
+//   zeichneLuft(dt)           the rooms' tones and the streams (setzeRaumFarben, luftStroeme)
 //   zeichneStets()            what is drawn in every frame, apart or together (symbol, detail panel)
 //   hubMarke(anteil)          a string that changes when the moving part has to be drawn again;
 //                             `anteil` 0…1 is how much of its travel it still shows (0 while apart)
@@ -60,6 +60,20 @@ export const schaltzeichenBlock = ({ svg, text }) => `<p class="beifigur-titel">
 
 /** The readout of two lines, and the two views of a turned part: the half section blends out when it has left. */
 export const CSS = `[data-readout] { white-space: pre-line; text-align: left }\n[data-lage="ganz"] { opacity: 0; pointer-events: none }`;
+
+/**
+ * A part of rubber, drawn whole (a ring, a body): every shade of the solid takes the strong ink colour
+ * in steps, so it reads as black rubber in the light mode like the half section's dark fill does.
+ * Put the part in a group of the class `gummi`.
+ */
+export const GUMMI_CSS = [0, 1, 2, 3].map((n, i) => {
+  const f = `color-mix(in srgb, var(--anatomy-strong) ${100 - i * 9}%, var(--anatomy-paper))`;
+  return `.gummi .iso-shade[data-shade="${n}"], .gummi .iso-solid[data-seamless]>.iso-shade[data-shade="${n}"] { fill: ${f}; stroke: ${f} }`;
+}).join("\n")
+  + `\n.gummi .tb-body { fill: color-mix(in srgb, var(--anatomy-strong) 82%, var(--anatomy-paper)) }`
+  + `\n.gummi .tb-shine { fill: color-mix(in srgb, var(--anatomy-strong) 62%, var(--anatomy-paper)) }`
+  + `\n.gummi .tb-shade { fill: var(--anatomy-strong) }`
+  + `\n.gummi .iso-top, .gummi .iso-fill, .gummi .iso-solid[data-seamless]>.iso-top { fill: color-mix(in srgb, var(--anatomy-strong) 58%, var(--anatomy-paper)); stroke: none }`;
 
 const runde = (v) => Math.round(v * 10) / 10;
 
@@ -143,6 +157,11 @@ const bed = bedienungSignale({
   autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
   geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
 });
+// The automatic button, then whatever else the page shows of its controls.
+function zeichneBedienung() {
+  knopfAuto.setAttribute("aria-pressed", String(bed.auto));
+  seiteBedienung();
+}
 const stoppeAuto = () => { bed.autoAus(); };
 
 // A hand on a control: optionally stops the cycle, wakes the model, draws the controls, restarts the loop.
@@ -186,6 +205,12 @@ let letzteZeile = "";
 function zeichneAnzeige() {
   const text = anzeigeText();
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+// The model's frame: the moving part, the air, the readout.
+function zeichneModell(dm) {
+  zeichneHub();
+  zeichneLuft(dm);
+  zeichneAnzeige();
 }
 
 // Paint every room of the drawing with the tone its side has in farbe.
@@ -241,18 +266,15 @@ function bildZeichnen(dt, offen, bewegt) {
 // Before taking it apart: no automatic cycle; the moving parts go home by themselves (hubAnteil).
 function vorDemZerlegen() { stoppeAuto(); }
 
-// The first picture, once the page has defined its own functions.
-function schnittStart() {
+// The first picture, once the page has defined its own functions, and the handle for the browser test and
+// for screenshots; eigenes are the page's own entries.
+function figurStarten(eigenes) {
   zeichneBedienung();
   zeichneModell(0);
   zeichneLagen();
   zeichneStets();
   poseExplode();
-}
-
-// The handle for the browser test and for screenshots; the page adds its own entries.
-function figurGrundstock(eigenes) {
-  return Object.assign({
+  window.__figur = Object.assign({
     zerlegt: () => zerlegt,
     offen: () => offenAnteil(),
     weiter: () => { angehalten = false; run(); },
@@ -264,10 +286,11 @@ function figurGrundstock(eigenes) {
 
 /**
  * Page, style, file. `css` is the page's own style rules; `SCHNITT_CSS` (the section tone) comes after.
- * `ziel` is the file; every other key is passed on to `seite()` of figur/seite.mjs.
+ * `ziel` is the file; `legende` the legend's entries (the buttons are made here); every other key is passed on to
+ * `seite()` of figur/seite.mjs. Default: "Bild 1", 1240 px wide, the aside labelled "Schaltzeichen".
  */
-export function seiteSchreiben({ ziel, css, ...optionen }) {
+export function seiteSchreiben({ ziel, css, legende, fig = "Bild 1", breite = 1240, beiFigurLabel = "Schaltzeichen", ...optionen }) {
   mkdirSync(dirname(ziel), { recursive: true });
-  const html = seite(optionen).replace("</style>", `${css}${SCHNITT_CSS}</style>`);
+  const html = seite({ fig, breite, beiFigurLabel, legende: LEG.knoepfe(legende), ...optionen }).replace("</style>", `${css}${SCHNITT_CSS}</style>`);
   writeFileSync(ziel, html);
 }

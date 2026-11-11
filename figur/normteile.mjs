@@ -100,6 +100,27 @@ export function federPruefen(feder, hub, reserve) {
   return text;
 }
 
+/**
+ * The standard G1/4 push-in fitting (Steckverschraubung) every pneumatic page draws, with the hose stub
+ * it carries: dimensions along the port axis (s from the housing's face outward), the radius of its
+ * threaded stub, of the hose and its bore, and the walls it shows in a section (`schnitt`:
+ * [[s0, s1], rIn, rAus, hatching direction]). Annahme: sizes estimated, the same on every page.
+ */
+export const STECKVERSCHRAUBUNG_G14 = (() => {
+  const rPort = 6.5;                                // G1/4 thread bore, outside Ø 13.2
+  const rStummel = rPort - 0.2;                     // the threaded stub, clear of the thread
+  return {
+    rPort, rStummel, rSchlauch: 4, rSchlauchInnen: 3, schlauchLaenge: 8,
+    masse: { gewinde: [-12, 0], sechskant: [0, 4.5], rS: 7.6, koerper: [4.5, 11], rK: 6, ring: [11, 12.5], rR: 5.2 },
+    schnitt: [
+      [[-12, 0], 4, rStummel, 1],                   // the threaded stub, in the thread bore
+      [[0, 4.5], 4, 6.6, -1],                       // the hexagon (across the flats at the cut)
+      [[4.5, 11], 4, 6, 1],                         // the body
+      [[11, 12.5], 4, 5.2, -1],                     // the release collar
+    ],
+  };
+})();
+
 export function normteile({ P, rec, put, gruppe }) {
   const at = (p) => k.iso(p, P);
   const V = G.viewOf(P);

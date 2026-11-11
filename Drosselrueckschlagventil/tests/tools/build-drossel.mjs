@@ -18,28 +18,22 @@
 // The kit's camera looks from +x, +y, +z, so the half of the valve that is kept is the one at
 // y <= 0 and its cut face at y = 0 looks at the viewer. Turned parts are cut in half: their
 // cut faces lie in the plane y = 0 in the section tone.
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../../../.claude/skills/anatomy/kit/lathe.mjs";
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
-import * as LEG from "../../../figur/legende.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
 import * as SS from "../../../figur/schnittseite.mjs";
-import { schnittTeile, hatchSegmente } from "../../../figur/schnittteile.mjs";
+import { schnittTeile, hatchSegmente, LEINWAND } from "../../../figur/schnittteile.mjs";
 import { GRA_1_4 as M, DROSSELRICHTUNG, FREIE_RICHTUNG, anzeige, anzeigeZeile, neuerZustand, durchfluss } from "../../../figur/stromventil.mjs";
 import { drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
 import { knopf, schieber } from "../../../figur/seite.mjs";
-import { zeichner } from "../../../figur/zylinderteile.mjs";
-import { normteile, stummel, sechskant } from "../../../figur/normteile.mjs";
+import { zeichner, ort, MOVE_BASIS } from "../../../figur/zylinderteile.mjs";
+import { normteile, stummel, sechskant, STECKVERSCHRAUBUNG_G14 as G14 } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-drossel.mjs";
 
-const HIER = dirname(fileURLToPath(import.meta.url));
-const WURZEL = join(HIER, "..", "..", "..");
-const W = 900;
-const H = 800;
-const TAU = Math.PI * 2;
+const { ZIEL, WURZEL } = ort(import.meta.url);
+const { W, H } = LEINWAND;
 
 // --- Dimensions ----------------------------------------------------------
 // The core (insert, lip seal, bush, pin) is drawn large: about half of the block's width, so that the ring
@@ -47,8 +41,7 @@ const TAU = Math.PI * 2;
 const XC = 35;                                   // the axis of the screw, insert and bush
 const LAENGE = 70, TIEFE = 16, HOEHE = 58;       // housing block; the half y in [-16, 0] is kept
 const Z1 = 16, Z2 = 33;                          // port axes: 1 low on the left, 2 higher on the right
-const R_PORT = 6.5;                              // G1/4 thread bore, outside Ø 13.2
-const R_STUMMEL = R_PORT - 0.2;                  // the threaded stub of a fitting, clear of the thread
+const { rPort: R_PORT, rStummel: R_STUMMEL } = G14;   // G1/4 thread bore and the threaded stub of a fitting
 const BODEN = 9;                                 // floor of the central cavity (= bottom of channel 1)
 const R_KAV = 14, Z_KAV = 36.5;                  // cavity for the insert and the lip: up to the bush's lower end
 const R_GEW = 16;                                // thread bore of the bush, from Z_KAV to the top face
@@ -84,8 +77,8 @@ const PROFIL_BUCHSE = [[BUCHSE.rTasche, BUCHSE.z0], [R_GEW, BUCHSE.z0], [R_GEW, 
 const LOCH = { x: [9, 61], z: 47, r: 4 };        // the two mounting holes, across the block
 
 // Fittings and hoses along the port axis, s from the housing's face outward.
-const VERSCHRAUBUNG = { gewinde: [-12, 0], sechskant: [0, 4.5], rS: 7.6, koerper: [4.5, 11], rK: 6, ring: [11, 12.5], rR: 5.2 };
-const R_SCHLAUCH = 4, R_SCHLAUCH_INNEN = 3;
+const VERSCHRAUBUNG = G14.masse;
+const { rSchlauch: R_SCHLAUCH, rSchlauchInnen: R_SCHLAUCH_INNEN } = G14;
 const SCHLAUCH_LAENGE = 14;                      // the hose stubs drawn in the section
 const WEGE = Object.fromEntries([1, 2].map((nr) => {
   const v = nr === 1 ? -1 : 1;
@@ -111,8 +104,7 @@ const STAGGER = ["leitung", "verschraubung", "schraube", "kontermutter", "buchse
 // turned parts leave upwards along the screw's axis in the order they were mounted, the fittings
 // and the hoses sideways through the cut.
 const MOVE = {
-  grund: [0, 0, 0],
-  luft: [0, 0, 0],
+  ...MOVE_BASIS,
   leitung: [0, 112, 0],
   verschraubung: [0, 72, 0],
   schraube: [-42, 0, 150],
@@ -145,8 +137,7 @@ const HOHLRAUM = [
   [[XC + R_KAV, LAENGE - 12, Z2 - 3.5, Z2 + 3.5], "h"],             // channel 2: into the ring space
   [[LAENGE - 12, LAENGE, Z2 - R_PORT, Z2 + R_PORT], "h"],           // port 2 (thread bore)
   [[XC - R_GEW, XC + R_GEW, Z_KAV, HOEHE], "v"],                    // the bush's thread bore (the bush fills it)
-  [[LOCH.x[0] - LOCH.r, LOCH.x[0] + LOCH.r, LOCH.z - LOCH.r, LOCH.z + LOCH.r], "loch"],   // mounting holes, across the block
-  [[LOCH.x[1] - LOCH.r, LOCH.x[1] + LOCH.r, LOCH.z - LOCH.r, LOCH.z + LOCH.r], "loch"],
+  ...ST.loecher(LOCH),                                              // the two mounting holes, across the block
 ];
 // --- Turned parts, cut in half: polygons in the plane y = 0, mirrored about the axis ------------
 const { beideSeiten } = ST.drehachse({ richtung: "z", mitte: XC });   // (radius, z) profiles, once on each side of the axis
@@ -352,13 +343,7 @@ function anschlussSchnitte() {
       streifen: (s0, s1, q0, q1) => [...[x(s0), x(s1)].sort((a, b) => a - b), za + q0, za + q1],
       hohl: AUSSEN_HOHL[nr - 1],
       raum: nr === 1 ? "s1" : "s2",
-      teile: [
-        [[-12, 0], 4, R_STUMMEL, 1],                       // the threaded stub, in the housing's port bore
-        [[0, 4.5], 4, 6.6, -1],                            // the hexagon (across the flats at the cut)
-        [[4.5, 11], 4, 6, 1],                              // the body
-        [[11, 12.5], 4, 5.2, -1],                          // the release collar
-      ],
-      schlauch: { s: [VERSCHRAUBUNG.ring[1], VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE], rIn: R_SCHLAUCH_INNEN, rAus: R_SCHLAUCH },
+      schlauchLaenge: SCHLAUCH_LAENGE,
       traeger: `verschraubung${nr}.gewinde`,
     });
   }
@@ -569,6 +554,7 @@ function setzeLupeFarben(farbe) {
 }
 
 function zeichneLuft(dt) {
+  zeichneSpalt();
   const farbe = seitenFarben();
   setzeRaumFarben(farbe);
   setzeLupeFarben(farbe);
@@ -613,23 +599,16 @@ function zeichneSymbol() {
   for (const sym of symbole) drosselSymbolStellen(sym, { drossel: q.drossel, rueckschlag: rueck, ton: "stark" });
 }
 
-function zeichneBedienung() {
+function seiteBedienung() {
   const frei = richtung === FREIE_RICHTUNG;
   knopfRichtung.setAttribute("aria-pressed", String(frei));
   const text = frei ? "Richtung 2 → 1 (frei)" : "Richtung 1 → 2 (gedrosselt)";
   if (knopfRichtung.textContent !== text) knopfRichtung.textContent = text;
-  knopfAuto.setAttribute("aria-pressed", String(bed.auto));
   reglerWert.textContent = komma(regler) + " Umdr.";
 }
 
 // The frames of the shared loop (figur/schnittseite.mjs): the model, then what is drawn.
 function modellSchritt(dm) { schritt(zustand, GRA_1_4, dm, { richtung, umdrehungen: regler, dpBar: DP }); }
-function zeichneModell(dm) {
-  zeichneSpalt();
-  zeichneHub();
-  zeichneLuft(dm);
-  zeichneAnzeige();
-}
 function zeichneStets() {
   zeichneSymbol();
   zeichneLupe();
@@ -645,10 +624,8 @@ reglerEl.addEventListener("input", () => {
   bedient(false);
 });
 
-schnittStart();
-
 // A handle for the browser test and for screenshots: it puts the figure into a known state.
-window.__figur = figurGrundstock({
+figurStarten({
   MASSE: GRA_1_4,
   geometrie: SPALT_GEO,
   modell: () => zustand,
@@ -664,10 +641,7 @@ window.__figur = figurGrundstock({
     zustand.lippe = r === FREIE_RICHTUNG ? lippeHub(DP, GRA_1_4) : 0;
     spaltZapfen = null;
     zeichneBedienung();
-    zeichneSpalt();
-    zeichneHub();
-    zeichneLuft(0.016);
-    zeichneAnzeige();
+    zeichneModell(0.016);
     zeichneSymbol();
     zeichneLupe();
     run();
@@ -755,12 +729,10 @@ Der Katalog gibt von der Bauform nur den Schnitt mit den Nummern 1 bis 3 an: Die
 </div>`;
 
 const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n${SS.CSS}\n.beifigur-lupe .lupe { display: block; width: 100%; height: auto; margin: 10px 0 12px; color: var(--anatomy-strong); overflow: hidden }\n.lupe .lupe-pfeil { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0 }\n.lupe-titel { margin-top: 20px }`;
-const ZIEL = join(HIER, "..", "..", "index.html");
 SS.seiteSchreiben({
   ziel: ZIEL,
   css: EIGENES_CSS,
   titel: "Drosselrückschlagventil – Pneumatik",
-  fig: "Bild 1",
   kartenTitel: "Drosselrückschlagventil",
   hinweis: "Richtung, Drosselschraube, zerlegen",
   anzeige: ANZEIGE,
@@ -774,14 +746,12 @@ SS.seiteSchreiben({
     + "Von 1 nach 2 spreizt der Druck die Lippe an die Wand und die Luft muss durch den Spalt; von 2 nach 1 klappt sie nach innen und die Luft strömt außen vorbei.",
   svg,
   leiste: LEISTE,
-  legende: LEG.knoepfe(LEGENDE),
+  legende: LEGENDE,
   infoText: INFO,
   lesetext: LESETEXT,
   laufzeit: live,
-  breite: 1240,
   buehneLabel: "Drosselrückschlagventil im Schnitt: Drosselspalt, Dichtmanschette, Luftweg und Baugruppen",
   beiFigur: BEIFIGUR,
-  beiFigurLabel: "Schaltzeichen",
 });
 
 ST.ende({

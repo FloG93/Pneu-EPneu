@@ -24,10 +24,10 @@ test("Die Laufzeit steht ohne Backtick im klassischen Skript", () => {
 });
 
 test("Die Laufzeit nennt jeden Haken, den sie von der Seite erwartet, und jeden Namen, den sie bereitstellt", () => {
-  for (const haken of ["seiteAutoSchritt()", "zeichneBedienung()", "modellSchritt(dm)", "zeichneModell(dm)", "zeichneStets()", "hubMarke(hubAnteil)", "hubStellen(hubAnteil)", "anzeigeText()"]) {
+  for (const haken of ["seiteAutoSchritt()", "seiteBedienung()", "modellSchritt(dm)", "zeichneLuft(dm)", "zeichneStets()", "hubMarke(hubAnteil)", "hubStellen(hubAnteil)", "anzeigeText()"]) {
     assert.ok(LAUFZEIT.includes(haken), `${haken} wird nicht gerufen`);
   }
-  for (const name of ["function bildZeichnen", "function vorDemZerlegen", "function schnittStart", "function figurGrundstock", "function stelleFest",
+  for (const name of ["function bildZeichnen", "function vorDemZerlegen", "function figurStarten", "function zeichneBedienung", "function zeichneModell", "function stelleFest",
     "function bedient", "function zeichneHub", "function zeichneAnzeige", "function zeichneLagen", "function setzeRaumFarben", "function luftStroeme", "const stoppeAuto", "const bed ="]) {
     assert.ok(LAUFZEIT.includes(name), `${name} fehlt`);
   }
@@ -97,7 +97,7 @@ test("Die Seite wird geschrieben: Skript, eigene Stilregeln und Schnittton in de
   try {
     const ziel = join(ordner, "teil", "index.html");
     seiteSchreiben({
-      ziel, css: ".eigene-regel { color: red }\n", titel: "Test – Pneumatik", fig: "Bild 1", kartenTitel: "Test", hinweis: "x", anzeige: "Anzeige",
+      ziel, css: ".eigene-regel { color: red }\n", legende: [], titel: "Test – Pneumatik", fig: "Bild 1", kartenTitel: "Test", hinweis: "x", anzeige: "Anzeige",
       caption: "Eine Bildunterschrift.", svg: "<svg viewBox=\"0 0 10 10\"></svg>", leiste: leiste(""), laufzeit: "window.__probe = 1;",
     });
     const html = readFileSync(ziel, "utf8");

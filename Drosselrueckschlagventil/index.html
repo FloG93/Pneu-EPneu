@@ -1633,6 +1633,11 @@ const bed = bedienungSignale({
   autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
   geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
 });
+// The automatic button, then whatever else the page shows of its controls.
+function zeichneBedienung() {
+  knopfAuto.setAttribute("aria-pressed", String(bed.auto));
+  seiteBedienung();
+}
 const stoppeAuto = () => { bed.autoAus(); };
 
 // A hand on a control: optionally stops the cycle, wakes the model, draws the controls, restarts the loop.
@@ -1676,6 +1681,12 @@ let letzteZeile = "";
 function zeichneAnzeige() {
   const text = anzeigeText();
   if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+// The model's frame: the moving part, the air, the readout.
+function zeichneModell(dm) {
+  zeichneHub();
+  zeichneLuft(dm);
+  zeichneAnzeige();
 }
 
 // Paint every room of the drawing with the tone its side has in farbe.
@@ -1731,18 +1742,15 @@ function bildZeichnen(dt, offen, bewegt) {
 // Before taking it apart: no automatic cycle; the moving parts go home by themselves (hubAnteil).
 function vorDemZerlegen() { stoppeAuto(); }
 
-// The first picture, once the page has defined its own functions.
-function schnittStart() {
+// The first picture, once the page has defined its own functions, and the handle for the browser test and
+// for screenshots; eigenes are the page's own entries.
+function figurStarten(eigenes) {
   zeichneBedienung();
   zeichneModell(0);
   zeichneLagen();
   zeichneStets();
   poseExplode();
-}
-
-// The handle for the browser test and for screenshots; the page adds its own entries.
-function figurGrundstock(eigenes) {
-  return Object.assign({
+  window.__figur = Object.assign({
     zerlegt: () => zerlegt,
     offen: () => offenAnteil(),
     weiter: () => { angehalten = false; run(); },
@@ -1835,6 +1843,7 @@ function setzeLupeFarben(farbe) {
 }
 
 function zeichneLuft(dt) {
+  zeichneSpalt();
   const farbe = seitenFarben();
   setzeRaumFarben(farbe);
   setzeLupeFarben(farbe);
@@ -1879,23 +1888,16 @@ function zeichneSymbol() {
   for (const sym of symbole) drosselSymbolStellen(sym, { drossel: q.drossel, rueckschlag: rueck, ton: "stark" });
 }
 
-function zeichneBedienung() {
+function seiteBedienung() {
   const frei = richtung === FREIE_RICHTUNG;
   knopfRichtung.setAttribute("aria-pressed", String(frei));
   const text = frei ? "Richtung 2 → 1 (frei)" : "Richtung 1 → 2 (gedrosselt)";
   if (knopfRichtung.textContent !== text) knopfRichtung.textContent = text;
-  knopfAuto.setAttribute("aria-pressed", String(bed.auto));
   reglerWert.textContent = komma(regler) + " Umdr.";
 }
 
 // The frames of the shared loop (figur/schnittseite.mjs): the model, then what is drawn.
 function modellSchritt(dm) { schritt(zustand, GRA_1_4, dm, { richtung, umdrehungen: regler, dpBar: DP }); }
-function zeichneModell(dm) {
-  zeichneSpalt();
-  zeichneHub();
-  zeichneLuft(dm);
-  zeichneAnzeige();
-}
 function zeichneStets() {
   zeichneSymbol();
   zeichneLupe();
@@ -1911,10 +1913,8 @@ reglerEl.addEventListener("input", () => {
   bedient(false);
 });
 
-schnittStart();
-
 // A handle for the browser test and for screenshots: it puts the figure into a known state.
-window.__figur = figurGrundstock({
+figurStarten({
   MASSE: GRA_1_4,
   geometrie: SPALT_GEO,
   modell: () => zustand,
@@ -1930,10 +1930,7 @@ window.__figur = figurGrundstock({
     zustand.lippe = r === FREIE_RICHTUNG ? lippeHub(DP, GRA_1_4) : 0;
     spaltZapfen = null;
     zeichneBedienung();
-    zeichneSpalt();
-    zeichneHub();
-    zeichneLuft(0.016);
-    zeichneAnzeige();
+    zeichneModell(0.016);
     zeichneSymbol();
     zeichneLupe();
     run();

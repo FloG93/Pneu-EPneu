@@ -19,13 +19,15 @@
 //   ST.hohlraum(h)           one hollow on the cut face; h = [[x0, x1, z0, z1], "h" | "v" | "loch"]
 //   ST.materialKoerper(...)  the material of the half block as axis boxes, from the hollows
 //   ST.gehaeuseBlock({...})  the whole housing block: cut face, hollows, round walls, rooms of air, edges
+//   ST.loecher({ x, z, r })  the two mounting holes as hollows
 //   ST.raumPfade({...}), ST.rahmen(x0, x1, z0, z1)   the rooms of air as empty paths; a rectangle's outline
 //   ST.schnittFlaeche(punkte, richtung)   a cut face in the section tone with 45° hatching
 //   ST.zweiLagen(schnitt, ganz)   the two drawings of a turned part, blended by the page
 //   ST.drehachse({ richtung, mitte })     (radius, s) profile → both sides of the axis
 //   ST.obenFlaeche(punkte)   the top face of a part that stands above the housing
 //   ST.schnittEnde(punkte, rAussen, rInnen)   the cut end of a hose
-//   ST.anschlussSchnitt({...})  the fitting with its hose stub cut in the plane, and its air room
+//   ST.anschlussSchnitt({...})  the standard fitting with its hose stub cut in the plane, and its air room
+//   ST.schnittLage(traeger, svg)  hang a half section on an item
 //   ST.schlaeuche(wege, {...})  the hoses in pieces, with their route for the escape
 //   ST.anordnen({...})       depth order: the housing as back drop, the turned parts in mounting order
 //   ST.pruefeBaugruppen(LEGENDE, STAGGER)   every part has a legend number, legend and order agree
@@ -37,9 +39,13 @@ import * as G from "../.claude/skills/anatomy/kit/lathe.mjs";
 import * as A from "../.claude/skills/anatomy/kit/audit.mjs";
 import { tubePieces, tubeSvg } from "../.claude/skills/anatomy/kit/tube.mjs";
 import * as SCH from "./schnitt.mjs";
+import { STECKVERSCHRAUBUNG_G14 as G14 } from "./normteile.mjs";
 import * as EX from "./explode.mjs";
 
 const TAU = Math.PI * 2;
+
+/** The canvas of every section page. */
+export const LEINWAND = { W: 900, H: 800 };
 
 /** The layer of the particles in the housing's own drawing (behind the parts that stand in the hollows); the page runtime looks for it. */
 export const LUFTLAGE_HINTEN = `<g class="luft" data-luftlage-hinten=""></g>`;
@@ -133,6 +139,9 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
     ];
   }
 
+  /** The two mounting holes across the block as hollows: `{ x: [x0, x1], z, r }`. */
+  const loecher = ({ x, z, r }) => x.map((xm) => [[xm - r, xm + r, z - r, z + r], "loch"]);
+
   /**
    * The housing block, cut in half: the halo, the top and the right end (the two outer faces the camera
    * sees besides the cut face), the cut face with its hollows (all outlines first, then all fills over
@@ -140,13 +149,15 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
    * stays), the round walls behind the cut, the rooms of air, the outlines of the holes and the edges.
    * The block is `laenge` (x) long, `hoehe` (z) high and kept from y = -`tiefe` to 0. Group "gehaeuse".
    *   hohlraeume  [[[x0, x1, z0, z1], "h" | "v" | "loch"], ...]
-   *   rundeWaende rectangles whose far half is a round wall behind the cut (drawn as "v" hollows)
+   *   rundeWaende rectangles whose far half is a round wall behind the cut (drawn as "v" hollows, or as
+   *               [rect, art] for another kind)
    *   raeume      the markup of `raumPfade`
+   *   oben        more markup drawn over the rooms (the thread's rings on a bore's wall)
    *   mitte       where the housing's recorded bodies stand (default the middle of the block)
    * The particles of the passages run in a layer of their own at the end of the housing's drawing: in
    * front of the cut face, behind the parts that stand in the hollows and are drawn after it.
    */
-  function gehaeuseBlock({ laenge, hoehe, tiefe, hohlraeume, rundeWaende = [], raeume = [], name = "gehaeuse.koerper" }) {
+  function gehaeuseBlock({ laenge, hoehe, tiefe, hohlraeume, rundeWaende = [], raeume = [], oben = [], name = "gehaeuse.koerper" }) {
     gruppe("gehaeuse");
     const plan = { x: 0, y: -tiefe, w: laenge, d: tiefe, r: 0 };
     const loecher = hohlraeume.filter(([, art]) => art === "loch");
@@ -159,8 +170,9 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
       NT.schnitt([[0, 0, 0], [laenge, 0, 0], [laenge, 0, hoehe], [0, 0, hoehe]]).replace("<path ", '<path data-mass="" '),   // data-mass: the browser test reads the scale from it
       L(hohlraeume.filter(([, art]) => art !== "loch").map(([[x0, x1, z0, z1]]) => rahmen(x0, x1, z0, z1)).join(""), { tone: "mid" }),
       ...hohlraeume.map(hohlraum),
-      ...rundeWaende.map((r) => hohlraum([r, "v"])),
+      ...rundeWaende.map((r) => hohlraum(Array.isArray(r[0]) ? r : [r, "v"])),
       ...raeume,
+      ...oben,
       L(loecher.map(([[x0, x1, z0, z1]]) => ring3(Array.from({ length: 41 }, (_, i) => [(x0 + x1) / 2 + ((x1 - x0) / 2) * Math.cos((i / 40) * TAU), 0, (z0 + z1) / 2 + ((z1 - z0) / 2) * Math.sin((i / 40) * TAU)]))).join(""), { tone: "mid" }),
       L(rahmen(0, laenge, 0, hoehe), { tone: "mid" }),
       L(k.segment([laenge, 0, hoehe], [laenge, -tiefe, hoehe], P) + k.segment([laenge, -tiefe, hoehe], [0, -tiefe, hoehe], P) + k.segment([0, -tiefe, hoehe], [0, 0, hoehe], P)
@@ -224,18 +236,20 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
    * The hoses of `wege` = { nr: points }: each in pieces of at most `maxLaenge`, group "leitung", with the
    * cut end on the last piece. `frei` says which ends of the route come free when the valve is taken apart.
    */
-  function schlaeuche(wege, { radius, innen, piece = "leitung", maxLaenge = 14, ends = [true, false], frei = [true, false] }) {
-    gruppe(piece);
+  function schlaeuche(wege, { radius, innen, piece = "leitung", name = "leitung", maxLaenge = 14, ends = [true, false], frei = [true, false] }) {
     for (const nr of Object.keys(wege)) {
       const punkte = wege[nr];
+      // `piece` may be a function of the port: each port's hose then rides with its own fitting
+      const teil = typeof piece === "function" ? piece(nr) : piece;
+      gruppe(teil);
       // The far end is cut off in the air on purpose: it is no tip that must land on a part.
-      R.route(`${piece}.${nr}`, punkte, radius, { piece, move: MOVE[piece], ends, free: frei });
+      R.route(`${name}.${nr}`, punkte, radius, { piece: teil, move: MOVE[teil], ends, free: frei });
       const stuecke = tubePieces(punkte, radius, P, { maxLength: maxLaenge });
       stuecke.forEach((teil, i) => {
         const letztes = i === stuecke.length - 1;
         put(teil.mid, tubeSvg(teil, { tone: "mid" }) + (letztes ? schnittEnde(punkte, radius, innen) : ""),
           [A.tube(teil.points, teil.radii)],
-          { name: `${piece}.schlauch${nr}:${i}`, route: `${piece}.${nr}`, chunk: i });
+          { name: `${name}.schlauch${nr}:${i}`, route: `${name}.${nr}`, chunk: i });
       });
     }
   }
@@ -250,11 +264,11 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
    *        second edge) that lies between s0 and s1 along the port axis (s from the housing's face outward)
    *        and between q0 and q1 across it; the port knows where its axis runs
    *   hohl     [[x0, x1, z0, z1], art]  the bore outside the block, with its far wall; `raum` its room of air
-   *   teile    [[[s0, s1], rIn, rAus, richtung], ...]  the walls of the fitting (rIn/rAus radii, richtung of the hatching)
-   *   schlauch { s: [s0, s1], rIn, rAus }  the hose stub
+   *   teile    [[[s0, s1], rIn, rAus, richtung], ...]  the walls of the fitting (rIn/rAus radii, richtung of the hatching); default: the standard fitting `STECKVERSCHRAUBUNG_G14` of normteile.mjs
+   *   schlauch { s: [s0, s1], rIn, rAus }  the hose stub; default: the standard one, `schlauchLaenge` long
    *   traeger  name of the fitting's first item
    */
-  function anschlussSchnitt({ streifen, hohl, raum, teile, schlauch, traeger }) {
+  function anschlussSchnitt({ streifen, hohl, raum, traeger, teile = G14.schnitt, schlauchLaenge = G14.schlauchLaenge, schlauch = { s: [G14.masse.ring[1], G14.masse.ring[1] + schlauchLaenge], rIn: G14.rSchlauchInnen, rAus: G14.rSchlauch } }) {
     const b = hohl[0];
     const flaechen = [`<g data-hohl="">${hohlraum(hohl)}`, `<path class="kammer" data-raum="${raum}" fill="none" d="${ring3([[b[0], 0, b[2]], [b[1], 0, b[2]], [b[1], 0, b[3]], [b[0], 0, b[3]]])}"/></g>`];
     const linien = [];
@@ -271,8 +285,16 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
       linien.push(ring3(poly));
       flaechen.push(`<path class="iso-shade" data-shade="0" d="${ring3(poly)}"/>`);
     }
+    schnittLage(traeger, `${flaechen.join("")}${L(linien.join(""), { tone: "mid" })}`);
+  }
+
+  /**
+   * Hang the half section of a part on one of its items (an item without a recorded body would not pass the
+   * audit) and draw it before the item's own whole drawing: `traeger` is that item's name.
+   */
+  function schnittLage(traeger, schnittSvg) {
     const trager = R.items.find((it) => it.name === traeger);
-    trager.svg = `<g data-lage="schnitt">${flaechen.join("")}${L(linien.join(""), { tone: "mid" })}</g><g data-lage="ganz">${trager.svg}</g>`;
+    trager.svg = `<g data-lage="schnitt">${schnittSvg}</g><g data-lage="ganz">${trager.svg}</g>`;
   }
 
   // --- Order, view, drawing, end ----------------------------------------------------------------------
@@ -349,7 +371,7 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
   }
 
   return {
-    R, at, L, SV, ring3, umriss, flaeche, rahmen, hohlraum, materialKoerper, raumPfade, gehaeuseBlock, schnittFlaeche, drehachse, zweiLagen, obenFlaeche,
-    schnittEnde, schlaeuche, anschlussSchnitt, pruefeBaugruppen, anordnen, ansicht, figur, ende,
+    R, at, L, SV, ring3, umriss, flaeche, rahmen, loecher, hohlraum, materialKoerper, raumPfade, gehaeuseBlock, schnittFlaeche, drehachse, zweiLagen, obenFlaeche,
+    schnittEnde, schlaeuche, anschlussSchnitt, schnittLage, pruefeBaugruppen, anordnen, ansicht, figur, ende,
   };
 }
