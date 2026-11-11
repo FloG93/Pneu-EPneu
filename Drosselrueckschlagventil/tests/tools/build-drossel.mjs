@@ -551,6 +551,9 @@ const eintrag = (name) => R.items.find((it) => it.name === name);
 R.items.sort((a, b) => a.key - b.key);
 
 const { KEYS, LIFT, VIEW0, VIEW1: VIEW1_ROH, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
+// The housing's number hangs on the left edge of its cut face, where its label stands clear of the parts that left it
+// (the centre of the block lies under the insert, and the label there sat on the other assemblies).
+MITTE.gehaeuse = [0, 0, HOEHE * 0.45];
 // vorbereiten measures the parts' places, not their extent: the housing is big, so the view
 // with everything out is widened by a few percent about its centre (same aspect ratio).
 const VIEW1 = (([x, y, w, h]) => [x - w * 0.03, y - h * 0.03, w * 1.06, h * 1.06])(VIEW1_ROH);

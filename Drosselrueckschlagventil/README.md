@@ -47,6 +47,9 @@ Zylinder aufgebaut ist: [doppeltwirkender Zylinder](../Zylinder-Doppeltwirkend/)
 - **Drosselschraube** (0 bis 6 Umdrehungen, Start 3) fährt den Zapfen nach oben oder unten:
   Der Ringspalt wird weiter oder enger. Die Mutter bleibt stehen.
 - **Automatik** wechselt die Richtung von selbst (alle 3 s).
+- **Lupe** (neben dem Schaltzeichen): ein flacher, großer Schnitt des Kerns aus denselben Maßen. Zapfen, Lippe,
+  Töne der Räume und die Pfeile der Wege folgen demselben Zustand wie die Figur; zwei kurze Sätze erklären
+  die gerade gezeigte Richtung.
 - **Zerlegen und zusammenbauen** fährt die Baugruppen entlang der Achsen auseinander,
   hält kurz und setzt sie von innen nach außen wieder zusammen. Ein zweiter Druck oder
   Escape bricht ab.
@@ -122,7 +125,7 @@ Regulierschraube, Gehäuse; Einsatz mit Manschette).
 **Alles Übrige ist angenommen oder nachgezeichnet:**
 
 - **Die inneren Wege sind dem Katalogschnitt nachgezeichnet, nicht vermessen.** Gehäusemaße
-  (70 × 42 mm), Durchmesser von Buchse, Einsatz, Manschette und Bohrung, Länge des Zapfens, die
+  (70 × 58 mm), Durchmesser von Buchse, Einsatz, Manschette und Bohrung, Länge des Zapfens, die
   Lage der Querbohrungen und der Befestigungsbohrungen sind aus den G¼-Anschlüssen geschätzt.
 - **Der Ringspalt und die Lippe sind überhöht gezeichnet.** In Wirklichkeit ist der Spalt
   Bruchteile eines Millimeters breit und die Lippe dünner; ohne Übertreibung sähe man sie auf dem
@@ -147,9 +150,13 @@ Regulierschraube, Gehäuse; Einsatz mit Manschette).
 
 **Vereinfachungen in der Zeichnung:**
 
+- **Der Kern ist größer gezeichnet als im Katalog:** Einsatz, Manschette, Buchse und Zapfen nehmen fast die Hälfte der
+  Blockbreite ein, damit man Spalt und Lippe auf dem Beamer sieht; der Block ist dafür kürzer (70 mm).
+- Die **Steckverschraubungen und die Schlauchstücke** sind in derselben Ebene aufgeschnitten (Wände schraffiert, Bohrung
+  frei), damit man den Weg der Luft vom Schlauch bis zum Kern verfolgen kann; beim Zerlegen werden sie ganz gezeichnet.
 - Alle Drehteile sind **durch die Mitte aufgeschnitten** und schraffiert (jedes Teil in anderer
   Richtung); sobald ein Teil beim Zerlegen seinen Platz verlässt, wird es **ganz** gezeichnet.
-  Die Rückseiten der halbierten Teile sind nicht gezeichnet.
+  Von den Rückhälften sind die Innenwände der Bohrungen (Einsatz, Spalte, Tasche) als Rundung schattiert; ihre Außenflächen sind nicht gezeichnet.
 - Die Querbohrungen des Einsatzes sind je ein Fenster in der Schnittebene; im ganzen Einsatz
   fehlen sie.
 - Die Luft strömt in Wirklichkeit rundherum; die Figur zeigt je einen Weg in der Schnittebene,

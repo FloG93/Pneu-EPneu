@@ -80,7 +80,7 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | … einfachwirkender Zylinder | `npm run pruef:browser:zylinder-ew` (dazu `npm run pruef:zylinder-ew` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 3/2-Wegeventil | `npm run pruef:browser:ventil32` (dazu `npm run pruef:ventil32` für Audit und Zerlegen) | `all checks passed (132)`, fünfmal hintereinander |
-| … Drosselrückschlagventil | `npm run pruef:browser:drossel` (dazu `npm run pruef:drossel` für Audit und Zerlegen) | `all checks passed (104)`, fünfmal hintereinander |
+| … Drosselrückschlagventil | `npm run pruef:browser:drossel` (dazu `npm run pruef:drossel` für Audit und Zerlegen) | `all checks passed (114)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |
 
 Die Browserprüfungen laufen **nicht** in der CI: Playwright ist außerhalb des Repos installiert (keine npm-Pakete im Repo). Sie sind ein manueller Schritt vor jeder Veröffentlichung.
