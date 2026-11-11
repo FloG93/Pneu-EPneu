@@ -277,3 +277,16 @@ test("Das neue Symbol ändert 3/2 nicht: Ausgabe von 3/2 NC und NO byte-gleich",
   assert.equal(h(VENTIL_3_2_NC), "ff4923901b55559e44a706ecff2fde89f05d3940c72d290d00daf31e588608af");
   assert.equal(h(VENTIL_3_2_NO), "71676cac767375e535260c7131341e57834498535cce9450a6496f6f8a565355");
 });
+
+test("Drosselrückschlagventil ohne Feder: Kugel auf dem V-Sitz, kein Anschlag, keine Feder; mit Feder bleibt die Ausgabe wie sie war", () => {
+  const ohne = drosselRueckschlagSymbol({ feder: false }).svg;
+  assert.ok(!ohne.includes("sz-feder") && !ohne.includes("sz-anschlag"));
+  assert.match(ohne, /<circle class="sz-kugel"/);
+  assert.match(ohne, /class="sz-sitz"/);
+  assert.match(ohne, /data-weg="drossel"/);
+  assert.match(ohne, /Rückschlagventil ohne Feder/);
+  assert.ok(!ohne.includes("NaN"));
+  const mit = drosselRueckschlagSymbol().svg;
+  assert.ok(mit.includes("sz-feder") && mit.includes("sz-anschlag"));
+  assert.equal(drosselRueckschlagSymbol({ feder: true }).svg, mit);
+});

@@ -260,9 +260,10 @@ function symbolStellen(svgEl, anteil, offen) {
  * onto it (blocked) and flow 2→1 lifts it (free).
  * Each branch is one group with `data-weg` ("drossel" / "rueckschlag") for the
  * runtime to colour. `feld` is the scale in px (distance of the two branches
- * is 0,9 · feld).
+ * is 0,9 · feld). `feder: false` draws the check valve without its spring (ball against
+ * the V seat, no stop bar): the lip seal of a Festo GR/GRA has none.
  */
-export function drosselRueckschlagSymbol({ feld = 60 } = {}) {
+export function drosselRueckschlagSymbol({ feld = 60, feder = true } = {}) {
   const f = feld;
   const rand = 4, tH = f * 0.2;
   const anschl = f * 0.5;                       // port stub length
@@ -292,14 +293,19 @@ export function drosselRueckschlagSymbol({ feld = 60 } = {}) {
   const xSpitze = xb + r * Math.SQRT2;          // seat apex, arms at 45° touch the ball
   const xStop = xb - r - f * 0.3;
   const zick = 6, h = f * 0.065;
-  let feder = `M${zahl(xStop)} ${zahl(yUnten)}`;
+  let federPfad = `M${zahl(xStop)} ${zahl(yUnten)}`;
   const fa = xStop + f * 0.03, fe = xb - r - f * 0.02;
-  for (let i = 0; i < zick; i += 1) feder += `L${zahl(fa + ((fe - fa) * (i + 0.5)) / zick)} ${zahl(yUnten + (i % 2 === 0 ? -h : h))}`;
-  feder += `L${zahl(xb - r)} ${zahl(yUnten)}`;
+  for (let i = 0; i < zick; i += 1) federPfad += `L${zahl(fa + ((fe - fa) * (i + 0.5)) / zick)} ${zahl(yUnten + (i % 2 === 0 ? -h : h))}`;
+  federPfad += `L${zahl(xb - r)} ${zahl(yUnten)}`;
+  const leitungUnten = feder
+    ? `M${zahl(xL)} ${zahl(yUnten)}L${zahl(xStop)} ${zahl(yUnten)}M${zahl(xSpitze)} ${zahl(yUnten)}L${zahl(xR)} ${zahl(yUnten)}`
+    : `M${zahl(xL)} ${zahl(yUnten)}L${zahl(xb - r)} ${zahl(yUnten)}M${zahl(xSpitze)} ${zahl(yUnten)}L${zahl(xR)} ${zahl(yUnten)}`;
   const rueck = `<g class="sz-zweig" data-weg="rueckschlag">`
-    + `<path class="sz-leitung" d="M${zahl(xL)} ${zahl(yUnten)}L${zahl(xStop)} ${zahl(yUnten)}M${zahl(xSpitze)} ${zahl(yUnten)}L${zahl(xR)} ${zahl(yUnten)}" ${strich}/>`
-    + `<path class="sz-anschlag" d="M${zahl(xStop)} ${zahl(yUnten - d * 0.7)}L${zahl(xStop)} ${zahl(yUnten + d * 0.7)}" ${strich}/>`
-    + `<path class="sz-feder" d="${feder}" ${strich} stroke-linejoin="round"/>`
+    + `<path class="sz-leitung" d="${leitungUnten}" ${strich}/>`
+    + (feder
+      ? `<path class="sz-anschlag" d="M${zahl(xStop)} ${zahl(yUnten - d * 0.7)}L${zahl(xStop)} ${zahl(yUnten + d * 0.7)}" ${strich}/>`
+        + `<path class="sz-feder" d="${federPfad}" ${strich} stroke-linejoin="round"/>`
+      : "")
     + `<circle class="sz-kugel" cx="${zahl(xb)}" cy="${zahl(yUnten)}" r="${zahl(r)}" ${strich}/>`
     + `<path class="sz-sitz" d="M${zahl(xSpitze - d)} ${zahl(yUnten - d)}L${zahl(xSpitze)} ${zahl(yUnten)}L${zahl(xSpitze - d)} ${zahl(yUnten + d)}" ${strich} stroke-linejoin="miter"/>`
     + `</g>`;
@@ -312,7 +318,7 @@ export function drosselRueckschlagSymbol({ feld = 60 } = {}) {
 
   const breite = Math.ceil(xR + anschl + rand);
   const hoehe = Math.ceil(yUnten + f * 0.2 + rand);
-  const beschr = "Schaltzeichen Drosselrückschlagventil: oben die einstellbare Drossel, unten parallel das federbelastete Rückschlagventil, von Anschluss 1 nach Anschluss 2";
+  const beschr = `Schaltzeichen Drosselrückschlagventil: oben die einstellbare Drossel, unten parallel das ${feder ? "federbelastete " : ""}Rückschlagventil${feder ? "" : " ohne Feder"}, von Anschluss 1 nach Anschluss 2`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" color="currentColor">`
     + drossel + rueck + fest + "</svg>";
   return { svg, breite, hoehe };
