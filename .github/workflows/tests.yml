@@ -25,6 +25,8 @@ jobs:
         run: npm run pruef:ventil32
       - name: Geometrie des Drosselrückschlagventils prüfen
         run: npm run pruef:drossel
+      - name: Geometrie des Wechselventils prüfen
+        run: npm run pruef:wechsel
       - name: Erzeugte Seiten sind aktuell
         # npm test und die Prüfschritte bauen die Seiten neu; ein vergessener
         # Neubau im Commit zeigt sich als Unterschied.
