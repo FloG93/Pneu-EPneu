@@ -315,9 +315,10 @@ function manschette() {
   gruppe("manschette");
   const F = FZ();
   const [w0, w1] = LIPPE.wurzel;
-  const zu = [[R_EIN, w0], [7.0, w0], [8.6, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [7.8, w1], [R_EIN, w1]];
+  const zu = [[R_EIN, w0], [7.0, w0], [8.3, LIPPE.mund], [LIPPE.rZu, LIPPE.mund], [7.8, w1], [R_EIN, w1]];
   const auf = [[R_EIN, w0], [LIPPE.rAuf - 0.7, w0], [LIPPE.rAuf - 0.7, LIPPE.mund], [LIPPE.rAuf, LIPPE.mund], [7.8, w1], [R_EIN, w1]];
-  const lage = (profil, art) => `<g data-lippe="${art}">${beideSeiten(profil).map((f) => schnittFlaeche(f, -1)).join("")}${L(beideSeiten(profil).map(umriss).join(""), { tone: "mid" })}</g>`;
+  // the rubber is drawn dark, like the black rings of the catalogue
+  const lage = (profil, art) => `<g data-lippe="${art}">${beideSeiten(profil).map((f) => `<path class="iso-shade" data-shade="0" d="${umriss(f)}"/>`).join("")}${L(beideSeiten(profil).map(umriss).join(""), { tone: "mid" })}</g>`;
   put([XC, 0, (LIPPE.mund + w1) / 2], zweiLagen([
     lage(zu, "zu"), lage(auf, "auf"),
   ].join(""), [
@@ -490,20 +491,61 @@ const { KEYS, LIFT, VIEW0, VIEW1: VIEW1_ROH, MITTE } = EX.vorbereiten(R, P, MOVE
 // with everything out is widened by a tenth about its centre (same aspect ratio).
 const VIEW1 = (([x, y, w, h]) => [x - w * 0.06, y - h * 0.06, w * 1.12, h * 1.12])(VIEW1_ROH);
 
+
+// --- Air: the ways the particles take, in the cut plane, always in the direction 1 → 2 ----------------------
+// They run only through free space, never over a cut face: round the insert through its cross holes, up the
+// throttle bore, through the ring gap between pin and bore (this part follows the pin: the page calls
+// `spaltBahnen` whenever the pin has moved), over the insert's top into the ring space and out of channel 2;
+// and, when the lip is folded in, down the ring space outside the lip and straight across at the height of the
+// cross holes. The streams sit in the housing's back layer, the hoses' in the front layer.
+const X_RING = XC + 8.7;                         // the ring space outside the lip: between its root (7,8) and the wall (9,5)
+const ROUTEN_FEST = {
+  z1: G.cut(WEGE[1].slice().reverse(), 0, G.pathLength(WEGE[1]) - 9),
+  k1: [[14, 0, Z1], [XC - 8.7, 0, Z1]],
+  w: [[XC - 8.7, 0, Z1], [XC + 8.7, 0, Z1]],
+  l: [[XC + 8.7, 0, Z1], [X_RING, 0, Z1 + 4], [X_RING, 0, Z2]],
+  z2: G.cut(WEGE[2], 9, G.pathLength(WEGE[2])),
+};
+/** The routes through the ring gap for a pin whose tip stands at `zt`: left leg bl/gl, right leg b/g. */
+function spaltBahnen(zt) {
+  const mitte = (z) => (Math.min(R_BOHRUNG, R_SPITZE + KONUS * Math.max(0, z - zt)) + R_BOHRUNG) / 2;   // middle of the free band at height z
+  const lauf = (seite) => {
+    const x = (r) => XC + seite * r;
+    const zu = Math.max(Z1 + 1, zt - 1.0);
+    const hoch = [[x(1.0), 0, zu], [x(mitte(zt + 0.4)), 0, zt + 0.4], [x(mitte(ZM - 0.2)), 0, ZM - 0.2]];
+    return {
+      b: [[XC + seite * (-3.5), 0, Z1], [x(1.0), 0, Z1], ...hoch],
+      g: [[x(mitte(ZM - 0.2)), 0, ZM - 0.2], [x(4.2), 0, 26.2], seite > 0 ? [X_RING, 0, 26.2] : [XC - 8.0, 0, 26.2],
+        ...(seite > 0 ? [[X_RING, 0, Z2], [LAENGE - 13, 0, Z2]] : [])],
+    };
+  };
+  const links = lauf(-1), rechts = lauf(1);
+  return { b: rechts.b, g: rechts.g, bl: links.b, gl: links.g };
+}
+const BAHNEN = Object.fromEntries(Object.entries({ ...ROUTEN_FEST, ...spaltBahnen(ZT0) }).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
+const SEITE_VON = { z1: "s1", k1: "s1", w: "s1", b: "s1", bl: "s1", l: "s2", g: "s2", gl: "s2", z2: "s2" };
+
 const svg = k.figureSvg({
   width: W,
   height: H,
   label:
     "Ein Drosselrückschlagventil mit G1/4-Anschlüssen im Schnitt durch die Mitte: Anschluss 1 links liegt tiefer, Anschluss 2 rechts höher. "
     + "In der Mitte sitzen von oben die Regulierschraube mit Rändelkopf und kegeligem Zapfen, die Einschraubbuchse mit der Mutter und der Ventileinsatz mit der Drosselbohrung; "
-    + "um den Einsatz liegen die Dichtmanschette und die Stützscheibe. Links und rechts stecken Schläuche in den Steckverschraubungen.",
+    + "um den Einsatz liegen die Dichtmanschette und die Stützscheibe. Der Ringspalt zwischen Zapfen und Bohrung ist die Drossel, die Lippe der Manschette das Rückschlagventil. "
+    + "Die Druckluft ist eingefärbt: das kräftige Blau steht unter Druck, das blasse ist entspannte Luft hinter der Drossel.",
   body: [
     R.items.map((it) => `<g data-g="${it.gruppe}" data-piece="${it.piece}">${it.svg}</g>`).join(""),
     `<g class="luft" data-luftlage=""></g>`,
   ],
 });
 
-// --- The page (the live behaviour follows with the air and the controls) --------------------------------
+// --- The page ------------------------------------------------------------------------
+const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
+const DP = 1;                                        // bar: the catalogue's pressure drop (6 bar in, 5 bar out)
+const START = { richtung: DROSSELRICHTUNG, umdrehungen: M.umdrehungen / 2 };
+const ANZEIGE = anzeigeZeile(anzeige(neuerZustand(M, START.umdrehungen), M, { richtung: START.richtung, dpBar: DP }), START.richtung, DP);
+const q = (richtung, u) => durchfluss(richtung, u, DP, M);
+
 const live = `
 const P = ${JSON.stringify(P)};
 const MOVE = ${JSON.stringify(MOVE)};
@@ -516,14 +558,114 @@ const VIEW0 = ${JSON.stringify(VIEW0)};
 const VIEW1 = ${JSON.stringify(VIEW1.map((v) => Math.round(v * 10) / 10))};
 const MITTE = ${JSON.stringify(Object.fromEntries(Object.entries(MITTE).map(([a, b]) => [a, b.map((v) => Math.round(v * 10) / 10)])))};
 const STEP = ${JSON.stringify(LEG.tabelle(LEGENDE))};
+const FARBEN = ${JSON.stringify(LU.FARBEN)};
+const BAHNEN = ${JSON.stringify(BAHNEN)};
+const SEITE_VON = ${JSON.stringify(SEITE_VON)};
+const DP = ${DP};
+const U0 = ${M.umdrehungen / 2};
+const AUTO_TAKT = 3;    // s between two automatic changes of direction
+// what the ring gap's routes need to follow the pin
+const SPALT = ${JSON.stringify({ XC, ZM, Z1, Z2, R_BOHRUNG, R_SPITZE, KONUS, ZT0, X_RING, LAENGE })};
+
 const stage = document.querySelector(".iso-stage");
 const svg = stage.querySelector("svg");
 const groups = Array.from(svg.querySelectorAll("[data-g]"));
+const readout = document.querySelector("[data-readout]");
 const info = document.querySelector(".pickinfo");
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+
+${modulQuelle(WURZEL, ["figur/stromventil.mjs"])}
 ${EX.LAUFZEIT}
 ${LEG.LAUFZEIT}
 ${EX.ABLAUF}
+${LU.LAUFZEIT}
+${DROSSEL_SYMBOL_LAUFZEIT}
+${BEDIENUNG_LAUFZEIT}
+
+// --- the model drives everything -------------------------------------------
+let richtung = DROSSELRICHTUNG;
+let regler = U0;
+let angehalten = false;
+let hubAnteil = 1;                    // goes to 0 while the valve is taken apart: the moving parts stand home
+const zustand = neuerZustand(GRA_1_4, U0);
+
+const zapfenTeile = Array.from(svg.querySelectorAll("[data-hub]"));
+const lippeZu = Array.from(svg.querySelectorAll('[data-lippe="zu"]'));
+const lippeAuf = Array.from(svg.querySelectorAll('[data-lippe="auf"]'));
 const lagen = Array.from(svg.querySelectorAll("[data-lage]"));
+const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
+const luftLage = svg.querySelector("[data-luftlage]");
+const luftHinten = svg.querySelector("[data-luftlage-hinten]");
+const stroeme = {};
+const ANZAHL = { z1: 8, k1: 6, w: 8, b: 9, bl: 6, g: 11, gl: 6, l: 8, z2: 8 };
+for (const name in BAHNEN) stroeme[name] = stromBauen(/^(z1|z2)$/.test(name) ? luftLage : luftHinten, name, BAHNEN[name], ANZAHL[name]);
+const symbole = Array.from(document.querySelectorAll(".beifigur-symbol svg"));
+
+const knopfRichtung = document.getElementById("btn-richtung");
+const knopfAuto = document.getElementById("btn-auto");
+const reglerEl = document.getElementById("drossel");
+const reglerWert = document.getElementById("drossel-wert");
+const komma = (x) => String(x).replace(".", ",");
+
+// The automatic cycle is figur/bedienung.mjs: every AUTO_TAKT s of model time the direction flips.
+const bed = bedienungSignale({
+  namen: [],
+  impuls: 0,
+  autoTakt: AUTO_TAKT,
+  autoAn: !still.matches,
+  erster: "R",
+  haltenModus: () => false,
+  setzeSignal: () => {},
+  autoSchritt: () => { richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG; zeichneBedienung(); },
+  autoEnde: () => {},
+  autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
+  geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
+});
+
+// The routes of the ring gap follow the pin: the middle of the free band between its cone and the bore.
+function bahnNeu(punkte) {
+  const flach = punkte.map((p) => iso(p, P));
+  const laenge = [0];
+  for (let i = 1; i < flach.length; i += 1) laenge.push(laenge[i - 1] + Math.hypot(flach[i][0] - flach[i - 1][0], flach[i][1] - flach[i - 1][1]));
+  return { punkte: flach.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]), laenge, gesamt: laenge[laenge.length - 1] };
+}
+function spaltBahnen(zt) {
+  const S = SPALT;
+  const mitte = (z) => (Math.min(S.R_BOHRUNG, S.R_SPITZE + S.KONUS * Math.max(0, z - zt)) + S.R_BOHRUNG) / 2;
+  const lauf = (seite) => {
+    const x = (r) => S.XC + seite * r;
+    const zu = Math.max(S.Z1 + 1, zt - 1.0);
+    const hoch = [[x(1.0), 0, zu], [x(mitte(zt + 0.4)), 0, zt + 0.4], [x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2]];
+    return {
+      b: [[S.XC - seite * 3.5, 0, S.Z1], [x(1.0), 0, S.Z1], ...hoch],
+      g: [[x(mitte(S.ZM - 0.2)), 0, S.ZM - 0.2], [x(4.2), 0, 26.2], seite > 0 ? [S.X_RING, 0, 26.2] : [S.XC - 8.0, 0, 26.2],
+        ...(seite > 0 ? [[S.X_RING, 0, S.Z2], [S.LAENGE - 13, 0, S.Z2]] : [])],
+    };
+  };
+  const l = lauf(-1), r = lauf(1);
+  return { b: r.b, g: r.g, bl: l.b, gl: l.g };
+}
+let spaltZapfen = null;
+function zeichneSpalt() {
+  if (spaltZapfen !== null && Math.abs(zustand.zapfen - spaltZapfen) < 0.04) return;
+  spaltZapfen = zustand.zapfen;
+  const neu = spaltBahnen(SPALT.ZT0 + (zustand.zapfen - U0) * GRA_1_4.steigung);
+  for (const name in neu) stroeme[name].bahn = bahnNeu(neu[name]);
+}
+
+let gezeichnet = "";
+function zeichneHub() {
+  const dz = (zustand.zapfen - U0) * GRA_1_4.steigung * hubAnteil;
+  const marke = dz.toFixed(3) + "|" + zustand.lippe.toFixed(3);
+  if (marke === gezeichnet) return;
+  gezeichnet = marke;
+  const tz = Math.abs(dz) > 1e-4 ? translateAlong(P, [0, 0, dz]) : null;
+  for (const el of zapfenTeile) { if (tz) el.setAttribute("transform", tz); else el.removeAttribute("transform"); }
+  // the lip: two drawn shapes blended by how far it has folded in
+  const auf = zustand.lippe * hubAnteil;
+  for (const el of lippeZu) el.style.opacity = String(1 - auf);
+  for (const el of lippeAuf) el.style.opacity = String(auf);
+}
 // Every turned part: its half section while it sits in place, the whole part once it has left.
 function zeichneLagen() {
   for (const el of lagen) {
@@ -533,33 +675,255 @@ function zeichneLagen() {
     if (el.dataset.stand !== String(wert)) { el.style.opacity = String(wert); el.dataset.stand = String(wert); }
   }
 }
-function bildZeichnen() { zeichneLagen(); }
-function vorDemZerlegen() {}
+
+// The tones of the two sides. 1 → 2: the side the air comes from is under pressure, behind the throttle it is
+// relaxed. 2 → 1 with the lip folded in the air is hardly relaxed at all, so both sides are strong; while the lip
+// is still shut the free direction behaves like the throttled one with the sides swapped.
+function seitenFarben() {
+  const F = luftFarben();
+  if (richtung === DROSSELRICHTUNG) return { s1: F.druck, s2: F.abluft };
+  if (zustand.lippe > 0.5) return { s1: F.druck, s2: F.druck };
+  return { s1: F.abluft, s2: F.druck };
+}
+function setzeRaumFarben(farbe) {
+  for (const el of raeume) {
+    const f = farbe[el.dataset.raum];
+    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
+  }
+}
+
+// Particle speed and strength follow the flow of the way they run on (l/min at the catalogue's pressure drop).
+const tempoVon = (q) => Math.min(200, q * 0.32);
+const staerkeVon = (q) => (q > 0.5 ? Math.min(1, 0.3 + (0.7 * q) / 420) : 0);
+function zeichneLuft(dt) {
+  const farbe = seitenFarben();
+  setzeRaumFarben(farbe);
+  const q = durchfluss(richtung, zustand.zapfen, DP, GRA_1_4);
+  // the lip's own fold decides whether the way past it carries air
+  const rueck = richtung === FREIE_RICHTUNG && zustand.lippe > 0.05 ? q.rueckschlag * zustand.lippe : 0;
+  const lauf = richtung === FREIE_RICHTUNG ? -1 : 1;
+  const strecke = { z1: q.drossel + rueck, z2: q.drossel + rueck, k1: q.drossel + rueck, w: rueck, l: rueck, b: q.drossel, g: q.drossel, bl: q.drossel * 0.5, gl: q.drossel * 0.5 };
+  for (const name in stroeme) {
+    const ton = farbe[SEITE_VON[name]];
+    stromSchritt(stroeme[name], dt, lauf * tempoVon(strecke[name]), staerkeVon(strecke[name]), ton);
+  }
+  for (const name in stroeme) {
+    const sichtbar = stroeme[name].kugeln.some((c) => c.getAttribute("opacity") !== "0");
+    stroeme[name].g.style.opacity = sichtbar ? "" : "0";
+  }
+}
+
+let letzteZeile = "";
+function zeichneAnzeige() {
+  const text = anzeigeZeile(anzeige(zustand, GRA_1_4, { richtung, dpBar: DP }), richtung, DP);
+  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
+}
+
+// The symbol beside the card: the branch that carries air takes the strong tone.
+function zeichneSymbol() {
+  const q = durchfluss(richtung, zustand.zapfen, DP, GRA_1_4);
+  const rueck = richtung === FREIE_RICHTUNG && zustand.lippe > 0.05 ? q.rueckschlag : 0;
+  for (const sym of symbole) drosselSymbolStellen(sym, { drossel: q.drossel, rueckschlag: rueck, ton: "stark" });
+}
+
+function zeichneBedienung() {
+  const frei = richtung === FREIE_RICHTUNG;
+  knopfRichtung.setAttribute("aria-pressed", String(frei));
+  const text = frei ? "Richtung 2 → 1 (frei)" : "Richtung 1 → 2 (gedrosselt)";
+  if (knopfRichtung.textContent !== text) knopfRichtung.textContent = text;
+  knopfAuto.setAttribute("aria-pressed", String(bed.auto));
+  reglerWert.textContent = komma(regler) + " Umdr.";
+}
+
+// One frame (the loop itself is EX.ABLAUF).
+function bildZeichnen(dt, offen, bewegt) {
+  luftLage.style.opacity = String(Math.max(0, 1 - offen * 3));
+  luftHinten.style.opacity = String(Math.max(0, 1 - offen * 3));
+  for (const el of raeume) {
+    if (offen > 0.001) el.style.opacity = (0.82 * Math.max(0, 1 - offen * 3)).toFixed(3);
+    else el.style.removeProperty("opacity");
+  }
+  const willHub = Math.max(0, 1 - offen * 2);
+  if (Math.abs(willHub - hubAnteil) > 1e-4) { hubAnteil = willHub; gezeichnet = ""; }
+  // The valve stops while it is being taken apart and carries on afterwards.
+  if (offen < 0.01 && !bewegt) {
+    const dm = angehalten ? 0 : dt;
+    if (dm > 0) {
+      bed.takt(dm);
+      schritt(zustand, GRA_1_4, dm, { richtung, umdrehungen: regler, dpBar: DP });
+    }
+    zeichneSpalt();
+    zeichneHub();
+    zeichneLuft(dm);
+    zeichneAnzeige();
+  } else {
+    zeichneHub();
+    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
+  }
+  zeichneLagen();
+  zeichneSymbol();
+}
+
+// --- controls -------------------------------------------------------------
+const stoppeAuto = () => { bed.autoAus(); };
+knopfRichtung.addEventListener("click", () => {
+  stoppeAuto();
+  richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG;
+  angehalten = false;
+  zeichneBedienung();
+  run();
+});
+knopfAuto.addEventListener("click", () => {
+  if (bed.auto) bed.autoAus(); else bed.autoStart("R");
+  angehalten = false;
+  zeichneBedienung();
+  run();
+});
+reglerEl.addEventListener("input", () => {
+  regler = reglerEl.valueAsNumber;
+  angehalten = false;
+  zeichneBedienung();
+  run();
+});
+
+// Before taking it apart: no automatic cycle; the moving parts go home by themselves (hubAnteil).
+function vorDemZerlegen() { stoppeAuto(); }
+
+zeichneBedienung();
+zeichneSpalt();
+zeichneHub();
+zeichneLuft(0);
+zeichneAnzeige();
+zeichneSymbol();
 zeichneLagen();
 poseExplode();
-window.__figur = { zerlegt: () => zerlegt, offen: () => offenAnteil(), spiele, waehle };
+
+// A handle for the browser test and for screenshots: it puts the figure into a known state.
+window.__figur = {
+  MASSE: GRA_1_4,
+  modell: () => zustand,
+  richtung: () => richtung,
+  regler: () => regler,
+  zerlegt: () => zerlegt,
+  offen: () => offenAnteil(),
+  // direction ("drossel" | "frei") and turns 0…6, everything settled at once
+  stelle(r, u) {
+    stoppeAuto();
+    angehalten = true;
+    richtung = r;
+    regler = u;
+    reglerEl.value = String(u);
+    zustand.zapfen = u;
+    zustand.lippe = r === FREIE_RICHTUNG ? lippeHub(DP, GRA_1_4) : 0;
+    gezeichnet = "";
+    spaltZapfen = null;
+    zeichneBedienung();
+    zeichneSpalt();
+    zeichneHub();
+    zeichneLuft(0.016);
+    zeichneAnzeige();
+    zeichneSymbol();
+    run();
+  },
+  weiter: () => { angehalten = false; run(); },
+  spiele,
+  waehle,
+};
 `;
 
-const LEISTE = knopf("btn-explode", "Zerlegen und zusammenbauen") + `<span class="luecke"></span>` + hausBedienung();
+const LEISTE = knopf("btn-richtung", "Richtung 1 → 2 (gedrosselt)", { titel: "Umschalten zwischen Drosselrichtung (1 → 2) und freier Richtung (2 → 1)" })
+  + schieber("drossel", "Drosselschraube", { min: 0, max: M.umdrehungen, step: 0.5, wert: START.umdrehungen, einheit: " Umdr.", beschreibung: "Drosselschraube: Umdrehungen offen, 0 ist ganz zu" })
+    .replace(`>${START.umdrehungen} Umdr.</output>`, `>${komma(START.umdrehungen, 0)} Umdr.</output>`)
+  + knopf("btn-auto", "Automatik", { gedrueckt: true })
+  + knopf("btn-explode", "Zerlegen und zusammenbauen")
+  + `<span class="luecke"></span>` + hausBedienung();
+
+const INFO = "Der Schnitt zeigt, was wirklich im Ventil sitzt: den Zapfen der Schraube in der Drosselbohrung und die Dichtmanschette um den Einsatz. "
+  + "Stelle die Richtung und die Drosselschraube ein oder lass die Automatik laufen. Das kräftige Blau steht unter Druck, das blasse ist entspannte Luft hinter der Drossel. "
+  + "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
+
+const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
+  + `<div class="beifigur-symbol">${drosselRueckschlagSymbol({ feld: 60, feder: false }).svg}</div>`
+  + `<p class="beifigur-text">Oben die einstellbare Drossel (zwei Bögen, vom Schrägpfeil durchkreuzt), darunter parallel das Rückschlagventil. `
+  + `Es hat keine Feder: Die Lippe der Manschette braucht keine. Von 1 nach 2 sperrt es, von 2 nach 1 gibt es den Weg frei. Der Zweig, durch den gerade Luft strömt, färbt sich. `
+  + `Für die Abluftdrosselung zeigt Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil.</p>`;
+
+const LESETEXT = `<div class="lesetext">
+<h2>Was man sieht</h2>
+<p>Das Ventil ist durch seine Mitte aufgeschnitten und sieht aus wie der Funktionsschnitt im Katalog der Drossel-Rückschlagventile von Festo (Baureihe GR/GRA):
+alles Wichtige sitzt <strong>rund um die Regulierschraube</strong>. Links liegt der Anschluss <strong>1</strong> (tiefer), rechts der Anschluss <strong>2</strong> (höher); mehr Anschlüsse hat das Ventil nicht.
+Von oben stecken im Gehäuse die <strong>Einschraubbuchse</strong> mit der Mutter, darin die <strong>Regulierschraube</strong> mit dem Rändelkopf und dem kegeligen <strong>Zapfen</strong>, darunter der <strong>Ventileinsatz</strong>
+mit der Drosselbohrung. Um den Einsatz liegt die <strong>Dichtmanschette</strong> aus Gummi, gestützt von einer kleinen Scheibe. Eine zweite Kammer, einen zweiten Kanal oder eine Feder gibt es nicht.</p>
+<p>Die Schnittflächen sind schraffiert, jedes Teil in anderer Richtung. Der Spalt am Zapfen und die Lippe sind in der Zeichnung größer als in Wirklichkeit, damit man sie sieht.</p>
+
+<h2>Von 1 nach 2: die Luft muss durch den Spalt</h2>
+<p>Die Luft von Anschluss 1 kommt in einem Kanal unter die Mitte, tritt durch Querbohrungen in den Einsatz und steigt in seiner Bohrung nach oben. Der Zapfen taucht von oben in diese Bohrung;
+der <strong>Ringspalt</strong> zwischen Zapfen und Bohrung ist die Drossel. Dahinter strömt die Luft über den Rand des Einsatzes in den Ringraum und durch den Kanal zu Anschluss 2.
+Gleichzeitig drückt die Luft von 1 in den Raum <em>unter</em> der Manschette und spreizt ihre Lippe an die Gehäusewand: Der Weg außen herum ist dicht. Vor der Drossel ist die Luft im <strong>kräftigen Blau</strong> unter Druck,
+dahinter im <strong>blassen Blau</strong> entspannt. Bei ganz offener Drossel schafft das Ventil so ${q(DROSSELRICHTUNG, M.umdrehungen).gesamt} l/min.</p>
+
+<h2>Von 2 nach 1: die Lippe klappt zu, die Luft geht außen vorbei</h2>
+<p>Drückt die Luft von 2 gegen die Manschette, klappt sie die Lippe nach innen (im Modell ab ${komma(M.oeffnungsdruck, 1)} bar Druckunterschied). Jetzt strömt die Luft ungebremst außen an der Manschette vorbei nach unten und durch die Querbohrungen
+zu Anschluss 1; zusätzlich fließt ein Teil durch den Ringspalt. Weil sie auf dem Weg kaum entspannt wird, sind <strong>beide Seiten im kräftigen Blau</strong>. Zu den ${q(DROSSELRICHTUNG, M.umdrehungen).drossel} l/min der offenen Drossel
+kommen ${q(FREIE_RICHTUNG, 0).rueckschlag} l/min an der Manschette vorbei, zusammen ${q(FREIE_RICHTUNG, M.umdrehungen).gesamt} l/min. Auch bei ganz zugedrehter Drossel
+fließen in dieser Richtung im Modell noch ${q(FREIE_RICHTUNG, 0).gesamt} l/min (${M.qnFrei} − ${M.qnDrossel}, angenommen: die beiden Wege wirken unabhängig voneinander). Die Drossel wirkt also nur in <strong>einer</strong> Richtung.</p>
+
+<h2>Die Rändelschraube</h2>
+<p>Am Rändelkopf stellt man den Querschnitt ein. Dreht man die Schraube heraus, hebt sich der kegelige Zapfen aus der Bohrung, und der Ringspalt wird weiter. Im Modell ändert eine Umdrehung die Höhe des Zapfens um ${komma(M.steigung, 0)} mm,
+${M.umdrehungen} Umdrehungen gehen von ganz zu bis ganz offen (angenommene Werte), und der Durchfluss wächst im gleichen Maß: bei ${komma(M.umdrehungen / 2, 0)} Umdrehungen sind es ${q(DROSSELRICHTUNG, M.umdrehungen / 2).gesamt} l/min,
+bei 0 Umdrehungen fließt im Modell in Drosselrichtung keine Luft (angenommen ist ein dichter Sitz).</p>
+
+<h2>Warum drosselt man die Abluft?</h2>
+<p>Man setzt das Ventil an den Anschluss eines Zylinders und stellt damit seine Geschwindigkeit in <strong>einer</strong> Richtung ein. Für die
+<strong>Abluftdrosselung</strong> zeigt dabei <strong>Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil</strong>. Die Zuluft strömt dann vom Wegeventil frei
+in den Zylinder (2 → 1, die Lippe klappt nach innen), nur die Abluft muss auf dem Rückweg durch die Drossel (1 → 2).</p>
+<p>Dadurch ist der Kolben zwischen zwei Luftpolstern eingespannt: Hinter ihm steht der volle Druck, vor ihm bleibt ein Gegendruck stehen, den die Drossel erzeugt.
+Das Gegenhalten macht die Bewegung gleichmäßig und ruhig. Der Kolben ruckt bei wechselnder Last nicht und wird auch von einer ziehenden Last nicht mitgerissen,
+weil sie gegen den Gegendruck arbeiten müsste; die Geschwindigkeit hängt so weniger von der Last ab.
+Bei der Zuluftdrosselung wäre es umgekehrt: Der Druck müsste sich erst langsam aufbauen, der Kolben bliebe haften und spränge dann los. Eine Ausnahme sind
+einfachwirkende und sehr kleine Zylinder: Ein einfachwirkender Zylinder hat nur eine Luftseite, und bei sehr kleinem Volumen lässt sich kaum ein Luftpolster aufbauen;
+dort wird meist die Zuluft gedrosselt. Wie ein Zylinder aufgebaut ist, zeigt die Seite zum <a href="../Zylinder-Doppeltwirkend/">doppeltwirkenden Zylinder</a>.</p>
+<p class="formel">
+Drossel ganz offen, 1 → 2: <strong>${q(DROSSELRICHTUNG, M.umdrehungen).gesamt} l/min</strong><br>
+Drossel halb offen, 1 → 2: <strong>${q(DROSSELRICHTUNG, M.umdrehungen / 2).gesamt} l/min</strong><br>
+Drossel zu, 1 → 2: <strong>${q(DROSSELRICHTUNG, 0).gesamt} l/min</strong><br>
+2 → 1, Drossel offen: ${q(DROSSELRICHTUNG, M.umdrehungen).gesamt} + ${q(FREIE_RICHTUNG, 0).rueckschlag} = <strong>${q(FREIE_RICHTUNG, M.umdrehungen).gesamt} l/min</strong><br>
+2 → 1, Drossel zu: nur an der Manschette vorbei, <strong>${q(FREIE_RICHTUNG, 0).gesamt} l/min</strong>
+</p>
+<p class="hinweis">Alle Zahlen stehen im Modell, das auch den Zapfen und die Lippe bewegt. Sie gelten bei den Bedingungen des Datenblatts: 6 bar am Eingang und 1 bar Druckunterschied
+(die Anzeige nennt sie). Nur die Normdurchflüsse 420 und 780 l/min sind Katalogwerte; die 360 l/min, die Umdrehungen, der Öffnungsdruck und der Hub der Lippe sind Annahmen.
+Der Katalog gibt von der Bauform nur den Schnitt mit den Nummern 1 bis 3 an: Die Maße sind geschätzt, die inneren Wege dem Schnitt nachgezeichnet, nicht vermessen; Spalt und Lippe sind überhöht. Die Anleitung zur Figur nennt alles einzeln.</p>
+<a class="zurueck" href="../">← Zurück zur Übersicht</a>
+</div>`;
+
+const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n[data-readout] { white-space: pre-line; text-align: left }\n[data-lage="ganz"] { opacity: 0; pointer-events: none }`;
 const ZIEL = join(HIER, "..", "..", "index.html");
 mkdirSync(dirname(ZIEL), { recursive: true });
 const html = seite({
   titel: "Drosselrückschlagventil – Pneumatik",
   fig: "Bild 1",
   kartenTitel: "Drosselrückschlagventil",
-  hinweis: "zerlegen",
-  anzeige: "in Arbeit",
-  schluessel: [{ mark: "lit", label: "Teile im Schnitt" }],
-  caption: "Drosselrückschlagventil, G1/4, im Schnitt.",
+  hinweis: "Richtung, Drosselschraube, zerlegen",
+  anzeige: ANZEIGE,
+  schluessel: [
+    { mark: "blue", label: "Kräftiges Blau: Druckluft unter Druck" },
+    { mark: "dotted", label: "Blasses Blau: entspannte Luft hinter der Drossel" },
+    { mark: "lit", label: "Zapfen der Schraube und Lippe der Manschette – was sich bewegt" },
+    { mark: "dim", label: "Alle Teile sind durch die Mitte aufgeschnitten; Spalt und Lippe sind überhöht" },
+  ],
+  caption: "Drosselrückschlagventil, G1/4 (Vorbild Festo GR/GRA), im Schnitt durch die Mitte: Der Ringspalt zwischen Zapfen und Bohrung drosselt, die Lippe der Dichtmanschette ist das Rückschlagventil. "
+    + "Von 1 nach 2 spreizt der Druck die Lippe an die Wand und die Luft muss durch den Spalt; von 2 nach 1 klappt sie nach innen und die Luft strömt außen vorbei.",
   svg,
   leiste: LEISTE,
   legende: LEG.knoepfe(LEGENDE),
-  infoText: "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.",
-  lesetext: "",
+  infoText: INFO,
+  lesetext: LESETEXT,
   laufzeit: live,
   breite: 1240,
-  buehneLabel: "Drosselrückschlagventil im Schnitt",
-}).replace("</style>", `${LU.CSS}${SCHNITT_CSS}\n[data-lage="ganz"] { opacity: 0; pointer-events: none }</style>`);
+  buehneLabel: "Drosselrückschlagventil im Schnitt: Drosselspalt, Dichtmanschette, Luftweg und Baugruppen",
+  beiFigur: BEIFIGUR,
+  beiFigurLabel: "Schaltzeichen",
+}).replace("</style>", `${EIGENES_CSS}${SCHNITT_CSS}</style>`);
 writeFileSync(ZIEL, html);
 
 console.log(`geschrieben: ${ZIEL}`);
@@ -574,7 +938,6 @@ if (process.argv.includes("--apart")) {
   console.log(probleme.length ? `auseinandergefahren: ${probleme.length} Durchdringungen` : "auseinandergefahren: sauber");
   if (probleme.length) process.exit(1);
 }
-
 if (process.argv.includes("--audit")) {
   A.auditOrExit(R, P, {
     allow: [
