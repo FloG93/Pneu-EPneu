@@ -41,8 +41,7 @@ export function reglerLeiste({ handBeschreibung = "Schieber von Hand: 0 % ist di
   return [
     zeitlupeSchieber(),
     schieber("hand", "Schieber von Hand", { min: 0, max: 100, step: 1, wert: 0, einheit: " %", beschreibung: handBeschreibung }),
-    schieber("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Versorgungsdruck in bar" })
-      .replace(">6 bar</output>", ">6,0 bar</output>"),
+    schieber("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Versorgungsdruck in bar", stellen: 1 }),
   ].map((r) => `<span class="regler">${r}</span>`).join("");
 }
 

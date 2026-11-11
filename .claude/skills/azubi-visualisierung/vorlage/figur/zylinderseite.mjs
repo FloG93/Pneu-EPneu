@@ -280,8 +280,7 @@ export function leiste({ vorn, zeitlupe = "" }) {
     + knopf("btn-explode", "Zerlegen und zusammenbauen")
     + `<span class="luecke"></span>`
     + zeitlupe
-    + schieber("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Betriebsdruck in bar" })
-      .replace(">6 bar</output>", ">6,0 bar</output>")
+    + schieber("druck", "Druck", { min: 2, max: 8, step: 0.5, wert: 6, einheit: " bar", beschreibung: "Betriebsdruck in bar", stellen: 1 })
     + hausBedienung();
 }
 

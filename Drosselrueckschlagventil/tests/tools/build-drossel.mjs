@@ -27,7 +27,7 @@ import * as SS from "../../../figur/schnittseite.mjs";
 import { schnittTeile, hatchSegmente, LEINWAND } from "../../../figur/schnittteile.mjs";
 import { GRA_1_4 as M, DROSSELRICHTUNG, FREIE_RICHTUNG, anzeige, anzeigeZeile, neuerZustand, durchfluss } from "../../../figur/stromventil.mjs";
 import { drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
-import { knopf, schieber } from "../../../figur/seite.mjs";
+import { knopf, schieber, komma } from "../../../figur/seite.mjs";
 import { zeichner, ort, MOVE_BASIS } from "../../../figur/zylinderteile.mjs";
 import { normteile, stummel, sechskant, STECKVERSCHRAUBUNG_G14 as G14 } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-drossel.mjs";
@@ -122,11 +122,6 @@ const ST = schnittTeile({ P, MOVE, R, rec, put, gruppe, NT });
 const { at, L, SV, ring3, umriss, schnittFlaeche, zweiLagen, obenFlaeche } = ST;
 
 const FZ = (x = XC) => G.frameOf([x, 0, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);               // vertical axes
-const FPORT = {
-  1: G.frameOf([0, 0, Z1], [-1, 0, 0], [0, 1, 0], [0, 0, 1]),
-  2: G.frameOf([LAENGE, 0, Z2], [1, 0, 0], [0, 1, 0], [0, 0, 1]),
-};
-const ortPort = (nr) => (rng) => { const s = (rng[0] + rng[1]) / 2; return [nr === 1 ? -s : LAENGE + s, 0, nr === 1 ? Z1 : Z2]; };
 
 // --- The hollows of the housing: rectangles (x0, x1, z0, z1) in the cut plane ----------------------
 // kind "h": horizontal bore (lit from below), "v": vertical bore (lit from the right)
@@ -325,34 +320,15 @@ function schraube() {
 }
 
 // --- Fittings and hoses ---------------------------------------------------------------------------------------
-function anschluesse() {
-  for (const nr of [1, 2]) {
-    NT.verschraubung(FPORT[nr], VERSCHRAUBUNG, "verschraubung", `verschraubung${nr}`, ortPort(nr), R_STUMMEL);
-  }
-  ST.schlaeuche(WEGE, { radius: R_SCHLAUCH, innen: R_SCHLAUCH_INNEN });
-}
-
-// The fittings and the hose stubs cut in the same plane as the block: walls in the section tone, the bore free, so the
-// way of the air from the hose to the core can be followed. While they leave the valve the whole parts are shown.
-function anschlussSchnitte() {
-  for (const nr of [1, 2]) {
-    const v = nr === 1 ? -1 : 1, za = nr === 1 ? Z1 : Z2;
-    const x = (sOut) => (v < 0 ? -sOut : LAENGE + sOut);
-    ST.anschlussSchnitt({
-      // the rectangle between s0 and s1 along the port and q0 and q1 across it (the port runs along x)
-      streifen: (s0, s1, q0, q1) => [...[x(s0), x(s1)].sort((a, b) => a - b), za + q0, za + q1],
-      hohl: AUSSEN_HOHL[nr - 1],
-      raum: nr === 1 ? "s1" : "s2",
-      schlauchLaenge: SCHLAUCH_LAENGE,
-      traeger: `verschraubung${nr}.gewinde`,
-    });
-  }
-}
+// Port 1 on the left face low, port 2 on the right face high: the fitting, its hose stub and the section of both, from one table.
+const ANSCHLUESSE = [
+  { nr: 1, gruppe: "verschraubung", name: "verschraubung1", flaeche: [0, 0, Z1], aus: [-1, 0, 0], raum: "s1", hohl: AUSSEN_HOHL[0] },
+  { nr: 2, gruppe: "verschraubung", name: "verschraubung2", flaeche: [LAENGE, 0, Z2], aus: [1, 0, 0], raum: "s2", hohl: AUSSEN_HOHL[1] },
+];
 
 // --- Compose ----------------------------------------------------------------------------------------------------
 gehaeuse();
-anschluesse();
-anschlussSchnitte();
+ST.anschluesse({ ports: ANSCHLUESSE, wege: WEGE, schlauchLaenge: SCHLAUCH_LAENGE });
 einsatz();
 scheibe();
 manschette();
@@ -422,7 +398,6 @@ const svg = ST.figur({
 });
 
 // --- The page ------------------------------------------------------------------------
-const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
 const DP = 1;                                        // bar: the catalogue's pressure drop (6 bar in, 5 bar out)
 const START = { richtung: DROSSELRICHTUNG, umdrehungen: M.umdrehungen / 2 };
 const ANZEIGE = anzeigeZeile(anzeige(neuerZustand(M, START.umdrehungen), M, { richtung: START.richtung, dpBar: DP }), START.richtung, DP);
@@ -663,8 +638,7 @@ const live = SS.lebendSkript({
 
 const LEISTE = SS.leiste(
   knopf("btn-richtung", "Richtung 1 → 2 (gedrosselt)", { titel: "Umschalten zwischen Drosselrichtung (1 → 2) und freier Richtung (2 → 1)" })
-  + schieber("drossel", "Drosselschraube", { min: 0, max: M.umdrehungen, step: 0.5, wert: START.umdrehungen, einheit: " Umdr.", beschreibung: "Drosselschraube: Umdrehungen offen, 0 ist ganz zu" })
-    .replace(`>${START.umdrehungen} Umdr.</output>`, `>${komma(START.umdrehungen, 0)} Umdr.</output>`));
+  + schieber("drossel", "Drosselschraube", { min: 0, max: M.umdrehungen, step: 0.5, wert: START.umdrehungen, einheit: " Umdr.", beschreibung: "Drosselschraube: Umdrehungen offen, 0 ist ganz zu", stellen: 0 }));
 
 const INFO = "Der Schnitt zeigt, was wirklich im Ventil sitzt: den Zapfen der Schraube in der Drosselbohrung und die Dichtmanschette um den Einsatz. "
   + "Stelle die Richtung und die Drosselschraube ein oder lass die Automatik laufen. Das kräftige Blau steht unter Druck, das blasse ist entspannte Luft hinter der Drossel. "

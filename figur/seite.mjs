@@ -27,12 +27,17 @@ export const knopf = (id, text, { gedrueckt = false, titel } = {}) =>
   `<button type="button" class="playbtn" id="${esc(id)}" aria-pressed="${gedrueckt}"`
   + `${titel ? ` title="${esc(titel)}"` : ""}>${esc(text)}</button>`;
 
-/** A labelled slider in the control bar. */
-export const schieber = (id, text, { min, max, step, wert, einheit = "", beschreibung }) =>
+/** A number as the pages write it: with a decimal comma and `n` decimals. Build-time helper of every page. */
+export const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
+/** The same for a number as it is (a legend's "1,5" mm, "6" Umdrehungen). */
+export const kommaZahl = (x) => String(x).replace(".", ",");
+
+/** A labelled slider in the control bar; `stellen` writes the first value with that many decimals and a comma (6 → "6,0"). */
+export const schieber = (id, text, { min, max, step, wert, einheit = "", beschreibung, stellen = null }) =>
   `<label class="ctrlab" for="${esc(id)}">${esc(text)}</label>`
   + `<input class="ctrrange" type="range" id="${esc(id)}" min="${min}" max="${max}" step="${step}"`
   + ` value="${wert}" aria-label="${esc(beschreibung ?? text)}" aria-describedby="${esc(id)}-wert">`
-  + `<output class="ctrwert" id="${esc(id)}-wert" for="${esc(id)}">${wert}${esc(einheit)}</output>`;
+  + `<output class="ctrwert" id="${esc(id)}-wert" for="${esc(id)}">${stellen === null ? wert : komma(wert, stellen)}${esc(einheit)}</output>`;
 
 /** The slow-motion slider: 1 = real time, n = model time at 1/n (`start` is the factor the page begins with). */
 export const zeitlupeSchieber = (start = 1) => {

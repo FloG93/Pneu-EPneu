@@ -18,7 +18,7 @@ drucklos, bleibt der Ausgang drucklos.
 - **Schaltkörper:** ein tonnenförmiges Gummiteil mit zwei gewölbten Dichtflächen, das **lose** in der Kammer liegt. Der höhere
   Druck schiebt ihn auf den Sitz des **anderen** Eingangs und sperrt ihn. Die Luft des offenen Eingangs strömt durch den
   **Ringspalt** um den Körper zum Ausgang.
-- **Drei Steckverschraubungen** mit kurzen Schlauchstücken an 1, 1 und 2.
+- **Drei Steckverschraubungen** mit kurzen Schlauchstücken an 1, 1 und 2; die Anschlussziffern stehen an den Schlauchenden der Zeichnung (beim Zerlegen blenden sie aus und die Nummern der Legende übernehmen).
 
 **Wer zuerst kommt:** Liegt an beiden Eingängen derselbe Druck an, bleibt der Körper, wo er ist; das zuerst angekommene Signal
 behält den Ausgang. Bei verschiedenem Druck sperrt der niedrigere Eingang. Ein gesperrter Eingang bekommt nichts vom

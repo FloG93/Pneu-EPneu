@@ -24,7 +24,7 @@ import * as LU from "../../../figur/luft.mjs";
 import * as LEG from "../../../figur/legende.mjs";
 import { ISO_5599_GR1, wegeOffen, neuesVentil, ventilAnzeige, ventilSchaltzeit } from "../../../figur/ventil.mjs";
 import { VENTIL_5_2, wegeventilSymbol, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
-import { seite, knopf, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
+import { seite, knopf, hausBedienung, modulQuelle, komma } from "../../../figur/seite.mjs";
 import { gehaeuseSchnitt } from "../../../figur/gehaeuse.mjs";
 import { normteile, stummel, sechskant, federPruefen } from "../../../figur/normteile.mjs";
 import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
@@ -389,7 +389,6 @@ const BEDIENTEXT = {
   mono: { titel14: "Gedrückt halten: Steuerluft an 14", hinweis: "Signal 14 halten, Zeitlupe, zerlegen" },
   bi: { titel14: "Kurz drücken: ein Impuls Steuerluft an 14", hinweis: "Signal 14 oder 12 kurz drücken, Zeitlupe, zerlegen" },
 };
-const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
 const ANZEIGE = `p2 ${komma(M_ANZEIGE.drucke[2])} bar · p4 ${komma(M_ANZEIGE.drucke[4])} bar · Schaltzeit ${M_ANZEIGE.schaltzeitMs ?? "–"} ms`;
 
 const live = `

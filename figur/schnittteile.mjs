@@ -28,6 +28,7 @@
 //   ST.obenFlaeche(punkte)   the top face of a part that stands above the housing
 //   ST.schnittEnde(punkte, rAussen, rInnen)   the cut end of a hose
 //   ST.anschlussSchnitt({...})  the standard fitting with its hose stub cut in the plane, and its air room
+//   ST.anschluesse({ ports, wege })  fittings, hoses and their sections from one table of ports
 //   ST.schnittLage(traeger, svg)  hang a half section on an item
 //   ST.schlaeuche(wege, {...})  the hoses in pieces, with their route for the escape
 //   ST.anordnen({...})       depth order: the housing as back drop, the turned parts in mounting order
@@ -74,6 +75,15 @@ export function hatchSegmente(poly, richtung = 1) {
     for (let i = 0; i + 1 < treffer.length; i += 2) segmente.push([[c + richtung * treffer[i], treffer[i]], [c + richtung * treffer[i + 1], treffer[i + 1]]]);
   }
   return segmente;
+}
+
+/**
+ * A point on a port's axis in the cut plane: `s` out from the housing's face, `q` across the axis (in x for a vertical
+ * port, in z for a horizontal one). A port is `{ flaeche: [x, 0, z], aus: [dx, 0, dz] }`, `aus` the unit direction out of the housing.
+ */
+export function anschlussPunkt(port, s, q = 0) {
+  const [x, , z] = port.flaeche;
+  return port.aus[2] !== 0 ? [x + q, 0, z + port.aus[2] * s] : [x + port.aus[0] * s, 0, z + q];
 }
 
 export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
@@ -321,7 +331,7 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
    *   schlauch { s: [s0, s1], rIn, rAus }  the hose stub; default: the standard one, `schlauchLaenge` long
    *   traeger  name of the fitting's first item
    */
-  function anschlussSchnitt({ streifen, hohl, raum, traeger, fitting = G14, teile = fitting.schnitt, schlauchLaenge = fitting.schlauchLaenge, schlauch = { s: [fitting.masse.ring[1], fitting.masse.ring[1] + schlauchLaenge], rIn: fitting.rSchlauchInnen, rAus: fitting.rSchlauch } }) {
+  function anschlussSchnitt({ streifen, hohl, raum, traeger, bezeichnung = null, fitting = G14, teile = fitting.schnitt, schlauchLaenge = fitting.schlauchLaenge, schlauch = { s: [fitting.masse.ring[1], fitting.masse.ring[1] + schlauchLaenge], rIn: fitting.rSchlauchInnen, rAus: fitting.rSchlauch } }) {
     const b = hohl[0];
     const flaechen = [`<g data-hohl="">${hohlraum(hohl)}`, `<path class="kammer" data-raum="${raum}" fill="none" d="${ring3([[b[0], 0, b[2]], [b[1], 0, b[2]], [b[1], 0, b[3]], [b[0], 0, b[3]]])}"/></g>`];
     const linien = [];
@@ -338,7 +348,14 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
       linien.push(ring3(poly));
       flaechen.push(`<path class="iso-shade" data-shade="0" d="${ring3(poly)}"/>`);
     }
-    schnittLage(traeger, `${flaechen.join("")}${L(linien.join(""), { tone: "mid" })}`);
+    // the port's designation (1, 2) at the hose's cut end, a little beyond it, drawn with the section (it fades when the part leaves)
+    const schrift = bezeichnung ? (() => {
+      const p = at(bezeichnung.punkt), q = at(bezeichnung.vorn);
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      const x = p[0] + ((q[0] - p[0]) / l) * 17, y = p[1] + ((q[1] - p[1]) / l) * 17;
+      return `<text class="anschluss-bez" x="${x.toFixed(1)}" y="${(y + 6.5).toFixed(1)}" text-anchor="middle" font-size="19" font-weight="600" style="fill:var(--anatomy-strong)">${bezeichnung.text}</text>`;
+    })() : "";
+    schnittLage(traeger, `${flaechen.join("")}${L(linien.join(""), { tone: "mid" })}${schrift}`);
   }
 
   /**
@@ -348,6 +365,43 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
   function schnittLage(traeger, schnittSvg) {
     const trager = R.items.find((it) => it.name === traeger);
     trager.svg = `<g data-lage="schnitt">${schnittSvg}</g><g data-lage="ganz">${trager.svg}</g>`;
+  }
+
+  /**
+   * The three kinds of part a port brings, from one table: the fitting (figur/normteile.mjs), the hose stub and the section of both.
+   * `ports` is a table of
+   *   { nr, gruppe, name, flaeche, aus, raum, hohl, schlauchGruppe? }
+   * `nr` is the key of its hose in `wege` (points of the hose's route), `gruppe` the drawing group and assembly of the fitting,
+   * `bezeichnung` the port's number as the drawing writes it ("1", "2"; optional), `name` the prefix of its bodies, `flaeche`/`aus` the port's face and outward direction (see `anschlussPunkt`), `raum` the air
+   * room of its bore, `hohl` the bore outside the block, `schlauchGruppe` the hose's assembly (default "leitung").
+   * The fitting is `fitting` (default the standard one) with a hose stub of `schlauchLaenge`; its frame has the axis `aus`, `u` along y for a horizontal port and along x for a vertical one.
+   */
+  function anschluesse({ ports, wege, fitting = G14, schlauchLaenge = fitting.schlauchLaenge }) {
+    const rahmenVon = (p) => (p.aus[2] !== 0
+      ? G.frameOf(p.flaeche, p.aus, [1, 0, 0], [0, 1, 0])
+      : G.frameOf(p.flaeche, p.aus, [0, 1, 0], [0, 0, 1]));
+    for (const p of ports) {
+      NT.verschraubung(rahmenVon(p), fitting.masse, p.gruppe, p.name, (rng) => anschlussPunkt(p, (rng[0] + rng[1]) / 2), fitting.rStummel);
+    }
+    const nachNr = Object.fromEntries(ports.map((p) => [p.nr, p]));
+    schlaeuche(wege, { radius: fitting.rSchlauch, innen: fitting.rSchlauchInnen, piece: (nr) => nachNr[nr].schlauchGruppe ?? "leitung" });
+    for (const p of ports) {
+      anschlussSchnitt({
+        // the rectangle between s0 and s1 along the port and q0 and q1 across it
+        streifen: (s0, s1, q0, q1) => {
+          const a = anschlussPunkt(p, s0, q0), b = anschlussPunkt(p, s1, q1);
+          return p.aus[2] !== 0
+            ? [p.flaeche[0] + q0, p.flaeche[0] + q1, Math.min(a[2], b[2]), Math.max(a[2], b[2])]
+            : [...[a[0], b[0]].sort((u, v) => u - v), p.flaeche[2] + q0, p.flaeche[2] + q1];
+        },
+        hohl: p.hohl, raum: p.raum, fitting, schlauchLaenge, traeger: `${p.name}.gewinde`,
+        bezeichnung: p.bezeichnung ? {
+          text: p.bezeichnung,
+          punkt: anschlussPunkt(p, fitting.masse.ring[1] + schlauchLaenge),
+          vorn: anschlussPunkt(p, fitting.masse.ring[1] + schlauchLaenge + 1),
+        } : null,
+      });
+    }
   }
 
   // --- Order, view, drawing, end ----------------------------------------------------------------------
@@ -425,6 +479,6 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
 
   return {
     R, at, L, SV, ring3, umriss, flaeche, rahmen, loecher, hohlraum, hohlraumUmriss, materialKeil, materialKoerper, raumPfade, gehaeuseBlock, schnittFlaeche, drehachse, zweiLagen, obenFlaeche,
-    schnittEnde, schlaeuche, anschlussSchnitt, schnittLage, pruefeBaugruppen, anordnen, ansicht, figur, ende,
+    schnittEnde, schlaeuche, anschlussSchnitt, anschluesse, schnittLage, pruefeBaugruppen, anordnen, ansicht, figur, ende,
   };
 }

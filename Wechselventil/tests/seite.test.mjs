@@ -95,6 +95,11 @@ test("Das Schaltzeichen trägt nur die Ziffern 1, 1 und 2, und nur die Nummern s
   assert.match(html, /aria-label="Schaltzeichen Wechselventil/);
 });
 
+test("Die Anschlussbezeichnungen stehen an den drei Schlauchenden der Zeichnung: 1, 1 und 2", () => {
+  const bez = [...html.matchAll(/<text class="anschluss-bez"[^>]*>([^<]*)</g)].map((m) => m[1]).sort();
+  assert.deepEqual(bez, ["1", "1", "2"]);
+});
+
 test("Die Teile der Zeichnung: Verschlussstück, O-Ring, Körper und beide Lagen der Drehteile", () => {
   for (const marke of ['data-lage="schnitt"', 'data-lage="ganz"', "data-hub", 'data-raum="L"', 'data-raum="R"', 'data-raum="A"', "data-mass", 'data-schnitt="b"', "data-luftlage-hinten"]) {
     assert.ok(html.includes(marke), `${marke} fehlt in der Zeichnung`);

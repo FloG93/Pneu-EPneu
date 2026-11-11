@@ -30,3 +30,21 @@ test("seite: ohne Begleitbild bleibt die Seite wie bisher", async () => {
   const { seite } = await import("../seite.mjs");
   assert.doesNotMatch(seite(PFLICHT), /beifigur/);
 });
+
+test("komma schreibt mit Dezimalkomma, kommaZahl lässt die Zahl wie sie ist", async () => {
+  const { komma, kommaZahl } = await import("../seite.mjs");
+  assert.equal(komma(6), "6,0");
+  assert.equal(komma(6.25, 2), "6,25");
+  assert.equal(komma(3, 0), "3");
+  assert.equal(kommaZahl(1.5), "1,5");
+  assert.equal(kommaZahl(6), "6");
+});
+
+test("schieber: mit stellen steht der erste Wert mit Komma im Ausgabefeld, der Wert des Reglers bleibt eine Zahl", async () => {
+  const { schieber } = await import("../seite.mjs");
+  const mit = schieber("druck", "Druck", { min: 0, max: 8, step: 0.5, wert: 6, einheit: " bar", stellen: 1 });
+  assert.match(mit, /value="6"/);
+  assert.match(mit, />6,0 bar<\/output>/);
+  const ohne = schieber("druck", "Druck", { min: 0, max: 8, step: 0.5, wert: 6, einheit: " bar" });
+  assert.match(ohne, />6 bar<\/output>/);
+});

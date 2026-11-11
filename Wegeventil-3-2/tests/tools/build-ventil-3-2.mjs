@@ -29,7 +29,7 @@ import * as LEG from "../../../figur/legende.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import { ISO_5599_GR1, wegeOffen, ventilWege, neuesVentil, ventilAnzeige, ventilSchaltzeit } from "../../../figur/ventil.mjs";
 import { VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
-import { seite, knopf, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
+import { seite, knopf, hausBedienung, modulQuelle, komma } from "../../../figur/seite.mjs";
 import { ventilRaeume } from "../../../figur/ventilraeume.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
 import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
@@ -502,7 +502,6 @@ const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
 // --- The page --------------------------------------------------------------------------------------------
 const ARTEN = { nc: VENTIL_3_2_NC, no: VENTIL_3_2_NO };
 const ms = (zeit) => Math.round(zeit * 1000);
-const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
 // The two valves as the model starts them: the page begins with the NC one.
 const START = Object.fromEntries(Object.entries(ARTEN).map(([n, art]) => [n, ventilAnzeige(neuesVentil(M, { art }), M, 6)]));
 const anzeigeText = (a) => `p2 ${komma(a.drucke[2])} bar · Schaltzeit ${a.schaltzeitMs ?? "–"} ms`;

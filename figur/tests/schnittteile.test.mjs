@@ -208,3 +208,27 @@ test("Die kompakte Verschraubung ist kürzer als die Standardverschraubung, das 
   assert.equal(K.schnitt.length, 4);
   assert.deepEqual(K.schnitt[3][0], [K.masse.koerper[1], K.masse.ring[1]]);
 });
+
+test("Anschlusspunkt: längs der Achse nach außen, quer in z (waagerecht) oder in x (senkrecht)", async () => {
+  const { anschlussPunkt } = await import("../schnittteile.mjs");
+  const links = { flaeche: [0, 0, 16], aus: [-1, 0, 0] };
+  const oben = { flaeche: [30, 0, 35], aus: [0, 0, 1] };
+  assert.deepEqual(anschlussPunkt(links, 5, 2), [-5, 0, 18]);
+  assert.deepEqual(anschlussPunkt(oben, 5, 2), [32, 0, 40]);
+  assert.deepEqual(anschlussPunkt({ flaeche: [60, 0, 16], aus: [1, 0, 0] }, 5), [65, 0, 16]);
+});
+
+test("Anschlüsse aus einer Tabelle: Verschraubung und Schlauch je Anschluss, der Schnitt hängt an der Verschraubung", () => {
+  const { ST, R } = neu();
+  const ports = [
+    { nr: 1, gruppe: "v", name: "v1", flaeche: [0, 0, 16], aus: [-1, 0, 0], raum: "s1", hohl: [[-30, 0, 12, 20], "h"] },
+    { nr: 2, gruppe: "v", name: "v2", flaeche: [60, 0, 20], aus: [1, 0, 0], raum: "s2", hohl: [[60, 90, 16, 24], "h"], schlauchGruppe: "leitung" },
+  ];
+  const wege = { 1: [[-12.5, 0, 16], [-30, 0, 16]], 2: [[72.5, 0, 20], [90, 0, 20]] };
+  ST.anschluesse({ ports, wege, schlauchLaenge: 14 });
+  const namen = R.items.map((it) => it.name);
+  assert.ok(namen.includes("v1.gewinde") && namen.includes("v2.gewinde"), namen.join(", "));
+  assert.ok(namen.some((n) => n.startsWith("leitung.schlauch1")) && namen.some((n) => n.startsWith("leitung.schlauch2")));
+  for (const n of ["v1.gewinde", "v2.gewinde"]) assert.match(R.items.find((it) => it.name === n).svg, /^<g data-lage="schnitt">/);
+  assert.match(R.items.find((it) => it.name === "v2.gewinde").svg, /data-raum="s2"/);
+});

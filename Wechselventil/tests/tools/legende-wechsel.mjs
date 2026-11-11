@@ -6,8 +6,8 @@
 // What the catalogue gives (Festo OS-1/4-B) is said as such; what is derived, assumed or
 // redrawn from the Bosch cutaway model says so.
 import { OS_1_4 as M } from "../../../figur/wechselventil.mjs";
+import { kommaZahl as komma } from "../../../figur/seite.mjs";
 
-const komma = (x) => String(x).replace(".", ",");
 const ms = Math.round(M.schaltzeit * 1000);
 
 export const LEGENDE = [

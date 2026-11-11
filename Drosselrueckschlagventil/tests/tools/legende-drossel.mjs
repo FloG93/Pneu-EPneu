@@ -7,9 +7,9 @@
 // What the catalogue's section drawing shows (Festo GR/GRA: nut, regulating screw, housing)
 // is said as such; what is assumed or redrawn says so.
 import { GRA_1_4 as M } from "../../../figur/stromventil.mjs";
+import { kommaZahl as komma } from "../../../figur/seite.mjs";
 
 const frei = M.qnFrei - M.qnDrossel;
-const komma = (x) => String(x).replace(".", ",");
 
 export const LEGENDE = [
   { nr: "01", piece: "leitung", name: "Schläuche",

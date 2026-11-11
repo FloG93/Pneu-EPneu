@@ -19,11 +19,11 @@ import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mj
 import * as LU from "../../../figur/luft.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
 import * as SS from "../../../figur/schnittseite.mjs";
-import { schnittTeile, LEINWAND } from "../../../figur/schnittteile.mjs";
+import { schnittTeile, anschlussPunkt, LEINWAND } from "../../../figur/schnittteile.mjs";
 import { OS_1_4 as M, neuerZustand, anzeige, anzeigeZeilen, durchfluss, absolut } from "../../../figur/wechselventil.mjs";
 import { wechselventilSymbol, WECHSEL_SYMBOL_CSS, WECHSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
 import { TAU } from "../../../figur/schnitt.mjs";
-import { schieber } from "../../../figur/seite.mjs";
+import { schieber, komma } from "../../../figur/seite.mjs";
 import { zeichner, ort, MOVE_BASIS } from "../../../figur/zylinderteile.mjs";
 import { normteile, stummel, STECKVERSCHRAUBUNG_G14_KURZ as G14 } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-wechsel.mjs";
@@ -81,10 +81,7 @@ const ANSCHLUESSE = {
   "1r": { piece: "anschluss1r", raum: "R", flaeche: [LAENGE, 0, ZA], aus: [1, 0, 0] },
   "2": { piece: "anschluss2", raum: "A", flaeche: [XC, 0, HOEHE], aus: [0, 0, 1] },
 };
-const punktAn = (nr, s, q = 0) => {
-  const a = ANSCHLUESSE[nr];
-  return nr === "2" ? [XC + q, 0, HOEHE + s] : [a.flaeche[0] + a.aus[0] * s, 0, ZA + q];
-};
+const punktAn = (nr, s, q = 0) => anschlussPunkt(ANSCHLUESSE[nr], s, q);
 const WEGE = Object.fromEntries(Object.keys(ANSCHLUESSE).map((nr) => {
   const p0 = punktAn(nr, VERSCHRAUBUNG.ring[1]);
   // seen whole (while the valve is taken apart) the left one bends towards the viewer, so that its cut end faces us
@@ -256,35 +253,12 @@ function koerper() {
 }
 
 // --- Fittings and hoses ---------------------------------------------------------------------------------------
-function anschluesse() {
-  for (const [nr, a] of Object.entries(ANSCHLUESSE)) {
-    const F = G.frameOf(a.flaeche, a.aus, nr === "2" ? [1, 0, 0] : [0, 1, 0], nr === "2" ? [0, 1, 0] : [0, 0, 1]);
-    NT.verschraubung(F, VERSCHRAUBUNG, a.piece, a.piece, (rng) => punktAn(nr, (rng[0] + rng[1]) / 2), G14.rStummel);
-  }
-  ST.schlaeuche(WEGE, { radius: R_SCHLAUCH, innen: R_SCHLAUCH_INNEN, piece: (nr) => ANSCHLUESSE[nr].piece });
-}
-
-// The fittings and the hose stubs cut in the same plane as the block: walls in the section tone, the bore free.
-function anschlussSchnitte() {
-  for (const [nr, a] of Object.entries(ANSCHLUESSE)) {
-    ST.anschlussSchnitt({
-      // the rectangle between s0 and s1 along the port and q0 and q1 across it
-      streifen: (s0, s1, q0, q1) => {
-        const p = punktAn(nr, s0, q0), q = punktAn(nr, s1, q1);
-        return nr === "2" ? [XC + q0, XC + q1, Math.min(p[2], q[2]), Math.max(p[2], q[2])] : [...[p[0], q[0]].sort((u, v) => u - v), ZA + q0, ZA + q1];
-      },
-      hohl: AUSSEN_HOHL[nr],
-      raum: a.raum,
-      fitting: G14,
-      traeger: `${a.piece}.gewinde`,
-    });
-  }
-}
+// The three ports as a table: the fitting, its hose stub and the section of both (the hoses ride with their own fitting).
+const PORTS = Object.entries(ANSCHLUESSE).map(([nr, a]) => ({ nr, gruppe: a.piece, name: a.piece, flaeche: a.flaeche, aus: a.aus, raum: a.raum, hohl: AUSSEN_HOHL[nr], schlauchGruppe: a.piece, bezeichnung: nr === "2" ? "2" : "1" }));
 
 // --- Compose ----------------------------------------------------------------------------------------------------
 gehaeuse();
-anschluesse();
-anschlussSchnitte();
+ST.anschluesse({ ports: PORTS, wege: WEGE, fitting: G14 });
 stopfen();
 oring();
 koerper();
@@ -509,7 +483,7 @@ const live = SS.lebendSkript({
   eigenes,
 });
 
-const regler = (id, text, beschreibung) => SS.regler(schieber(id, text, { min: 0, max: P_MAX, step: 0.5, wert: 0, einheit: " bar", beschreibung }).replace(">0 bar</output>", ">0,0 bar</output>"));
+const regler = (id, text, beschreibung) => SS.regler(schieber(id, text, { min: 0, max: P_MAX, step: 0.5, wert: 0, einheit: " bar", beschreibung, stellen: 1 }));
 const LEISTE = SS.leiste(
   regler("druck-links", "Eingang links", "Druck am linken Eingang 1 in bar") + regler("druck-rechts", "Eingang rechts", "Druck am rechten Eingang 1 in bar"),
   { zeitlupe: 10 });
@@ -524,7 +498,6 @@ const BEIFIGUR = SS.schaltzeichenBlock({
 });
 
 // --- The prose underneath ---------------------------------------------------------------------------
-const komma = (x, n = 1) => x.toFixed(n).replace(".", ",");
 const bar = (x) => absolut(x);
 const Q1 = durchfluss({ s: 0, pL: bar(0), pR: bar(6), p2: bar(5) }, M).gesamt;      // 1 bar over the open input: the catalogue's point
 const ms = Math.round(M.schaltzeit * 1000);
