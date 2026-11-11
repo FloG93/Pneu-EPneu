@@ -18,24 +18,21 @@
 // The kit's camera looks from +x, +y, +z, so the half of the valve that is kept is the one at
 // y <= 0 and its cut face at y = 0 looks at the viewer. Turned parts are cut in half: their
 // cut faces lie in the plane y = 0 in the section tone.
-import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../../../.claude/skills/anatomy/kit/lathe.mjs";
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
-import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mjs";
-import * as SCH from "../../../figur/schnitt.mjs";
-import * as EX from "../../../figur/explode.mjs";
 import * as LEG from "../../../figur/legende.mjs";
 import * as LU from "../../../figur/luft.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
+import * as SS from "../../../figur/schnittseite.mjs";
+import { schnittTeile, hatchSegmente } from "../../../figur/schnittteile.mjs";
 import { GRA_1_4 as M, DROSSELRICHTUNG, FREIE_RICHTUNG, anzeige, anzeigeZeile, neuerZustand, durchfluss } from "../../../figur/stromventil.mjs";
 import { drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT } from "../../../figur/schaltzeichen.mjs";
-import { LAUFZEIT as BEDIENUNG_LAUFZEIT } from "../../../figur/bedienung.mjs";
-import { seite, knopf, schieber, hausBedienung, modulQuelle } from "../../../figur/seite.mjs";
+import { knopf, schieber } from "../../../figur/seite.mjs";
 import { zeichner } from "../../../figur/zylinderteile.mjs";
-import { normteile, stummel, sechskant, SCHNITT_CSS } from "../../../figur/normteile.mjs";
+import { normteile, stummel, sechskant } from "../../../figur/normteile.mjs";
 import { LEGENDE } from "./legende-drossel.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -129,11 +126,8 @@ const MOVE = {
 
 const { R, rec, put, gruppe } = zeichner({ P, MOVE });
 const NT = normteile({ P, rec, put, gruppe });
-const at = (p) => k.iso(p, P);
-const V = G.viewOf(P);
-const SV = (paths, style) => k.solidSvg(paths, style);
-const L = (d, style) => k.lineSvg(d, style);
-const ring3 = (punkte) => SCH.pfad(punkte.map(at));
+const ST = schnittTeile({ P, MOVE, R, rec, put, gruppe, NT });
+const { at, L, SV, ring3, umriss, schnittFlaeche, zweiLagen, obenFlaeche } = ST;
 
 const FZ = (x = XC) => G.frameOf([x, 0, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);               // vertical axes
 const FPORT = {
@@ -154,88 +148,8 @@ const HOHLRAUM = [
   [[LOCH.x[0] - LOCH.r, LOCH.x[0] + LOCH.r, LOCH.z - LOCH.r, LOCH.z + LOCH.r], "loch"],   // mounting holes, across the block
   [[LOCH.x[1] - LOCH.r, LOCH.x[1] + LOCH.r, LOCH.z - LOCH.r, LOCH.z + LOCH.r], "loch"],
 ];
-const innen = (x, z) => HOHLRAUM.some(([[a, b, c, d]]) => x > a + 1e-9 && x < b - 1e-9 && z > c + 1e-9 && z < d - 1e-9);
-
-/** The material of the half block as axis boxes: the grid of all hollow edges, empty cells left out, runs merged. */
-function materialKoerper() {
-  const xs = [...new Set([0, LAENGE, ...HOHLRAUM.flatMap(([[a, b]]) => [a, b])])].sort((a, b) => a - b);
-  const zs = [...new Set([0, HOEHE, ...HOHLRAUM.flatMap(([[, , c, d]]) => [c, d])])].sort((a, b) => a - b);
-  const boxen = [];
-  for (let j = 0; j < zs.length - 1; j += 1) {
-    let start = null;
-    for (let i = 0; i <= xs.length - 1; i += 1) {
-      const voll = i < xs.length - 1 && !innen((xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2);
-      if (voll && start === null) start = xs[i];
-      if (!voll && start !== null) { boxen.push([start, xs[i], zs[j], zs[j + 1]]); start = null; }
-    }
-  }
-  // A long block is split along x: the crowding check reads anything four times longer than thick as a rod.
-  return boxen.flatMap(([x0, x1, z0, z1]) => {
-    const n = Math.max(1, Math.ceil((x1 - x0) / 24 - 1e-9));
-    return Array.from({ length: n }, (_, i) => rec(A.box(
-      [x0 + ((x1 - x0) * i) / n, -TIEFE, z0], [x0 + ((x1 - x0) * (i + 1)) / n, 0, z1], { name: "gehaeuse.material", ground: true })));
-  });
-}
-
-const flaeche = (x0, x1, z0, z1, band) => `<path class="iso-shade" data-shade="${band}" d="${ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]])}"/>`;
-/** One hollow on the cut face: the far half of a round bore, dark where the light does not reach, lit on the far side. */
-function hohlraum([[x0, x1, z0, z1], art]) {
-  const h = z1 - z0, b = x1 - x0;
-  if (art === "h") return flaeche(x0, x1, z0, z1, 0) + flaeche(x0, x1, z0, z0 + h * 0.62, 1) + flaeche(x0, x1, z0, z0 + h * 0.28, 2);
-  if (art === "loch") {
-    // a round hole across the block, seen as an ellipse on the cut face: its far wall shows as a lit crescent
-    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, r = b / 2;
-    const kreis = (rr, dz = 0) => ring3(Array.from({ length: 41 }, (_, i) => [mx + rr * Math.cos((i / 40) * TAU), 0, mz + dz + rr * Math.sin((i / 40) * TAU)]));
-    return `<path class="iso-shade" data-shade="0" d="${kreis(r)}"/><path class="iso-shade" data-shade="1" d="${kreis(r * 0.8, -r * 0.14)}"/>`;
-  }
-  return flaeche(x0, x1, z0, z1, 0) + flaeche(x0 + b * 0.4, x1, z0, z1, 1) + flaeche(x0 + b * 0.72, x1, z0, z1, 2);
-}
-
 // --- Turned parts, cut in half: polygons in the plane y = 0, mirrored about the axis ------------
-const spiegel = (pt) => pt.map(([r, z]) => [XC - r, 0, z]);     // (radius, z) pairs → left side points in the cut plane
-const rechts = (pt) => pt.map(([r, z]) => [XC + r, 0, z]);
-/** A closed profile of (radius, z) points, once on each side of the axis. */
-const beideSeiten = (profil) => [spiegel(profil), rechts(profil)];
-/**
- * Every turned part is drawn twice, once as its half section (while the valve is together) and once
- * whole (once it flies apart); the page blends the two by how far that part has left its place.
- * A half section floating in the air would be a flat strip, not a part.
- */
-const zweiLagen = (schnitt, ganz) => `<g data-lage="schnitt">${schnitt}</g><g data-lage="ganz">${ganz}</g>`;
-let hatchNr = 0;
-/**
- * A cut face in the section tone with the hatching of technical drawings: parallel lines at 45° in the
- * cut plane, clipped to the face, so the cut parts that lie one against the other can be told apart.
- * `richtung` 1 or -1 turns the lines the other way for the neighbouring part.
- */
-/** The hatching of a polygon of (x, z) points: parallel 45° lines, each cut with the polygon's edges and kept between pairs of crossings. */
-function hatchSegmente(poly, richtung = 1) {
-  const xs = poly.map((p) => p[0]), zs = poly.map((p) => p[1]);
-  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
-  const segmente = [];
-  // every line x - r·z = c (r = ±1) is cut with the polygon's edges; between each pair of crossings it lies inside the face
-  for (let c = x0 - richtung * (richtung > 0 ? z1 : z0) - 1; c <= x1 - richtung * (richtung > 0 ? z0 : z1) + 1; c += 2.2) {
-    const treffer = [];
-    for (let i = 0; i < poly.length; i += 1) {
-      const [ax, az] = poly[i], [bx, bz] = poly[(i + 1) % poly.length];
-      const fa = ax - richtung * az - c, fb = bx - richtung * bz - c;
-      if ((fa < 0) === (fb < 0) || fa === fb) continue;
-      const t = fa / (fa - fb);
-      treffer.push(az + (bz - az) * t);
-    }
-    treffer.sort((u, v) => u - v);
-    for (let i = 0; i + 1 < treffer.length; i += 2) segmente.push([[c + richtung * treffer[i], treffer[i]], [c + richtung * treffer[i + 1], treffer[i + 1]]]);
-  }
-  return segmente;
-}
-function schnittFlaeche(punkte, richtung = 1) {
-  const d = hatchSegmente(punkte.map((p) => [p[0], p[2]]), richtung)
-    .map(([a, b]) => `M${at([a[0], 0, a[1]]).map((v) => v.toFixed(1)).join(" ")}L${at([b[0], 0, b[1]]).map((v) => v.toFixed(1)).join(" ")}`);
-  return NT.schnitt(punkte) + L(d.join(""), { tone: "faint" });
-}
-const umriss = (punkte) => ring3(punkte);
-/** The top face of a turned part that stands above the housing: a mid-light tone and an outline, so it does not melt into the white top of the block. */
-const obenFlaeche = (punkte) => `<path class="iso-shade" data-shade="2" d="${ring3(punkte)}"/>` + L(ring3(punkte), { tone: "mid" });
+const { beideSeiten } = ST.drehachse({ richtung: "z", mitte: XC });   // (radius, z) profiles, once on each side of the axis
 /** The half annulus a horizontal ring shows to the camera from above (the back half, y <= 0), at height z. */
 function halbRing(rIn, rAus, z) {
   const n = 28;
@@ -277,37 +191,14 @@ const RAUM_KEILE = [
 
 // --- The housing ---------------------------------------------------------------------------------------
 function gehaeuse() {
-  gruppe("gehaeuse");
-  const plan = { x: 0, y: -TIEFE, w: LAENGE, d: TIEFE, r: 0 };
-  const rahmen = (x0, x1, z0, z1) => ring3([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]]);
-  const raeume = [
-    ...RAUM_RECHTECKE.map(([seite, [x0, x1, z0, z1]]) => `<path class="kammer" data-raum="${seite}" fill="none" d="${rahmen(x0, x1, z0, z1)}"/>`),
-    ...RAUM_KEILE.flatMap(([seite, pt]) => beideSeiten(pt).map((s) => `<path class="kammer" data-raum="${seite}" fill="none" d="${ring3(s)}"/>`)),
-  ];
-  const teile = [
-    `<path class="iso-halo" d="${k.haloOf(plan, 0, HOEHE, P)}"/>`,
-    // top and the right end: the two outer faces the camera sees besides the cut face
-    NT.flach([[0, -TIEFE, HOEHE], [LAENGE, -TIEFE, HOEHE], [LAENGE, 0, HOEHE], [0, 0, HOEHE]], [0, 0, 1]),
-    NT.flach([[LAENGE, -TIEFE, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [LAENGE, -TIEFE, HOEHE]], [1, 0, 0]),
-    // the cut face
-    NT.schnitt([[0, 0, 0], [LAENGE, 0, 0], [LAENGE, 0, HOEHE], [0, 0, HOEHE]]).replace("<path ", '<path data-mass="" '),   // data-mass: the browser test reads the scale from it
-    // The hollows: all outlines first, then all fills over them, so the lines inside a junction
-    // of two hollows are covered and only the outline of the union stays.
-    L(HOHLRAUM.filter(([, art]) => art !== "loch").map(([[x0, x1, z0, z1]]) => rahmen(x0, x1, z0, z1)).join(""), { tone: "mid" }),
-    ...HOHLRAUM.map(hohlraum),
+  ST.gehaeuseBlock({
+    laenge: LAENGE, hoehe: HOEHE, tiefe: TIEFE,
+    hohlraeume: HOHLRAUM,
     // the round walls behind the cut: the far half of the insert's bore, of the gaps round the insert and of the pocket round the pin
-    ...[[XC - R_BOHRUNG, XC + R_BOHRUNG, BODEN, ZM], [XC - R_KAV, XC - R_EIN, BODEN, Z_KAV], [XC + R_EIN, XC + R_KAV, BODEN, Z_KAV],
-      [XC - BUCHSE.rTasche, XC + BUCHSE.rTasche, Z_KAV, BUCHSE.zTasche]].map((r) => hohlraum([r, "v"])),
-    ...raeume,
-    L(HOHLRAUM.filter(([, art]) => art === "loch").map(([[x0, x1, z0, z1]]) => ring3(Array.from({ length: 41 }, (_, i) => [(x0 + x1) / 2 + ((x1 - x0) / 2) * Math.cos((i / 40) * TAU), 0, (z0 + z1) / 2 + ((z1 - z0) / 2) * Math.sin((i / 40) * TAU)]))).join(""), { tone: "mid" }),
-    L(rahmen(0, LAENGE, 0, HOEHE), { tone: "mid" }),
-    L(k.segment([LAENGE, 0, HOEHE], [LAENGE, -TIEFE, HOEHE], P) + k.segment([LAENGE, -TIEFE, HOEHE], [0, -TIEFE, HOEHE], P) + k.segment([0, -TIEFE, HOEHE], [0, 0, HOEHE], P)
-      + k.segment([LAENGE, -TIEFE, HOEHE], [LAENGE, -TIEFE, 0], P) + k.segment([LAENGE, -TIEFE, 0], [LAENGE, 0, 0], P), { tone: "mid" }),
-  ];
-  // The particles of the passages run in a layer of their own at the end of the housing's drawing: in front of
-  // the cut face, behind the parts that stand in the hollows and are drawn after it.
-  teile.push(`<g class="luft" data-luftlage-hinten=""></g>`);
-  put([LAENGE / 2, -TIEFE / 2, HOEHE / 2], teile.join(""), materialKoerper(), { name: "gehaeuse.koerper" });
+    rundeWaende: [[XC - R_BOHRUNG, XC + R_BOHRUNG, BODEN, ZM], [XC - R_KAV, XC - R_EIN, BODEN, Z_KAV], [XC + R_EIN, XC + R_KAV, BODEN, Z_KAV],
+      [XC - BUCHSE.rTasche, XC + BUCHSE.rTasche, Z_KAV, BUCHSE.zTasche]],
+    raeume: ST.raumPfade({ rechtecke: RAUM_RECHTECKE, keile: RAUM_KEILE, beideSeiten }),
+  });
 }
 
 // --- The insert with the throttle bore ---------------------------------------------------------------------
@@ -442,41 +333,12 @@ function schraube() {
   ], { name: "schraube.zapfen", hub: true });
 }
 
-/** The cut end of a hose: its wall as a ring and the dark bore inside. */
-function schnittEnde(punkte, rAussen, rInnen) {
-  const ende = punkte[punkte.length - 1];
-  const vor = punkte[punkte.length - 2];
-  const F = G.frameAlong(ende, G.unit3(G.sub3(ende, vor)));
-  const band = G.toneOf(F.a, P);
-  const ringPfad = (r) => Array.from({ length: 41 }, (_, i) => at(G.pointOf(F, 0, r, (i / 40) * TAU)));
-  if (G.dot3(F.a, V) <= 0) return "";
-  return [
-    `<path class="iso-fill" d="${SCH.pfad(ringPfad(rAussen))}"/>`,
-    band >= 4 ? `<path class="iso-top" d="${SCH.pfad(ringPfad(rAussen))}"/>` : `<path class="iso-shade" data-shade="${band}" d="${SCH.pfad(ringPfad(rAussen))}"/>`,
-    `<path class="iso-shade" data-shade="0" d="${SCH.pfad(ringPfad(rInnen))}"/>`,
-    L(SCH.pfad(ringPfad(rAussen)), { tone: "mid" }),
-    L(SCH.pfad(ringPfad(rInnen)), { tone: "mid" }),
-  ].join("");
-}
-
 // --- Fittings and hoses ---------------------------------------------------------------------------------------
 function anschluesse() {
   for (const nr of [1, 2]) {
     NT.verschraubung(FPORT[nr], VERSCHRAUBUNG, "verschraubung", `verschraubung${nr}`, ortPort(nr), R_STUMMEL);
   }
-  gruppe("leitung");
-  for (const nr of [1, 2]) {
-    const punkte = WEGE[nr];
-    // The far end is cut off in the air on purpose: it is no tip that must land on a part.
-    R.route(`leitung.${nr}`, punkte, R_SCHLAUCH, { piece: "leitung", move: MOVE.leitung, ends: [true, false], free: [true, false] });
-    const stuecke = tubePieces(punkte, R_SCHLAUCH, P, { maxLength: 14 });
-    stuecke.forEach((teil, i) => {
-      const letztes = i === stuecke.length - 1;
-      put(teil.mid, tubeSvg(teil, { tone: "mid" }) + (letztes ? schnittEnde(punkte, R_SCHLAUCH, R_SCHLAUCH_INNEN) : ""),
-        [A.tube(teil.points, teil.radii)],
-        { name: `leitung.schlauch${nr}:${i}`, route: `leitung.${nr}`, chunk: i });
-    });
-  }
+  ST.schlaeuche(WEGE, { radius: R_SCHLAUCH, innen: R_SCHLAUCH_INNEN });
 }
 
 // The fittings and the hose stubs cut in the same plane as the block: walls in the section tone, the bore free, so the
@@ -485,34 +347,20 @@ function anschlussSchnitte() {
   for (const nr of [1, 2]) {
     const v = nr === 1 ? -1 : 1, za = nr === 1 ? Z1 : Z2;
     const x = (sOut) => (v < 0 ? -sOut : LAENGE + sOut);
-    const streifen = (s0, s1, rIn, rAus, richtung) => [[x(s0), x(s1)].sort((a, b) => a - b), rIn, rAus, richtung];
-    const teile = [
-      [[-12, 0], 4, R_STUMMEL, 1],                       // the threaded stub, in the housing's port bore
-      [[0, 4.5], 4, 6.6, -1],                            // the hexagon (across the flats at the cut)
-      [[4.5, 11], 4, 6, 1],                              // the body
-      [[11, 12.5], 4, 5.2, -1],                          // the release collar
-    ];
-    // the bore outside the block, with its far wall and its room of air: part of the fitting's section
-    const bohrung = AUSSEN_HOHL[nr - 1][0];
-    const flaechen = [`<g data-hohl="">${hohlraum(AUSSEN_HOHL[nr - 1])}`, `<path class="kammer" data-raum="${nr === 1 ? "s1" : "s2"}" fill="none" d="${ring3([[bohrung[0], 0, bohrung[2]], [bohrung[1], 0, bohrung[2]], [bohrung[1], 0, bohrung[3]], [bohrung[0], 0, bohrung[3]]])}"/></g>`], linien = [];
-    for (const [[s0, s1], rIn, rAus, richtung] of teile) {
-      const [xa, xb] = [x(s0), x(s1)].sort((a, b) => a - b);
-      for (const [za0, za1] of [[za + rIn, za + rAus], [za - rAus, za - rIn]]) {
-        const poly = [[xa, 0, za0], [xb, 0, za0], [xb, 0, za1], [xa, 0, za1]];
-        flaechen.push(schnittFlaeche(poly, richtung));
-        linien.push(ring3(poly));
-      }
-    }
-    const [ha, hb] = [x(VERSCHRAUBUNG.ring[1]), x(VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE)].sort((a, b) => a - b);
-    for (const [za0, za1] of [[za + R_SCHLAUCH_INNEN, za + R_SCHLAUCH], [za - R_SCHLAUCH, za - R_SCHLAUCH_INNEN]]) {
-      const poly = [[ha, 0, za0], [hb, 0, za0], [hb, 0, za1], [ha, 0, za1]];
-      linien.push(ring3(poly));
-      flaechen.push(`<path class="iso-shade" data-shade="0" d="${ring3(poly)}"/>`);
-    }
-    // The section hangs on the whole fitting's first item (an item without a recorded body would not pass the audit)
-    // and is drawn before it: the part's own recorded body is the whole stub.
-    const trager = R.items.find((it) => it.name === `verschraubung${nr}.gewinde`);
-    trager.svg = `<g data-lage="schnitt">${flaechen.join("")}${L(linien.join(""), { tone: "mid" })}</g><g data-lage="ganz">${trager.svg}</g>`;
+    ST.anschlussSchnitt({
+      // the rectangle between s0 and s1 along the port and q0 and q1 across it (the port runs along x)
+      streifen: (s0, s1, q0, q1) => [...[x(s0), x(s1)].sort((a, b) => a - b), za + q0, za + q1],
+      hohl: AUSSEN_HOHL[nr - 1],
+      raum: nr === 1 ? "s1" : "s2",
+      teile: [
+        [[-12, 0], 4, R_STUMMEL, 1],                       // the threaded stub, in the housing's port bore
+        [[0, 4.5], 4, 6.6, -1],                            // the hexagon (across the flats at the cut)
+        [[4.5, 11], 4, 6, 1],                              // the body
+        [[11, 12.5], 4, 5.2, -1],                          // the release collar
+      ],
+      schlauch: { s: [VERSCHRAUBUNG.ring[1], VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE], rIn: R_SCHLAUCH_INNEN, rAus: R_SCHLAUCH },
+      traeger: `verschraubung${nr}.gewinde`,
+    });
   }
 }
 
@@ -526,38 +374,15 @@ manschette();
 buchse();
 schraube();
 
-const LEGENDE_IDS = LEGENDE.map((e) => e.piece);
-for (const it of R.items) {
-  if (!LEGENDE_IDS.includes(it.piece)) throw new Error(`Teil ${it.name} hat keine Legendennummer (${it.piece})`);
-}
-if (STAGGER.length !== LEGENDE_IDS.length || !LEGENDE_IDS.every((id) => STAGGER.includes(id))) {
-  throw new Error("STAGGER und LEGENDE nennen nicht dieselben Baugruppen");
-}
-
-A.settle(R, P);
-// The housing is the back drop of everything inside it.
-const eintrag = (name) => R.items.find((it) => it.name === name);
-{
-  const unten = Math.min(...R.items.filter((it) => it.name !== "gehaeuse.koerper").map((it) => it.key));
-  eintrag("gehaeuse.koerper").key = unten - 1;
-  // The turned parts are drawn flat in the cut plane and share one axis, so no depth order tells them
-  // apart; they are drawn in the order of their mounting, from the inside out.
-  const reihe = ["einsatz.fuss", "scheibe.ring", "manschette.lippe", "buchse.gewinde", "kontermutter.mutter", "schraube.zapfen"].map(eintrag);
-  const basis = Math.min(...reihe.map((it) => it.key));
-  reihe.forEach((it, i) => { it.key = basis + i * 0.01; });
-  // the whole fittings and hoses are what is seen once they have left; in place the cut ones are
-  for (const it of R.items) if ((it.piece === "verschraubung" || it.piece === "leitung") && !it.svg.startsWith("<g data-lage=\"schnitt\">")) it.svg = `<g data-lage="ganz">${it.svg}</g>`;
-}
-R.items.sort((a, b) => a.key - b.key);
-
-const { KEYS, LIFT, VIEW0, VIEW1: VIEW1_ROH, MITTE } = EX.vorbereiten(R, P, MOVE, W, H);
+ST.pruefeBaugruppen(LEGENDE, STAGGER);
+ST.anordnen({
+  hintergrund: "gehaeuse.koerper",
+  reihe: ["einsatz.fuss", "scheibe.ring", "manschette.lippe", "buchse.gewinde", "kontermutter.mutter", "schraube.zapfen"],
+  ganzStuecke: ["verschraubung", "leitung"],
+});
 // The housing's number hangs on the left edge of its cut face, where its label stands clear of the parts that left it
 // (the centre of the block lies under the insert, and the label there sat on the other assemblies).
-MITTE.gehaeuse = [0, 0, HOEHE * 0.45];
-// vorbereiten measures the parts' places, not their extent: the housing is big, so the view
-// with everything out is widened by a few percent about its centre (same aspect ratio).
-const VIEW1 = (([x, y, w, h]) => [x - w * 0.03, y - h * 0.03, w * 1.06, h * 1.06])(VIEW1_ROH);
-
+const ANSICHT = ST.ansicht({ W, H, mitte: { gehaeuse: [0, 0, HOEHE * 0.45] } });
 
 // --- Air: the ways the particles take, in the cut plane, always in the direction 1 → 2 ----------------------
 // They run only through free space, never over a cut face: round the insert through its cross holes, up the
@@ -601,18 +426,14 @@ const ROUTEN_FEST = {
 const BAHNEN = Object.fromEntries(Object.entries({ ...ROUTEN_FEST, ...spaltBahnen(SPALT, ZT0) }).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
 const SEITE_VON = { z1: "s1", k1: "s1", w: "s1", b: "s1", bl: "s1", l: "s2", g: "s2", gl: "s2", z2: "s2" };
 
-const svg = k.figureSvg({
-  width: W,
-  height: H,
+const svg = ST.figur({
+  W,
+  H,
   label:
     "Ein Drosselrückschlagventil mit G1/4-Anschlüssen im Schnitt durch die Mitte: Anschluss 1 links liegt tiefer, Anschluss 2 rechts höher. "
     + "In der Mitte sitzen von oben die Regulierschraube mit Rändelkopf und kegeligem Zapfen, die Einschraubbuchse mit der Mutter und der Ventileinsatz mit der Drosselbohrung; "
     + "um den Einsatz liegen die Dichtmanschette und die Stützscheibe. Der Ringspalt zwischen Zapfen und Bohrung ist die Drossel, die Lippe der Manschette das Rückschlagventil. "
     + "Die Druckluft ist eingefärbt: das kräftige Blau steht unter Druck, das blasse ist entspannte Luft hinter der Drossel.",
-  body: [
-    R.items.map((it) => `<g data-g="${it.gruppe}" data-piece="${it.piece}">${it.svg}</g>`).join(""),
-    `<g class="luft" data-luftlage=""></g>`,
-  ],
 });
 
 // --- The page ------------------------------------------------------------------------
@@ -666,63 +487,27 @@ const LUPE_TEXT = {
   [FREIE_RICHTUNG]: "Von 2 nach 1 klappt der Druck die Lippe nach innen: Die Luft strömt außen an ihr vorbei. Auch durch den Spalt fließt ein Teil, und beide Seiten bleiben unter Druck.",
 };
 
-const live = `
-const P = ${JSON.stringify(P)};
-const MOVE = ${JSON.stringify(MOVE)};
-const ORDER = ${JSON.stringify(STAGGER)};
-const SPR = ${JSON.stringify(EX.SPRING)};
-const TAKT = ${JSON.stringify(EX.TAKT)};
-const KEYS = ${JSON.stringify(KEYS)};
-const LIFT = ${JSON.stringify(LIFT)};
-const VIEW0 = ${JSON.stringify(VIEW0)};
-const VIEW1 = ${JSON.stringify(VIEW1.map((v) => Math.round(v * 10) / 10))};
-const MITTE = ${JSON.stringify(Object.fromEntries(Object.entries(MITTE).map(([a, b]) => [a, b.map((v) => Math.round(v * 10) / 10)])))};
-const STEP = ${JSON.stringify(LEG.tabelle(LEGENDE))};
-const FARBEN = ${JSON.stringify(LU.FARBEN)};
-const BAHNEN = ${JSON.stringify(BAHNEN)};
-const SEITE_VON = ${JSON.stringify(SEITE_VON)};
+const KONSTANTEN = `
 const DP = ${DP};
 const U0 = ${M.umdrehungen / 2};
-const AUTO_TAKT = 3;    // s between two automatic changes of direction
 // what the ring gap's routes need to follow the pin
 const LUPE = ${JSON.stringify(LUPE)};
 const LUPE_TEXT = ${JSON.stringify(LUPE_TEXT)};
 const SPALT = ${JSON.stringify(SPALT)};
-const SPALT_GEO = ${JSON.stringify(SPALT_GEO)};
+const SPALT_GEO = ${JSON.stringify(SPALT_GEO)};`;
 
-const stage = document.querySelector(".iso-stage");
-const svg = stage.querySelector("svg");
-const groups = Array.from(svg.querySelectorAll("[data-g]"));
-const readout = document.querySelector("[data-readout]");
-const info = document.querySelector(".pickinfo");
-const still = matchMedia("(prefers-reduced-motion: reduce)");
-
-${modulQuelle(WURZEL, ["figur/stromventil.mjs"])}
-${EX.LAUFZEIT}
-${LEG.LAUFZEIT}
-${EX.ABLAUF}
-${LU.LAUFZEIT}
-${DROSSEL_SYMBOL_LAUFZEIT}
-${BEDIENUNG_LAUFZEIT}
-
+// What only the throttle check valve knows: the pin and the lip, the ring gap's routes, the detail panel,
+// the two flow directions. The frame, the readout, the automatic cycle, the streams of the hoses, the
+// half sections and the handle of the browser test are figur/schnittseite.mjs.
+const eigenes = `
 // --- the model drives everything -------------------------------------------
 let richtung = DROSSELRICHTUNG;
 let regler = U0;
-let angehalten = false;
-let hubAnteil = 1;                    // goes to 0 while the valve is taken apart: the moving parts stand home
 const zustand = neuerZustand(GRA_1_4, U0);
 
 const zapfenTeile = Array.from(svg.querySelectorAll("[data-hub]"));
 const lippeZu = Array.from(svg.querySelectorAll('[data-lippe="zu"]'));
 const lippeAuf = Array.from(svg.querySelectorAll('[data-lippe="auf"]'));
-const lagen = Array.from(svg.querySelectorAll("[data-lage]"));
-const raeume = Array.from(svg.querySelectorAll("[data-raum]"));
-const luftLage = svg.querySelector("[data-luftlage]");
-const luftHinten = svg.querySelector("[data-luftlage-hinten]");
-const stroeme = {};
-const ANZAHL = { z1: 8, k1: 6, w: 8, b: 9, bl: 6, g: 11, gl: 6, l: 8, z2: 8 };
-for (const name in BAHNEN) stroeme[name] = stromBauen(/^(z1|z2)$/.test(name) ? luftLage : luftHinten, name, BAHNEN[name], ANZAHL[name]);
-const symbole = Array.from(document.querySelectorAll(".beifigur-symbol svg"));
 // the detail panel
 const lupeRaeume = Array.from(document.querySelectorAll("[data-lupe-raum]"));
 const lupeZapfen = document.querySelector("[data-lupe-zapfen]");
@@ -733,25 +518,11 @@ const lupeLippePfeil = document.querySelector('[data-lupe-pfeil="lippe"]');
 const lupeText = document.querySelector("[data-lupe-text]");
 
 const knopfRichtung = document.getElementById("btn-richtung");
-const knopfAuto = document.getElementById("btn-auto");
 const reglerEl = document.getElementById("drossel");
 const reglerWert = document.getElementById("drossel-wert");
-const komma = (x) => String(x).replace(".", ",");
 
-// The automatic cycle is figur/bedienung.mjs: every AUTO_TAKT s of model time the direction flips.
-const bed = bedienungSignale({
-  namen: [],
-  impuls: 0,
-  autoTakt: AUTO_TAKT,
-  autoAn: !still.matches,
-  erster: "R",
-  haltenModus: () => false,
-  setzeSignal: () => {},
-  autoSchritt: () => { richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG; zeichneBedienung(); },
-  autoEnde: () => {},
-  autoAnzeige: (an) => knopfAuto.setAttribute("aria-pressed", String(an)),
-  geaendert: () => { angehalten = false; zeichneBedienung(); run(); },
-});
+// The automatic cycle flips the direction.
+function seiteAutoSchritt() { richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG; zeichneBedienung(); }
 
 // The routes of the ring gap follow the pin: the middle of the free band between its cone and the bore.
 function bahnNeu(punkte) {
@@ -769,27 +540,16 @@ function zeichneSpalt() {
   for (const name in neu) stroeme[name].bahn = bahnNeu(neu[name]);
 }
 
-let gezeichnet = "";
-function zeichneHub() {
-  const dz = (zustand.zapfen - U0) * GRA_1_4.steigung * hubAnteil;
-  const marke = dz.toFixed(3) + "|" + zustand.lippe.toFixed(3);
-  if (marke === gezeichnet) return;
-  gezeichnet = marke;
+// The pin moves with the regulator, the lip folds with the pressure; both stand home while the valve is taken apart.
+const hubMarke = (anteil) => ((zustand.zapfen - U0) * GRA_1_4.steigung * anteil).toFixed(3) + "|" + zustand.lippe.toFixed(3);
+function hubStellen(anteil) {
+  const dz = (zustand.zapfen - U0) * GRA_1_4.steigung * anteil;
   const tz = Math.abs(dz) > 1e-4 ? translateAlong(P, [0, 0, dz]) : null;
   for (const el of zapfenTeile) { if (tz) el.setAttribute("transform", tz); else el.removeAttribute("transform"); }
   // the lip: two drawn shapes blended by how far it has folded in
-  const auf = zustand.lippe * hubAnteil;
+  const auf = zustand.lippe * anteil;
   for (const el of lippeZu) el.style.opacity = String(1 - auf);
   for (const el of lippeAuf) el.style.opacity = String(auf);
-}
-// Every turned part: its half section while it sits in place, the whole part once it has left.
-function zeichneLagen() {
-  for (const el of lagen) {
-    const x = spr[el.closest("[data-g]").dataset.piece]?.x ?? 0;
-    const ganz = Math.min(1, Math.max(0, x * 6));
-    const wert = el.dataset.lage === "ganz" ? ganz : 1 - ganz;
-    if (el.dataset.stand !== String(wert)) { el.style.opacity = String(wert); el.dataset.stand = String(wert); }
-  }
 }
 
 // The tones of the two sides. 1 → 2: the side the air comes from is under pressure, behind the throttle it is
@@ -801,43 +561,25 @@ function seitenFarben() {
   if (zustand.lippe > 0.5) return { s1: F.druck, s2: F.druck };
   return { s1: F.abluft, s2: F.druck };
 }
-function setzeRaumFarben(farbe) {
-  for (const el of raeume) {
-    const f = farbe[el.dataset.raum];
-    if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
-  }
+function setzeLupeFarben(farbe) {
   for (const el of lupeRaeume) {
     const f = farbe[el.dataset.lupeRaum];
     if (el.getAttribute("fill") !== f) el.setAttribute("fill", f);
   }
 }
 
-// Particle speed and strength follow the flow of the way they run on (l/min at the catalogue's pressure drop).
-const tempoVon = (q) => Math.min(160, q * 0.25);
-const staerkeVon = (q) => (q > 0.5 ? Math.min(1, 0.3 + (0.7 * q) / 420) : 0);
 function zeichneLuft(dt) {
   const farbe = seitenFarben();
   setzeRaumFarben(farbe);
+  setzeLupeFarben(farbe);
   const q = durchfluss(richtung, zustand.zapfen, DP, GRA_1_4);
   // the lip's own fold decides whether the way past it carries air
   const rueck = richtung === FREIE_RICHTUNG && zustand.lippe > 0.05 ? q.rueckschlag * zustand.lippe : 0;
-  const lauf = richtung === FREIE_RICHTUNG ? -1 : 1;
   const strecke = { z1: q.drossel + rueck, z2: q.drossel + rueck, k1: q.drossel + rueck, w: rueck, l: rueck, b: q.drossel, g: q.drossel, bl: q.drossel * 0.5, gl: q.drossel * 0.5 };
-  for (const name in stroeme) {
-    const ton = farbe[SEITE_VON[name]];
-    stromSchritt(stroeme[name], dt, lauf * tempoVon(strecke[name]), staerkeVon(strecke[name]), ton);
-  }
-  for (const name in stroeme) {
-    const sichtbar = stroeme[name].kugeln.some((c) => c.getAttribute("opacity") !== "0");
-    stroeme[name].g.style.opacity = sichtbar ? "" : "0";
-  }
+  luftStroeme(dt, farbe, strecke, richtung === FREIE_RICHTUNG ? -1 : 1);
 }
 
-let letzteZeile = "";
-function zeichneAnzeige() {
-  const text = anzeigeZeile(anzeige(zustand, GRA_1_4, { richtung, dpBar: DP }), richtung, DP);
-  if (text !== letzteZeile) { readout.textContent = text; letzteZeile = text; }
-}
+const anzeigeText = () => anzeigeZeile(anzeige(zustand, GRA_1_4, { richtung, dpBar: DP }), richtung, DP);
 
 // The detail panel follows the same state: the pin, the lip, the arrows of the ways (the panel does not fly apart).
 function lupePunkt(p) { return ((p[0] - LUPE.x0) * LUPE.sx).toFixed(1) + " " + ((LUPE.zOben - p[2]) * LUPE.sx).toFixed(1); }
@@ -880,90 +622,46 @@ function zeichneBedienung() {
   reglerWert.textContent = komma(regler) + " Umdr.";
 }
 
-// One frame (the loop itself is EX.ABLAUF).
-function bildZeichnen(dt, offen, bewegt) {
-  luftLage.style.opacity = String(Math.max(0, 1 - offen * 3));
-  luftHinten.style.opacity = String(Math.max(0, 1 - offen * 3));
-  for (const el of raeume) {
-    if (offen > 0.001) el.style.opacity = (0.82 * Math.max(0, 1 - offen * 3)).toFixed(3);
-    else el.style.removeProperty("opacity");
-  }
-  const willHub = Math.max(0, 1 - offen * 2);
-  if (Math.abs(willHub - hubAnteil) > 1e-4) { hubAnteil = willHub; gezeichnet = ""; }
-  // The valve stops while it is being taken apart and carries on afterwards.
-  if (offen < 0.01 && !bewegt) {
-    const dm = angehalten ? 0 : dt;
-    if (dm > 0) {
-      bed.takt(dm);
-      schritt(zustand, GRA_1_4, dm, { richtung, umdrehungen: regler, dpBar: DP });
-    }
-    zeichneSpalt();
-    zeichneHub();
-    zeichneLuft(dm);
-    zeichneAnzeige();
-  } else {
-    zeichneHub();
-    for (const s of Object.values(stroeme)) stromSchritt(s, dt, 0, 0, "#000");
-  }
-  zeichneLagen();
+// The frames of the shared loop (figur/schnittseite.mjs): the model, then what is drawn.
+function modellSchritt(dm) { schritt(zustand, GRA_1_4, dm, { richtung, umdrehungen: regler, dpBar: DP }); }
+function zeichneModell(dm) {
+  zeichneSpalt();
+  zeichneHub();
+  zeichneLuft(dm);
+  zeichneAnzeige();
+}
+function zeichneStets() {
   zeichneSymbol();
   zeichneLupe();
 }
 
 // --- controls -------------------------------------------------------------
-const stoppeAuto = () => { bed.autoAus(); };
 knopfRichtung.addEventListener("click", () => {
-  stoppeAuto();
   richtung = richtung === DROSSELRICHTUNG ? FREIE_RICHTUNG : DROSSELRICHTUNG;
-  angehalten = false;
-  zeichneBedienung();
-  run();
-});
-knopfAuto.addEventListener("click", () => {
-  if (bed.auto) bed.autoAus(); else bed.autoStart("R");
-  angehalten = false;
-  zeichneBedienung();
-  run();
+  bedient(true);
 });
 reglerEl.addEventListener("input", () => {
   regler = reglerEl.valueAsNumber;
-  angehalten = false;
-  zeichneBedienung();
-  run();
+  bedient(false);
 });
 
-// Before taking it apart: no automatic cycle; the moving parts go home by themselves (hubAnteil).
-function vorDemZerlegen() { stoppeAuto(); }
-
-zeichneBedienung();
-zeichneSpalt();
-zeichneHub();
-zeichneLuft(0);
-zeichneAnzeige();
-zeichneSymbol();
-zeichneLagen();
-zeichneLupe();
-poseExplode();
+schnittStart();
 
 // A handle for the browser test and for screenshots: it puts the figure into a known state.
-window.__figur = {
+window.__figur = figurGrundstock({
   MASSE: GRA_1_4,
   geometrie: SPALT_GEO,
   modell: () => zustand,
   richtung: () => richtung,
   regler: () => regler,
-  zerlegt: () => zerlegt,
-  offen: () => offenAnteil(),
   // direction ("drossel" | "frei") and turns 0…6, everything settled at once
   stelle(r, u) {
-    stoppeAuto();
-    angehalten = true;
+    stelleFest();
     richtung = r;
     regler = u;
     reglerEl.value = String(u);
     zustand.zapfen = u;
     zustand.lippe = r === FREIE_RICHTUNG ? lippeHub(DP, GRA_1_4) : 0;
-    gezeichnet = "";
     spaltZapfen = null;
     zeichneBedienung();
     zeichneSpalt();
@@ -974,28 +672,36 @@ window.__figur = {
     zeichneLupe();
     run();
   },
-  weiter: () => { angehalten = false; run(); },
-  spiele,
-  waehle,
-};
+});
 `;
 
-const LEISTE = knopf("btn-richtung", "Richtung 1 → 2 (gedrosselt)", { titel: "Umschalten zwischen Drosselrichtung (1 → 2) und freier Richtung (2 → 1)" })
+const live = SS.lebendSkript({
+  wurzel: WURZEL, P, MOVE, STAGGER, ansicht: ANSICHT, LEGENDE, BAHNEN, SEITE_VON,
+  ANZAHL: { z1: 8, k1: 6, w: 8, b: 9, bl: 6, g: 11, gl: 6, l: 8, z2: 8 },
+  VORNE: ["z1", "z2"],                                   // the streams in the hoses run in front of the housing, the others behind
+  SKALA: { tempo: 0.25, tempoMax: 160, bezug: M.qnDrossel },
+  AUTO_TAKT: 3,
+  modelle: ["figur/stromventil.mjs"],
+  symbole: [DROSSEL_SYMBOL_LAUFZEIT],
+  konstanten: KONSTANTEN,
+  eigenes,
+});
+
+const LEISTE = SS.leiste(
+  knopf("btn-richtung", "Richtung 1 → 2 (gedrosselt)", { titel: "Umschalten zwischen Drosselrichtung (1 → 2) und freier Richtung (2 → 1)" })
   + schieber("drossel", "Drosselschraube", { min: 0, max: M.umdrehungen, step: 0.5, wert: START.umdrehungen, einheit: " Umdr.", beschreibung: "Drosselschraube: Umdrehungen offen, 0 ist ganz zu" })
-    .replace(`>${START.umdrehungen} Umdr.</output>`, `>${komma(START.umdrehungen, 0)} Umdr.</output>`)
-  + knopf("btn-auto", "Automatik", { gedrueckt: true })
-  + knopf("btn-explode", "Zerlegen und zusammenbauen")
-  + `<span class="luecke"></span>` + hausBedienung();
+    .replace(`>${START.umdrehungen} Umdr.</output>`, `>${komma(START.umdrehungen, 0)} Umdr.</output>`));
 
 const INFO = "Der Schnitt zeigt, was wirklich im Ventil sitzt: den Zapfen der Schraube in der Drosselbohrung und die Dichtmanschette um den Einsatz. "
   + "Stelle die Richtung und die Drosselschraube ein oder lass die Automatik laufen. Das kräftige Blau steht unter Druck, das blasse ist entspannte Luft hinter der Drossel. "
   + "Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
 
-const BEIFIGUR = `<p class="beifigur-titel">Schaltzeichen</p>`
-  + `<div class="beifigur-symbol">${drosselRueckschlagSymbol({ feld: 60, feder: false }).svg}</div>`
-  + `<p class="beifigur-text">Oben die einstellbare Drossel (zwei Bögen, vom Schrägpfeil durchkreuzt), darunter parallel das Rückschlagventil. `
-  + `Es hat keine Feder: Die Lippe der Manschette braucht keine. Von 1 nach 2 sperrt es, von 2 nach 1 gibt es den Weg frei. Der Zweig, durch den gerade Luft strömt, färbt sich. `
-  + `Für die Abluftdrosselung zeigt Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil.</p>`
+const BEIFIGUR = SS.schaltzeichenBlock({
+  svg: drosselRueckschlagSymbol({ feld: 60, feder: false }).svg,
+  text: `Oben die einstellbare Drossel (zwei Bögen, vom Schrägpfeil durchkreuzt), darunter parallel das Rückschlagventil. `
+    + `Es hat keine Feder: Die Lippe der Manschette braucht keine. Von 1 nach 2 sperrt es, von 2 nach 1 gibt es den Weg frei. Der Zweig, durch den gerade Luft strömt, färbt sich. `
+    + `Für die Abluftdrosselung zeigt Anschluss 1 zum Zylinder und Anschluss 2 zum Wegeventil.`,
+})
   + `<p class="beifigur-titel lupe-titel">Lupe: der Kern</p>`
   + `<div class="beifigur-lupe">${lupeSvg()}</div>`
   + `<p class="beifigur-text" data-lupe-text>${LUPE_TEXT[DROSSELRICHTUNG]}</p>`;
@@ -1048,10 +754,11 @@ Der Katalog gibt von der Bauform nur den Schnitt mit den Nummern 1 bis 3 an: Die
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 
-const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n[data-readout] { white-space: pre-line; text-align: left }\n[data-lage="ganz"] { opacity: 0; pointer-events: none }\n.beifigur-lupe .lupe { display: block; width: 100%; height: auto; margin: 10px 0 12px; color: var(--anatomy-strong); overflow: hidden }\n.lupe .lupe-pfeil { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0 }\n.lupe-titel { margin-top: 20px }`;
+const EIGENES_CSS = `${VS.CSS}\n${DROSSEL_SYMBOL_CSS}\n${SS.CSS}\n.beifigur-lupe .lupe { display: block; width: 100%; height: auto; margin: 10px 0 12px; color: var(--anatomy-strong); overflow: hidden }\n.lupe .lupe-pfeil { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0 }\n.lupe-titel { margin-top: 20px }`;
 const ZIEL = join(HIER, "..", "..", "index.html");
-mkdirSync(dirname(ZIEL), { recursive: true });
-const html = seite({
+SS.seiteSchreiben({
+  ziel: ZIEL,
+  css: EIGENES_CSS,
   titel: "Drosselrückschlagventil – Pneumatik",
   fig: "Bild 1",
   kartenTitel: "Drosselrückschlagventil",
@@ -1075,40 +782,28 @@ const html = seite({
   buehneLabel: "Drosselrückschlagventil im Schnitt: Drosselspalt, Dichtmanschette, Luftweg und Baugruppen",
   beiFigur: BEIFIGUR,
   beiFigurLabel: "Schaltzeichen",
-}).replace("</style>", `${EIGENES_CSS}${SCHNITT_CSS}</style>`);
-writeFileSync(ZIEL, html);
+});
 
-console.log(`geschrieben: ${ZIEL}`);
-console.log(`Teile: ${R.items.length}, Körper: ${R.solids.length}, Rohre: ${R.tubes.length}`);
-console.log(`Nummern an: ${Object.keys(MITTE).join(", ")}`);
-
-if (process.argv.includes("--apart")) {
-  for (const shape of R.solids) shape.move = MOVE[shape.piece] ?? [0, 0, 0];
-  const probleme = A.solidClearances(R.solids, { state: 1 });
-  for (const p of probleme.slice(0, 20)) console.log(`  ${p.a ?? p.one ?? ""} × ${p.b ?? p.two ?? ""}  ${JSON.stringify(p).slice(0, 150)}`);
-  console.log(`Ansicht auseinandergefahren: ${VIEW1.map((v) => v.toFixed(0)).join(" ")}`);
-  console.log(probleme.length ? `auseinandergefahren: ${probleme.length} Durchdringungen` : "auseinandergefahren: sauber");
-  if (probleme.length) process.exit(1);
-}
-if (process.argv.includes("--audit")) {
-  A.auditOrExit(R, P, {
-    allow: [
-      // Parts that stand in a half-cut hole of the housing: the cut face is in front of their back half
-      // and behind their front half, so no drawing order is right. The housing is drawn first and its
-      // hollows are painted over the cut face, which is what the eye expects (the same excuse the
-      // cylinder pages make for a rod in its gland).
-      ["gehaeuse.koerper", "verschraubung1.*"], ["gehaeuse.koerper", "verschraubung2.*"],
-      ["gehaeuse.koerper", "einsatz.*"], ["gehaeuse.koerper", "scheibe.*"], ["gehaeuse.koerper", "manschette.*"],
-      ["gehaeuse.koerper", "buchse.*"], ["gehaeuse.koerper", "schraube.*"],
-      // The turned parts sit one inside the other on a common axis and are drawn as flat cut faces in
-      // one plane: they are drawn in the order of their mounting (see the keys above).
-      ["einsatz.*", "scheibe.*"], ["einsatz.*", "manschette.*"], ["einsatz.*", "schraube.*"], ["scheibe.*", "manschette.*"],
-      ["buchse.*", "kontermutter.*"], ["buchse.*", "schraube.*"], ["schraube.*", "kontermutter.*"],
-      ["buchse.*", "manschette.*"], ["buchse.*", "einsatz.*"],
-    ],
-    crowd: [],
-    // The section of a whole fitting with its hose stub hangs on the stub's item; the other parts of the fitting
-    // and the hose have bodies of their own.
-    cover: ["verschraubung1.gewinde", "verschraubung2.gewinde"],
-  });
-}
+ST.ende({
+  ziel: ZIEL,
+  mitte: ANSICHT.MITTE,
+  view1: ANSICHT.VIEW1,
+  allow: [
+    // Parts that stand in a half-cut hole of the housing: the cut face is in front of their back half
+    // and behind their front half, so no drawing order is right. The housing is drawn first and its
+    // hollows are painted over the cut face, which is what the eye expects (the same excuse the
+    // cylinder pages make for a rod in its gland).
+    ["gehaeuse.koerper", "verschraubung1.*"], ["gehaeuse.koerper", "verschraubung2.*"],
+    ["gehaeuse.koerper", "einsatz.*"], ["gehaeuse.koerper", "scheibe.*"], ["gehaeuse.koerper", "manschette.*"],
+    ["gehaeuse.koerper", "buchse.*"], ["gehaeuse.koerper", "schraube.*"],
+    // The turned parts sit one inside the other on a common axis and are drawn as flat cut faces in
+    // one plane: they are drawn in the order of their mounting (see the keys above).
+    ["einsatz.*", "scheibe.*"], ["einsatz.*", "manschette.*"], ["einsatz.*", "schraube.*"], ["scheibe.*", "manschette.*"],
+    ["buchse.*", "kontermutter.*"], ["buchse.*", "schraube.*"], ["schraube.*", "kontermutter.*"],
+    ["buchse.*", "manschette.*"], ["buchse.*", "einsatz.*"],
+  ],
+  crowd: [],
+  // The section of a whole fitting with its hose stub hangs on the stub's item; the other parts of the fitting
+  // and the hose have bodies of their own.
+  cover: ["verschraubung1.gewinde", "verschraubung2.gewinde"],
+});

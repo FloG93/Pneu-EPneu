@@ -62,6 +62,8 @@ figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
   gehaeuse.mjs              Aufgeschnittenes Gehäuse eines Schieberventils
   ventilraeume.mjs          Lufträume im Ventilschnitt und Teilchenwege
   ventilseite.mjs           Gemeinsames der Ventilseiten: Regler, Anzeige, Schaltzeichen
+  schnittteile.mjs          Gemeinsames der Schnittseiten im Bauskript: Schnitt aus Hohlräumen, Schraffur, Drehteile, Verschraubung, Schläuche
+  schnittseite.mjs          Gemeinsames der Schnittseiten zur Laufzeit: Leiste, Bildschleife, Anzeige, Automatik, Teilchen
   bedienung.mjs             Signalknöpfe: Halten, Impuls, Automatik
   zylinderteile.mjs         Gemeinsames der Zylinderseiten: Füße, Schiene, Ventil auf Grundplatte, Schläuche
   zylinderseite.mjs         Gemeinsames der Zylinderseiten zur Laufzeit: Rahmen, Kammern, Seitenschale

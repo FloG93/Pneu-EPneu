@@ -15,7 +15,7 @@ Lernseite für Auszubildende: {{TITEL}} – Bauteile als interaktive isometrisch
 
 ## Die Naht
 
-`figur/` kennt **kein einziges Bauteil** (Ausnahme: Rechenmodelle, die ihr Bauteil kennen, und – gehört die Sammlung zu Längsschieberventilen – `gehaeuse.mjs`, `ventilraeume.mjs`, `ventilseite.mjs`, die den Aufbau der Bauart kennen, aber kein bestimmtes Ventil; gehören Zylinder auf Schiene mit Ventil dazu, `zylinderteile.mjs` und `zylinderseite.mjs`). Ein Bauteil liefert **nur** Geometrie und vier Datentabellen (`MOVE`, `STAGGER`, `PIECE_OF`, `LEGENDE`), bei beweglichen Bauteilen dazu die Medienwege und das Rechenmodell, das sie treibt. **`build-<bauteil>.mjs` darf keine Zeile Federmathematik, Sortierung oder Seitengerüst enthalten.**
+`figur/` kennt **kein einziges Bauteil** (Ausnahme: Rechenmodelle, die ihr Bauteil kennen, und – gehört die Sammlung zu Längsschieberventilen – `gehaeuse.mjs`, `ventilraeume.mjs`, `ventilseite.mjs`, die den Aufbau der Bauart kennen, aber kein bestimmtes Ventil; gehören Zylinder auf Schiene mit Ventil dazu, `zylinderteile.mjs` und `zylinderseite.mjs`; zeigt die Sammlung Gehäuse im Längsschnitt, `schnittteile.mjs` und `schnittseite.mjs`). Ein Bauteil liefert **nur** Geometrie und vier Datentabellen (`MOVE`, `STAGGER`, `PIECE_OF`, `LEGENDE`), bei beweglichen Bauteilen dazu die Medienwege und das Rechenmodell, das sie treibt. **`build-<bauteil>.mjs` darf keine Zeile Federmathematik, Sortierung oder Seitengerüst enthalten.**
 
 ## Medium
 

@@ -62,6 +62,7 @@ Was mehrere Seiten gleich brauchen, steht bauteilfrei in `figur/` und wird nicht
 - `gehaeuse.mjs`: das aufgeschnittene Gehäuse eines Schieberventils (Innenseite von Bohrung, Nut und Kanal, aufgenommene Körper); Bohrung und Nuten kommen als Parameter.
 - `ventilraeume.mjs`: Lufträume im Ventilschnitt und die Wege der Teilchen; das Bauteil sagt, wo seine Hälse liegen.
 - `ventilseite.mjs`: Regler, Gleiten von Schieber und Feder, Anzeige und Schaltzeichen einer Ventilseite.
+- `schnittteile.mjs`: Schnitt eines Gehäuses aus dem Raster der Hohlräume, Schraffur, Drehteile in zwei Lagen, Verschraubung mit Schlauchstück im Schnitt, Schläuche, Tiefenfolge, Ansicht und Schluss des Baus; `schnittseite.mjs` ist die zugehörige Seite (Leiste, Lebendskript mit Bildschleife, Anzeige, Automatik, Teilchen; die Seite liefert Haken).
 - `zylinderteile.mjs`: Füße und Schiene, Lastschlitten, das vereinfachte Ventil auf Grundplatte (Anschlüsse, Abluftwege und Scheiben als Parameter) und die Schläuche; `zylinderseite.mjs` ist die zugehörige Laufzeit (Hub, Kammerfüllung, Luftströme, Automatik).
 - `bedienung.mjs`: Signalknöpfe als Laufzeit (Halten, Impuls, Automatik auf Modellzeit).
 
