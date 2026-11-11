@@ -105,7 +105,7 @@ const MOVE = {
   anschluss2: [0, 8, 46],
   anschluss1r: [34, 26, 0],
   anschluss1l: [-50, 22, 0],
-  oring: [-36, 0, 12],
+  oring: [-36, 0, 17],
   stopfen: [-36, 0, 0],
   koerper: [0, 28, 14],
   gehaeuse: [0, 0, 0],
