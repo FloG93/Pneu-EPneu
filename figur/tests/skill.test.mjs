@@ -96,7 +96,10 @@ test("anlegen.mjs legt ein Projekt in einem anderen Fach an, und dessen Tests si
     assert.ok(existsSync(join(ziel, ".claude", "skills", "anatomy", "kit", "iso-kit.mjs")), "Zeichen-Kit fehlt");
 
     // The new project's own tests, including its measured medium tones.
-    const lauf = spawnSync(process.execPath, ["--test", "figur/tests/", "shared/tests/"], { cwd: ziel, encoding: "utf8" });
+    // Without NODE_TEST_CONTEXT removed, a nested node --test exits 0 even when a test in it fails.
+    const sauber = { ...process.env };
+    delete sauber.NODE_TEST_CONTEXT;
+    const lauf = spawnSync(process.execPath, ["--test", "figur/tests/*.test.mjs", "shared/tests/*.test.mjs"], { cwd: ziel, encoding: "utf8", env: sauber });
     assert.equal(lauf.status, 0, lauf.stdout.slice(-1500));
 
     execFileSync(process.execPath, ["figur/tests/tools/build-uebersicht.mjs"], { cwd: ziel, stdio: "pipe" });
