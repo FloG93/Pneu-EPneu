@@ -7,11 +7,13 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 const WURZEL = join(import.meta.dirname, "..", "..");
 const ORDNER = "ZZTest", ID = "zztest", NAME = "Zett-Test-Ventil";
 let kopie;
+/** The environment without NODE_TEST_CONTEXT: a `node --test` started from inside a test would otherwise report to its parent and exit 0 even when a test in it fails. */
+const UMGEBUNG = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT"));
 
 const generator = (...args) => spawnSync(process.execPath, [join(kopie, ".claude/skills/azubi-visualisierung/scripts/neue-schnittseite.mjs"), ...args],
   { cwd: kopie, encoding: "utf8" });
@@ -45,6 +47,29 @@ test("Ohne Angaben oder mit falschen Namen schreibt der Generator nichts", () =>
   assert.equal(generator(ORDNER, "Gross", NAME).status, 1);
   assert.equal(generator(ORDNER, ID, NAME, "--rubrik", "gibt-es-nicht").status, 1);
   assert.deepEqual(zustand(), vorher);
+});
+
+test("Unter einem Git-Worktree (.git ist eine Datei) trägt er die Ausschlusszeilen in die Ausschlussdatei dieses Klons ein", () => {
+  const git = (cwd, ...a) => spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" });
+  const haupt = mkdtempSync(join(tmpdir(), "schnittseite-wt-"));
+  const baum = haupt + "-baum";
+  try {
+    cpSync(kopie, haupt, { recursive: true });
+    assert.equal(git(haupt, "init", "-q").status, 0);
+    git(haupt, "add", "-A");
+    assert.equal(git(haupt, "commit", "-q", "-m", "x").status, 0);
+    assert.equal(git(haupt, "worktree", "add", "-q", baum).status, 0);
+    assert.ok(statSync(join(baum, ".git")).isFile(), "kein Worktree");
+    const l = spawnSync(process.execPath, [join(baum, ".claude/skills/azubi-visualisierung/scripts/neue-schnittseite.mjs"), ORDNER, ID, NAME], { cwd: baum, encoding: "utf8" });
+    assert.equal(l.status, 0, l.stderr);
+    const ausschluss = git(baum, "rev-parse", "--git-path", "info/exclude").stdout.trim();
+    const text = readFileSync(resolve(baum, ausschluss), "utf8");
+    assert.ok(text.includes(`${ORDNER}/index.html`) && text.includes(`${ORDNER}/.generiert.json`), `Ausschlusszeilen fehlen in ${ausschluss}`);
+    assert.ok(!/^\?\? ZZTest\/(index\.html|\.generiert\.json)/m.test(git(baum, "status", "--short", "-uall").stdout), "index.html wird nicht ausgeschlossen");
+  } finally {
+    rmSync(haupt, { recursive: true, force: true });
+    rmSync(baum, { recursive: true, force: true });
+  }
 });
 
 test("Er legt die Seite an: Dateien, Skripte, CI-Schritt, Liste der Seiten", () => {
@@ -95,7 +120,7 @@ test("Die Prüfungen der Seite tragen TODO im Namen: keine ist still grün", () 
 });
 
 test("Die Modell-Probe der neuen Seite läuft und ist grün", () => {
-  const l = spawnSync(process.execPath, ["--test", `figur/tests/${ID}.test.mjs`], { cwd: kopie, encoding: "utf8" });
+  const l = spawnSync(process.execPath, ["--test", `figur/tests/${ID}.test.mjs`], { cwd: kopie, encoding: "utf8", env: UMGEBUNG });
   assert.equal(l.status, 0, l.stdout.slice(-800));
 });
 
@@ -104,6 +129,25 @@ test("Die neue Seite baut, und die Geometrie besteht den Audit", () => {
   assert.equal(l.status, 0, (l.stdout + l.stderr).slice(-1200));
   assert.match(l.stdout + l.stderr, /audit passed/);
   assert.ok(existsSync(join(kopie, ORDNER, "index.html")));
+});
+
+test("Die gebaute Seite nennt sich Entwurf und trägt TODO( in die index.html (daran sehen die Wächter, dass sie nicht veröffentlicht werden darf)", () => {
+  const html = lies(`${ORDNER}/index.html`);
+  assert.match(html, /ENTWURF – nicht veröffentlichen \(TODO\(zztest\)\)/);
+});
+
+test("Eine frisch erzeugte Seite besteht ihren eigenen npm test ohne Änderung: ihre Tests, alle Tests von figur/ und die Liste der Seiten", () => {
+  // what `npm test` runs for the new page: test:<id>, and test:figur (without this very file, which would copy the copy again)
+  const lauf = (...args) => spawnSync(process.execPath, ["--test", ...args], { cwd: kopie, encoding: "utf8", env: UMGEBUNG });
+  const seite = lauf(`${ORDNER}/tests/seite.test.mjs`);
+  assert.equal(seite.status, 0, seite.stdout.slice(-2500));
+  const figur = readdirSync(join(kopie, "figur", "tests")).filter((d) => d.endsWith(".test.mjs") && d !== "neue-schnittseite.test.mjs").map((d) => `figur/tests/${d}`);
+  assert.ok(figur.includes(`figur/tests/${ID}.test.mjs`) && figur.includes("figur/tests/schnitt-seiten.test.mjs"));
+  const f = lauf(...figur);
+  assert.equal(f.status, 0, f.stdout.slice(-2500));
+  // and the same through the scripts of package.json, as npm would call them
+  const pj = JSON.parse(lies("package.json"));
+  assert.ok(pj.scripts.test.includes(`npm run test:${ID}`));
 });
 
 test("Ein zweiter Lauf bricht ab und überschreibt nichts", () => {

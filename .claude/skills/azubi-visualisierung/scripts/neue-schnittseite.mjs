@@ -22,11 +22,14 @@
 //   figur/<id>.mjs (model, the API of the shuttle valve's), figur/tests/<id>.test.mjs
 //   package.json: test:<id> (and in "test"), bau:<id>, pruef:<id>, pruef:browser:<id>
 //   .github/workflows/tests.yml: the geometry step; figur/tests/schnitt-seiten.test.mjs: the page's name in the list
-//   .git/info/exclude: <Ordner>/index.html and the record (pitfall: a folder with an index.html is published by pages.yml —
+//   the clone's info/exclude: <Ordner>/index.html and the record (pitfall: a folder with an index.html is published by pages.yml —
 //   create it only when the page is presentable, then `git add -f <Ordner>/index.html`)
+// A draft is never published by accident: its hint says ENTWURF and carries `TODO(<id>)` into index.html; pages.yml refuses to
+// deploy a page whose index.html has `TODO(`, and figur/tests/publish-wachter.test.mjs fails for a committed one.
 // Nothing existing is overwritten: when the folder, the model or a script name exists, nothing is written.
 // It draws nothing new, writes no texts of its own and runs no git. The overview tile (figur/kacheln.mjs) stays "geplant".
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +39,13 @@ const BEZUG = "Wechselventil";
 const MARKE = ".generiert.json";
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const lies = (pfad) => readFileSync(join(WURZEL, pfad), "utf8");
+
+/** The exclude file of THIS clone (also under a git worktree, where .git is a file); null when there is no repository. */
+function ausschlussDatei() {
+  const r = spawnSync("git", ["rev-parse", "--git-path", "info/exclude"], { cwd: WURZEL, encoding: "utf8" });
+  if (r.status !== 0 || !r.stdout.trim()) return null;
+  return resolve(WURZEL, r.stdout.trim());
+}
 
 // --- arguments ----------------------------------------------------------------------------------
 const args = process.argv.slice(2);
@@ -81,8 +91,8 @@ if (entfernen) {
   pj.scripts.test = pj.scripts.test.slice(0, -M.testSuffix.length);
   writeFileSync(join(WURZEL, "package.json"), JSON.stringify(pj, null, 2) + "\n");
   for (const e of M.einfuegungen) writeFileSync(join(WURZEL, e.datei), lies(e.datei).replace(e.text, () => ""));
-  const ausschluss = join(WURZEL, ".git", "info", "exclude");
-  if (existsSync(ausschluss)) {
+  const ausschluss = ausschlussDatei();
+  if (ausschluss && existsSync(ausschluss)) {
     const zeilen = readFileSync(ausschluss, "utf8").split("\n").filter((z) => !M.ausschluss.includes(z));
     writeFileSync(ausschluss, zeilen.join("\n"));
   }
@@ -123,6 +133,8 @@ for (const q of Object.values(QUELLEN)) if (!existsSync(join(WURZEL, q))) { cons
 /** Names: paths and file names take the folder and the id, the valve's name in prose takes the name. */
 function umbenennen(text) {
   return text
+    // the symbol's own label is said by figur/schaltzeichen.mjs, not by this page: the test keeps the neutral part
+    .replaceAll('aria-label="Schaltzeichen Wechselventil', 'aria-label="Schaltzeichen ')
     .replaceAll("figur/wechselventil.mjs", `figur/${ID}.mjs`)
     .replaceAll("../wechselventil.mjs", `../${ID}.mjs`)
     .replaceAll("build-wechsel.mjs", `build-${ID}.mjs`)
@@ -150,7 +162,12 @@ const benenne = (text, muster) => text.replace(muster, (m) => `${m}TODO(${ID}): 
 
 const dateien = {};     // path (relative to the root) -> content
 const baue = lies(QUELLEN.build);
-dateien[`${ORDNER}/tests/tools/build-${ID}.mjs`] = markiereAlle(umbenennen(baue), QUELLEN.build, [
+// The draft shows itself on the card (the hint under the figure) AND carries `TODO(` into index.html, where the publish guards look.
+const hinweisAlt = 'hinweis: "Eingänge, Automatik, Zeitlupe, zerlegen",';
+if (!baue.includes(hinweisAlt)) { console.error("Nicht angelegt: der Anker der Hinweiszeile fehlt in " + QUELLEN.build + " – der Generator muss angepasst werden."); process.exit(1); }
+const baueText = umbenennen(baue).replace(hinweisAlt, () => `hinweis: "ENTWURF – nicht veröffentlichen (TODO(${ID})) · Eingänge, Automatik, Zeitlupe, zerlegen",`);
+dateien[`${ORDNER}/tests/tools/build-${ID}.mjs`] = markiereAlle(baueText, QUELLEN.build, [
+  ["hinweis: \"ENTWURF", "der Hinweis der Karte; ENTWURF und die Aufgabenmarke in der Klammer erst entfernen, wenn die Seite vorzeigbar ist (die Wächter in pages.yml und im Test sehen daran, dass sie nicht veröffentlicht werden darf)"],
   ["// A shuttle valve", "Kopfkommentar: Bauform, Quelle (Quellenkarte), Maße, was überhöht ist"],
   ["// --- Dimensions", "Maße des Gehäuses, der Sitze und der Teile aus dem Schnittbild; Annahmen kennzeichnen"],
   ["const STOPFEN =", "die Drehteile (Profile, Nuten) des Bauteils"],
@@ -181,6 +198,7 @@ dateien[`${ORDNER}/tests/tools/legende-${ID}.mjs`] = markiereAlle(umbenennen(lie
 {
   let q = umbenennen(lies(QUELLEN.seiteTest));
   q = benenne(q, /\btest\(["`]/g);
+  q = markiere(q, QUELLEN.seiteTest, 'aria-label="Schaltzeichen', "das Schaltzeichen des Bauteils nennt seinen Namen im aria-label (figur/schaltzeichen.mjs); hier den Namen eintragen");
   q = markiere(q, QUELLEN.seiteTest, "execFileSync(process.execPath", "die Erwartungen dieses Tests (Legende, Zahlen, Texte) gelten noch der Bezugsseite; durch die des Bauteils ersetzen");
   dateien[`${ORDNER}/tests/seite.test.mjs`] = q;
 }
@@ -282,13 +300,13 @@ writeFileSync(join(WURZEL, "package.json"), JSON.stringify(paket, null, 2) + "\n
 for (const e of einfuegungen) writeFileSync(join(WURZEL, e.datei), lies(e.datei).replace(e.vor, () => e.text + e.vor));
 
 const ausschluss = [`${ORDNER}/index.html`, `${ORDNER}/${MARKE}`];
-const gitInfo = join(WURZEL, ".git", "info");
-if (existsSync(gitInfo)) {
-  const pfad = join(gitInfo, "exclude");
-  const alt = existsSync(pfad) ? readFileSync(pfad, "utf8") : "";
-  writeFileSync(pfad, alt + (alt && !alt.endsWith("\n") ? "\n" : "") + ausschluss.join("\n") + "\n");
+const ausschlussPfad = ausschlussDatei();
+if (ausschlussPfad) {
+  mkdirSync(dirname(ausschlussPfad), { recursive: true });
+  const alt = existsSync(ausschlussPfad) ? readFileSync(ausschlussPfad, "utf8") : "";
+  writeFileSync(ausschlussPfad, alt + (alt && !alt.endsWith("\n") ? "\n" : "") + ausschluss.join("\n") + "\n");
 } else {
-  console.log("Hinweis: kein .git/info – die Ausschlusszeilen für index.html wurden nicht eingetragen.");
+  console.log("Hinweis: kein Git-Repository – die Ausschlusszeilen für index.html wurden nicht eingetragen.");
 }
 writeFileSync(join(WURZEL, ORDNER, MARKE), JSON.stringify({
   id: ID, ordner: ORDNER, name: NAME, rubrik: rubrik ?? null,
