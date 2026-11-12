@@ -8,103 +8,118 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LEGENDE } from "./tools/legende-rueckschlagventil.mjs";
-import { OS_1_4 as M, durchfluss, absolut, anzeige, anzeigeZeilen, neuerZustand } from "../../figur/rueckschlagventil.mjs";
+import { H_1_4 as M, durchfluss, absolut, anzeige, anzeigeZeilen, neuerZustand } from "../../figur/rueckschlagventil.mjs";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
 const WURZEL = join(HIER, "..", "..");
 const SEITE = join(WURZEL, "Rueckschlagventil", "index.html");
 const BAU = join(WURZEL, "Rueckschlagventil", "tests", "tools", "build-rueckschlagventil.mjs");
 
-// TODO(rueckschlagventil): die Erwartungen dieses Tests (Legende, Zahlen, Texte) gelten noch der Bezugsseite; durch die des Bauteils ersetzen
 execFileSync(process.execPath, [BAU], { cwd: WURZEL });
 const html = readFileSync(SEITE, "utf8");
 
-test("TODO(rueckschlagventil): Die Seite enthält keine NaN", () => {
+test("Die Seite enthält keine NaN", () => {
   assert.ok(!html.includes("NaN"), "irgendwo steht NaN in einem Pfad");
 });
 
-test("TODO(rueckschlagventil): Die Seite steht auf Deutsch und trägt ihr Symbol", () => {
+test("Die Seite steht auf Deutsch und trägt ihr Symbol", () => {
   assert.match(html, /<html lang="de">/);
   assert.match(html, /rel="icon"[^>]*favicon\.svg/);
   assert.ok(existsSync(join(WURZEL, "Rueckschlagventil", "favicon.svg")));
 });
 
-test("TODO(rueckschlagventil): Alle Bedienelemente sind da", () => {
-  for (const id of ["druck-links", "druck-rechts", "zeitlupe", "btn-auto", "btn-explode", "kontrast", "btn-theme"]) {
+test("Alle Bedienelemente sind da", () => {
+  for (const id of ["druck-eingang", "btn-entlueften", "zeitlupe", "btn-auto", "btn-explode", "kontrast", "btn-theme"]) {
     assert.ok(html.includes(`id="${id}"`), `Bedienelement ${id} fehlt`);
   }
-  // both pressure sliders from 0 to 8 bar in steps of half a bar, the slow motion starting at 1/10
-  for (const id of ["druck-links", "druck-rechts"]) assert.match(html, new RegExp(`id="${id}" min="0" max="8" step="0.5" value="0"`));
+  // the slider from 0 to 8 bar in steps of half a bar, the slow motion starting at 1/10
+  assert.match(html, /id="druck-eingang" min="0" max="8" step="0.5" value="0"/);
   assert.match(html, /id="zeitlupe"[^>]* value="10"/);
   assert.match(html, /id="zeitlupe-wert"[^>]*>1\/10</);
+  assert.match(html, /id="btn-entlueften" aria-pressed="false"[^>]*>Ausgang 2 entlüften</);
 });
 
-test("TODO(rueckschlagventil): Die Legende ist vollständig: sieben Einträge, ein Knopf je Eintrag, jede Baugruppe gezeichnet, in der Reihenfolge der Spezifikation", () => {
-  assert.equal(LEGENDE.length, 7);
-  assert.deepEqual(LEGENDE.map((e) => e.nr), ["01", "02", "03", "04", "05", "06", "07"]);
-  assert.deepEqual(LEGENDE.map((e) => e.piece), ["anschluss2", "anschluss1l", "anschluss1r", "stopfen", "oring", "koerper", "gehaeuse"]);
+test("Die Legende ist vollständig: sechs Einträge, ein Knopf je Eintrag, jede Baugruppe gezeichnet, in der Reihenfolge der Spezifikation", () => {
+  assert.equal(LEGENDE.length, 6);
+  assert.deepEqual(LEGENDE.map((e) => e.nr), ["01", "02", "03", "04", "05", "06"]);
+  assert.deepEqual(LEGENDE.map((e) => e.piece), ["anschluss2", "anschluss1", "dichtring", "feder", "teller", "gehaeuse"]);
   assert.equal((html.match(/class="pickbtn"/g) || []).length, LEGENDE.length);
   const gezeichnet = new Set([...html.matchAll(/data-piece="([a-z0-9]+)"/g)].map((m) => m[1]));
   for (const e of LEGENDE) assert.ok(gezeichnet.has(e.piece), `Legendeneintrag "${e.piece}" hat keine Teile in der Zeichnung`);
 });
 
-test("TODO(rueckschlagventil): Jeder Legendensatz hat mindestens zwei Sätze", () => {
+test("Jeder Legendensatz hat mindestens zwei Sätze, höchstens drei bis vier", () => {
   for (const e of LEGENDE) {
     const saetze = e.satz.split(/(?<=[.!?])\s+/).filter(Boolean);
-    assert.ok(saetze.length >= 2, `${e.piece}: nur ${saetze.length} Satz`);
+    assert.ok(saetze.length >= 2 && saetze.length <= 5, `${e.piece}: ${saetze.length} Sätze`);
   }
 });
 
-test("TODO(rueckschlagventil): Die Zahlen kommen aus dem Modell: 1170 l/min bei 1 bar über den offenen Eingang, nichts durch den gesperrten", () => {
-  const offen = durchfluss({ s: 0, pL: absolut(0), pR: absolut(6), p2: absolut(5) }, M);
-  assert.equal(offen.gesamt, 1170);
-  assert.equal(offen.links, 0);
-  assert.ok(html.includes("<strong>1170 l/min</strong>"), "1170 l/min fehlt im Text");
-  assert.match(LEGENDE.map((e) => e.satz).join(" "), /1170 l\/min/);
+test("Die Zahlen kommen aus dem Modell: 1000 l/min bei 1 bar über den offenen Teller, nichts bei zu, Deckel 2000 l/min", () => {
+  assert.equal(durchfluss({ h: 1, p1: absolut(6), p2: absolut(5) }, M), 1000);
+  assert.equal(durchfluss({ h: 0, p1: absolut(6), p2: absolut(0) }, M), 0);
+  assert.ok(html.includes("<strong>1000 l/min</strong>"), "1000 l/min fehlt im Text");
+  assert.ok(html.includes("<strong>2000 l/min</strong>"), "die Begrenzung 2000 l/min fehlt im Text");
+  assert.match(LEGENDE.map((e) => e.satz).join(" "), /1000 l\/min/);
   // the legend names the model's assumptions with their values
-  assert.match(LEGENDE.find((e) => e.piece === "koerper").satz, new RegExp(`${String(M.schaltdruck).replace(".", ",")} bar`));
-  assert.match(LEGENDE.find((e) => e.piece === "koerper").satz, new RegExp(`${Math.round(M.schaltzeit * 1000)} ms`));
+  const teller = LEGENDE.find((e) => e.piece === "teller").satz;
+  assert.match(teller, new RegExp(`${String(M.oeffnungsdruck).replace(".", ",")} bar`));
+  assert.match(teller, new RegExp(`${String(M.vollDp).replace(".", ",")} bar`));
+  assert.match(teller, new RegExp(`${Math.round(M.schaltzeit * 1000)} ms`));
+  assert.match(LEGENDE.find((e) => e.piece === "feder").satz, new RegExp(`${M.hub} mm`));
   // the readout stands in the page without JavaScript: two lines
   const zeilen = anzeigeZeilen(anzeige(neuerZustand(), M));
   for (const z of zeilen) assert.ok(html.includes(z), `Anzeige „${z}“ fehlt`);
-  assert.match(html, /data-readout[^>]*>Eingang links 0,0 bar/);
+  assert.match(html, /data-readout[^>]*>Eingang 1 0,0\u00a0bar/);
 });
 
-test("TODO(rueckschlagventil): Der Erklärtext hat die Wahrheitstabelle als echte HTML-Tabelle: vier Fälle, ODER", () => {
+test("Der Erklärtext hat die Zustandstabelle als echte HTML-Tabelle: offen, zu, zu und fester angedrückt", () => {
   const tabelle = html.match(/<table class="wahrheit">[^]*?<\/table>/)?.[0];
   assert.ok(tabelle, "keine Tabelle");
   assert.match(tabelle, /<caption>/);
   assert.equal((tabelle.match(/<th scope="col">/g) || []).length, 3);
-  const zeilen = [...tabelle.matchAll(/<tr><td>([01])<\/td><td>([01])<\/td><td>([01])<\/td><\/tr>/g)].map((m) => m.slice(1).map(Number));
-  assert.deepEqual(zeilen, [[0, 0, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]]);
-  for (const [l, r, a] of zeilen) assert.equal(a, l | r);
+  const zeilen = [...tabelle.matchAll(/<tr><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)].map((m) => m.slice(1));
+  assert.equal(zeilen.length, 3);
+  assert.deepEqual(zeilen.map((z) => z[1]), ["offen", "zu", "zu, fester angedrückt"]);
+  assert.match(zeilen[0][0], /Δp &gt; 0,1 bar/);
+  assert.match(zeilen[2][2], /nichts strömt zurück/);
 });
 
-test("TODO(rueckschlagventil): Der Text sagt: gesperrt ist nicht drucklos, wer zuerst kommt, was angenommen ist und wo der Eingang 1/3 nicht vorkommt", () => {
-  assert.match(html, /„Gesperrt“ heißt nicht „drucklos“/);
-  assert.match(html, /Signal, das <strong>zuerst<\/strong> kam/);
-  assert.match(html, /\(angenommen: Haftreibung und Trägheit\)/);
-  assert.match(html, /linear mit dem Druckabfall/);
-  assert.match(html, /kleinen Druckstoß/);
-  assert.match(html, /Zweidruckventil/);
-  assert.ok(!/1\/3/.test(html.replace(/id="zeitlupe-wert"[^>]*>1\/10</, "")), "der Hinweis 1/3 steht nur in der README");
+test("Der Text sagt die Annahmen: Öffnungsdruck, 5,9 bar, begrenzte Anzeige, nachgezeichnet, blauer Dichtring, Zylinder, Hülse", () => {
+  assert.match(html, /angenommen: von der Schwesterreihe H-QS des Katalogs übernommen/);
+  assert.match(html, /steigt der Druck an 2 nur bis 5,9 bar/);
+  assert.match(html, /<strong>2000 l\/min<\/strong>, und schreibt dann „\(begrenzt\)“ dazu/);
+  assert.match(html, /nachgezeichnet nach dem Funktionsprinzip/);
+  assert.match(html, /der in Wirklichkeit blau ist, ist dunkel gezeichnet/);
+  assert.match(html, /ein <strong>Zylinder<\/strong>/);
+  assert.match(html, /aufgeschraubte <strong>Hülse<\/strong> \(angenommen/);
+  assert.match(html, /href="\.\.\/Drosselrueckschlagventil\/"/);
+  assert.match(html, /href="\.\.\/Wechselventil\/"/);
+  assert.match(html, /Eingebaut wird es <strong>in Pfeilrichtung<\/strong>/);
 });
 
-test("TODO(rueckschlagventil): Das Schaltzeichen trägt nur die Ziffern 1, 1 und 2, und nur die Nummern stehen als Schrift in der Zeichnung", () => {
+test("Das Schaltzeichen trägt nur die Ziffern 1 und 2, und nur die Nummern stehen als Schrift in der Zeichnung", () => {
   const texte = [...html.matchAll(/<text[^>]*class="sz-text"[^>]*>([^<]*)</g)].map((m) => m[1]).sort();
-  assert.deepEqual(texte, ["1", "1", "2"]);
-  // TODO(rueckschlagventil): das Schaltzeichen des Bauteils nennt seinen Namen im aria-label (figur/schaltzeichen.mjs); hier den Namen eintragen
-  assert.match(html, /aria-label="Schaltzeichen /);
+  assert.deepEqual(texte, ["1", "2"]);
+  assert.match(html, /aria-label="Schaltzeichen Rückschlagventil/);
 });
 
-test("TODO(rueckschlagventil): Die Anschlussbezeichnungen stehen an den drei Schlauchenden der Zeichnung: 1, 1 und 2", () => {
+test("Die Anschlussbezeichnungen stehen an den zwei Schlauchenden der Zeichnung: 1 und 2", () => {
   const bez = [...html.matchAll(/<text class="anschluss-bez"[^>]*>([^<]*)</g)].map((m) => m[1]).sort();
-  assert.deepEqual(bez, ["1", "1", "2"]);
+  assert.deepEqual(bez, ["1", "2"]);
 });
 
-test("TODO(rueckschlagventil): Die Teile der Zeichnung: Verschlussstück, O-Ring, Körper und beide Lagen der Drehteile", () => {
-  for (const marke of ['data-lage="schnitt"', 'data-lage="ganz"', "data-hub", 'data-raum="L"', 'data-raum="R"', 'data-raum="A"', "data-mass", 'data-schnitt="b"', "data-luftlage-hinten"]) {
+test("Die Teile der Zeichnung: Sitzeinsatz, Teller, Feder, Dichtring, beide Lagen der Drehteile, die zwei Räume", () => {
+  for (const marke of ['data-lage="schnitt"', 'data-lage="ganz"', "data-hub", 'data-raum="L"', 'data-raum="R"', "data-mass", 'data-schnitt="b"', "data-luftlage-hinten", 'data-feder="']) {
     assert.ok(html.includes(marke), `${marke} fehlt in der Zeichnung`);
   }
+  assert.ok(!html.includes('data-raum="A"'), "ein Rückschlagventil hat nur zwei Räume");
   assert.equal((html.match(/<g data-teil="kugel"/g) || []).length, 1);
+  for (const piece of ["gehaeuse", "teller", "feder", "dichtring", "anschluss1", "anschluss2"]) assert.ok(html.includes(`data-piece="${piece}"`), piece);
+});
+
+test("Das Gehäuse trägt Maße des Katalogs: 48 mm lang, Schlüsselweite 19 mm als Zylinder Ø 19, Gewinde 8 mm", () => {
+  const bau = readFileSync(BAU, "utf8");
+  assert.match(bau, /const RA = 9\.5, HOEHE = 2 \* RA/);
+  assert.match(bau, /const X_HEX = 40, X_ENDE = 48/);
 });

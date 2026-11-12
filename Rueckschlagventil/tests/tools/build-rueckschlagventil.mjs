@@ -165,7 +165,10 @@ function gehaeuse() {
     `<g clip-path="url(#huelle-gehaeuse)">${SV(rumpf, { tone: "mid" })}${SV(zapfen, { tone: "mid", inner: L(ringe.join(""), { tone: "faint" }) })}</g>`,
     L(`${SCH.pfad(G.hullOf(Array.from({ length: 25 }, (_, i) => [0, -RA * Math.sin((Math.PI * i) / 24), ZA + RA * Math.cos((Math.PI * i) / 24)]).map(at)))}`, { tone: "faint" }),
     // the cut face, the outline of the hollows over it (all outlines first, then the fills, so that a junction shows no line)
-    NT.schnitt(UMRISS.map(([x, z]) => [x, 0, z])).replace("<path ", '<path data-mass="" '),
+    // the body's rectangle (the browser test reads the scale from it: bottom left, bottom right, top right, top left) and the stub's, a little
+    // overlapped so that the two show no seam
+    NT.schnitt([[0, 0, 0], [X_HEX, 0, 0], [X_HEX, 0, HOEHE], [0, 0, HOEHE]]).replace("<path ", '<path data-mass="" '),
+    NT.schnitt([[X_HEX - 0.3, 0, ZA - R_GEWINDE], [X_ENDE, 0, ZA - R_GEWINDE], [X_ENDE, 0, ZA + R_GEWINDE], [X_HEX - 0.3, 0, ZA + R_GEWINDE]]),
     L(HOHLRAUM.map(([[x0, x1, z0, z1]]) => ST.rahmen(x0, x1, z0, z1)).join(""), { tone: "mid" }),
     ...HOHLRAUM.map(ST.hohlraum),
     ...ST.raumPfade({ rechtecke: RAUM_RECHTECKE, keile: RAUM_KEILE, beideSeiten }),
@@ -336,7 +339,7 @@ const MESSPUNKTE = {
 const KONSTANTEN = `
 const HUB = ${M.hub};
 const MESSPUNKTE = ${JSON.stringify(MESSPUNKTE)};
-const GEO = ${JSON.stringify({ LAENGE: X_ENDE, HOEHE, HUB: M.hub, ZA })};
+const GEO = ${JSON.stringify({ LAENGE: X_HEX, HOEHE, HUB: M.hub, ZA })};
 const LUFTWEGE = ${JSON.stringify(LUFTWEGE)};
 const P_AUTO = 6;
 const OFFEN_AB = ${OFFEN_AB};
@@ -552,8 +555,7 @@ SS.seiteSchreiben({
   css: EIGENES_CSS,
   titel: "Rückschlagventil – Pneumatik",
   kartenTitel: "Rückschlagventil",
-  // TODO(rueckschlagventil): der Hinweis der Karte; ENTWURF und die Aufgabenmarke in der Klammer erst entfernen, wenn die Seite vorzeigbar ist (die Wächter in pages.yml und im Test sehen daran, dass sie nicht veröffentlicht werden darf)
-  hinweis: "ENTWURF – nicht veröffentlichen (TODO(rueckschlagventil))",
+  hinweis: "Eingang 1, Entlüften, Automatik, Zeitlupe, zerlegen",
   anzeige: ANZEIGE,
   schluessel: [
     { mark: "blue", label: "Kräftiges Blau: Druckluft unter Druck" },

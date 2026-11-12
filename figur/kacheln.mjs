@@ -144,9 +144,14 @@ export const RUBRIKEN = [
       {
         id: "rueckschlagventil",
         name: "Rückschlagventil",
-        satz: "Lässt die Luft nur in eine Richtung durch. Das einfachste Bauteil der Pneumatik und in fast jedem anderen eingebaut.",
-        zustand: "geplant",
-        sinnbild: "Rückschlagventil",
+        satz:
+          "Von 1 nach 2 hebt der Druck den Ventilteller gegen eine schwache Feder vom Sitz ab, und die Luft strömt durch den Ringspalt; von 2 nach 1 presst der Druck den Teller fester auf den Sitz, und nichts strömt zurück. "
+          + "Der Druck hinter dem Ventil bleibt eingesperrt. Kräftiges Blau steht unter Druck, blasses ist drucklos, und das Schaltzeichen schaltet mit. "
+          + "Regler, Entlüften, Automatik, Zeitlupe und Zerlegen.",
+        zustand: "fertig",
+        ordner: "Rueckschlagventil",
+        sinnbild: "Rückschlagventil mit Feder",
+        marken: ["H-1/4-B", "G1/4", "sperrt eine Richtung"],
       },
       {
         id: "drosselrueckschlagventil",

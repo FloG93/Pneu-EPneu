@@ -12,12 +12,13 @@ Erklärte Bauteile für Auszubildende: jedes als interaktive isometrische Zeichn
 | **Aktoren** | **Einfachwirkender Zylinder** | Rundzylinder nach dem Vorbild Festo ESNU-50-25 mit Rückstellfeder und dem 3/2-Wegeventil, das ihn ansteuert. Taster halten füllt die Kammer, loslassen lässt die Feder zurückfahren; die Federkammer atmet durch einen Filter und bleibt blass. Die Kraft p · A − Feder wird live gerechnet, Zeitlupe, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Zylinder-Einfachwirkend/) |
 | **Wegeventile** | **5/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers. Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Mono- und bistabil, Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-5-2/) |
 | **Wegeventile** | **3/2-Wegeventil** | Längsschnitt durch ein Ventil nach ISO 5599-1, Größe 1, in der Ebene des Schiebers, in Ruhe gesperrt (NC) oder in Ruhe offen (NO). Kräftiges Blau steht unter Druck, blasses ist Abluft, das Schaltzeichen schaltet mit. Zeitlupe, Schieber von Hand, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wegeventil-3-2/) |
+| **Sperr- und Stromventile** | **Rückschlagventil** | Schnitt durch ein federbelastetes Rückschlagventil (G¼, Zahlen vom Festo H-1/4-B, das Innere nachgezeichnet nach dem Funktionsprinzip, denn der Katalog zeigt keinen Schnitt): Von 1 nach 2 hebt der Druck den Teller gegen die schwache Feder ab, von 2 nach 1 presst er ihn fester auf den Sitz; der Druck hinter dem Ventil bleibt eingesperrt. Kräftiges Blau steht unter Druck, blasses ist drucklos, das Schaltzeichen schaltet mit. Regler, Entlüften, Automatik mit acht Schritten, Zeitlupe, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Rueckschlagventil/) |
 | **Sperr- und Stromventile** | **Drosselrückschlagventil** | Schnitt durch ein einstellbares Drosselrückschlagventil (G¼, Vorbild Festo GR/GRA) in seiner echten Bauform: Der Zapfen der Rändelschraube bildet mit der Bohrung des Ventileinsatzes den Ringspalt, die Lippe einer Dichtmanschette ist das Rückschlagventil. Von 1 nach 2 sperrt sie, von 2 nach 1 klappt sie nach innen. Kräftiges Blau steht unter Druck, blasses ist entspannt, das Schaltzeichen färbt den durchströmten Zweig. Richtung, Drosselschraube, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Drosselrueckschlagventil/) |
 | **Sperr- und Stromventile** | **Wechselventil (ODER)** | Schnitt durch ein Wechselventil (G¼, Zahlen vom Festo OS-1/4-B, Innenaufbau nach einem Schnittmodell von Bosch): Der lose Gummikörper liegt zwischen zwei Sitzen; der höhere Druck sperrt den anderen Eingang, bei gleichem Druck bleibt der Körper liegen (wer zuerst kommt). Kräftiges Blau steht unter Druck, blasses ist drucklos, das Schaltzeichen schaltet mit. Zwei Regler, Automatik mit acht Schritten, Zeitlupe, Knopf zum Zerlegen. | [Öffnen](https://flog93.github.io/Pneu-EPneu/Wechselventil/) |
 
 [![Doppeltwirkender Zylinder im Schnitt, mit strömender Druckluft](docs/bilder/schnitt-nah.png)](https://flog93.github.io/Pneu-EPneu/Zylinder-Doppeltwirkend/)
 
-Weitere Bauteile sind auf der Übersichtsseite als Kacheln angelegt und kommen nach und nach dazu: Zylinder mit beidseitiger Kolbenstange, Teleskop- und Tandemzylinder, kolbenstangenloser Zylinder; 4/2- und 5/3-Wegeventile; Rückschlag-, Schnellentlüftungs- und Zweidruckventil; dazu die E-Pneumatik mit Magnetspule, Relais und Stromlaufplan.
+Weitere Bauteile sind auf der Übersichtsseite als Kacheln angelegt und kommen nach und nach dazu: Zylinder mit beidseitiger Kolbenstange, Teleskop- und Tandemzylinder, kolbenstangenloser Zylinder; 4/2- und 5/3-Wegeventile; Schnellentlüftungs- und Zweidruckventil; dazu die E-Pneumatik mit Magnetspule, Relais und Stromlaufplan.
 
 ## Für wen das gemacht ist
 
@@ -49,6 +50,10 @@ Drosselrueckschlagventil/   Bauteilseite
   index.html                erzeugt, nicht von Hand geschrieben
   favicon.svg, vorschau.svg (Kachelbild), README.md
   tests/tools/build-drossel.mjs    Geometrie + vier Datentabellen
+Rueckschlagventil/          Bauteilseite
+  index.html                erzeugt, nicht von Hand geschrieben
+  favicon.svg, vorschau.svg (Kachelbild), README.md
+  tests/tools/build-rueckschlagventil.mjs    Geometrie + vier Datentabellen
 Wechselventil/              Bauteilseite
   index.html                erzeugt, nicht von Hand geschrieben
   favicon.svg, vorschau.svg (Kachelbild), README.md
@@ -58,6 +63,7 @@ figur/                      Gemeinsames Gerüst aller Figuren (keine index.html,
   pneumatik.mjs             Rechenmodell: Flächen, Kräfte, Drücke, Bewegung
   stromventil.mjs           Rechenmodell: Drosselrückschlagventil (Durchfluss, Zapfen, Lippe)
   wechselventil.mjs         Rechenmodell: Wechselventil (Körper, Sitze, Ausgangsdruck, Durchfluss)
+  rueckschlagventil.mjs     Rechenmodell: Rückschlagventil (Teller, Öffnungsdruck, eingesperrter Druck, Durchfluss)
   explode.mjs               Explosion: Wege, Federn, Tiefensortierung
   legende.mjs               Legende, Nummern, Erklärzeile
   ventil.mjs                Rechenmodell des Wegeventils: Schieber, Steuerkammern, Schaltzeit
@@ -126,6 +132,7 @@ npm run test:ventil           # nur die Tests des 5/2-Wegeventils
 npm run test:ventil32         # nur die Tests des 3/2-Wegeventils
 npm run test:drossel          # nur die Tests des Drosselrückschlagventils
 npm run test:wechsel          # nur die Tests des Wechselventils
+npm run test:rueckschlagventil  # nur die Tests des Rückschlagventils
 ```
 
 ```bash
@@ -161,6 +168,9 @@ npm run pruef:browser:drossel  # Browsertest, Server auf Port 8311 nötig
 npm run bau:wechsel            # erzeugt Wechselventil/index.html neu
 npm run pruef:wechsel          # prüft dort Geometrie in Ruhe und zerlegt
 npm run pruef:browser:wechsel  # Browsertest, Server auf Port 8311 nötig
+npm run bau:rueckschlagventil            # erzeugt Rueckschlagventil/index.html neu
+npm run pruef:rueckschlagventil          # prüft dort Geometrie in Ruhe und zerlegt
+npm run pruef:browser:rueckschlagventil  # Browsertest, Server auf Port 8311 nötig
 npm run gate -- Wechselventil  # alle Tore einer Seite, eine Zeile je Tor (Server wird selbst gestartet)
 npm run gate:alle              # alle Seiten, Tabelle Seite × Tor
 npm run neu:schnittseite -- <Ordner> <id> "<Name>"   # neue Seite der Schnitt-Familie, bau- und prüfbar
