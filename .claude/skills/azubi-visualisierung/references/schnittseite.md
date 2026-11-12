@@ -26,14 +26,14 @@ Zugriffsfallen: `festo.com/net/…`, `pdf_flip` und `didacticonline` liefern 403
 **Phase 1 – Entwurf und Plan aus der Vorlage (Controller)**
 `docs/superpowers/specs/2026-11-11-wechselventil-design.md` und `docs/superpowers/plans/2026-11-11-wechselventil.md` sind die Vorlage: Abschnitte lassen, Inhalte ersetzen. Der Entwurf enthält vorab **Abnahmekriterien**, die später gemessen werden (siehe unten), keine Adjektive.
 
-**Phase 2 – ein Implementer (Sonnet), drei Pakete statt sieben Aufgaben**
+**Phase 2 – ein Implementer (ein günstigeres Modell), drei Pakete statt sieben Aufgaben**
 - **Paket A:** Modell + Tests (RED mit echten Assertions), Symbol; ein Review nur, wenn das Modell neu denkt (Logik, nicht nur Zahlen).
 - **Paket B:** Geometrie, Legende, Zerlegen. Endet mit Screenshots (hell/dunkel, zusammen/zerlegt, 390 px) **und** den messbaren Abnahmekriterien. **Controller sieht die Bilder** (ca. 5 k Token) und gibt frei oder nennt konkrete Mängel. Das ersetzt die bisherigen Klarheitsrunden.
 - **Paket C:** Luft, Bedienung, Texte, Browsermodul, README, Kachel, CI, Veröffentlichung vorbereiten, `git add -f index.html`.
 - Nach **jedem Teilschritt** committen (Container/Limits), nicht pushen.
 - Ein Implementer pro Seite, per `SendMessage` fortgesetzt (spart Wiedereinlesen).
 
-**Phase 3 – ein Abschluss-Review (Sonnet) mit Wackel-Suche**
+**Phase 3 – ein Abschluss-Review (ein günstigeres Modell) mit Wackel-Suche**
 Inhalt: 12 Läufe der Browserprüfung (einer unter `taskset -c 0` + Last), Texte als Lehrer des ersten Lehrjahrs, Bilder ansehen, Regression der anderen Seiten, Frische (`git diff --exit-code`). Eine Korrekturrunde, dann Controller pusht und prüft live.
 
 ## Abnahmekriterien (gelernt, gehören in jeden Entwurf; wo möglich schon im gemeinsamen Prüfer)
@@ -48,12 +48,12 @@ Inhalt: 12 Läufe der Browserprüfung (einer unter `taskset -c 0` + Last), Texte
 
 ## Die Werkzeuge (gebaut) und die übrigen Hebel
 
-1. **Gemeinsamer Prüfer** `figur/tests/tools/pruefe-schnitt.mjs`: Maßstab, Zeitlupe/Automatik beim Laden, Legendensätze, kein Teilchen auf Material oder außerhalb der Luft, Laufrichtung der Teilchen, gemessener Kontrast 6 bar gegen 0 bar (≥ 2,4:1), Abhebung eines Teils, Erklärtext 4,5:1, Anzeige und Regler bei 390 px, Zerlegen (Automatik aus, bewegte Teile zu Hause, nichts strömt). Das Seitenmodul `<Ordner>/tests/tools/pruefe-<id>.mjs` ruft `schnittPruefungen({ …ctx, h, beschreibung, spezifisch })` und enthält nur Bauteilspezifisches (ca. zwei Drittel der früheren Zeilen). Die Schnittstelle (was die Seite liefern muss) steht im Kopfkommentar des Prüfers; `beschreibungPruefen` nennt Fehlendes beim Namen. **Jede neue gemeinsame Prüfung bekommt eine RED-Probe an jeder Seite, die sie nutzt.**
+1. **Gemeinsamer Prüfer** `figur/tests/tools/pruefe-schnitt.mjs`: Maßstab, Zeitlupe/Automatik beim Laden, Legendensätze, kein Teilchen auf Material oder außerhalb der Luft, Laufrichtung der Teilchen, gemessener Kontrast 6 bar gegen 0 bar (≥ 2,4:1), Abhebung eines Teils, Erklärtext 4,5:1, Anzeige und Regler bei 390 px, Zerlegen (Automatik aus, bewegte Teile zu Hause, nichts strömt). Das Seitenmodul `<Ordner>/tests/tools/pruefe-<id>.mjs` ruft `schnittPruefungen({ …ctx, h, beschreibung, spezifisch })` und enthält nur Bauteilspezifisches (ca. zwei Drittel der früheren Zeilen). Die Schnittstelle (was die Seite liefern muss) steht im Kopfkommentar des Prüfers; die wahlfreien Abschnitte (`zeitlupe`, `luftwege`, `kontrast`, `abhebung`) sind an oder ausdrücklich `{ aus: "Grund" }`, nie still ausgelassen; `beschreibungPruefen` nennt Fehlendes beim Namen. **Jede neue gemeinsame Prüfung bekommt eine RED-Probe an jeder Seite, die sie nutzt.**
 2. **Seitengerüst-Generator:** `npm run neu:schnittseite -- <Ordner> <id> "<Name>" [--rubrik sperr-und-stromventile]` (z. B. `Rueckschlagventil rueckschlagventil "Rückschlagventil"`). Legt eine **sofort bau- und prüfbare** Seite an, abgeleitet vom Wechselventil: Bauskript, Legende, Prüfmodul, `seite.test.mjs`, Modell `figur/<id>.mjs` mit Test, README-Gerüst, favicon, `package.json`-Skripte (`test:`, `bau:`, `pruef:`, `pruef:browser:`), CI-Schritt, Eintrag in `figur/tests/schnitt-seiten.test.mjs`. Jede zu ersetzende Stelle trägt `TODO(<id>)`, die Prüfungen und Tests der Kopie tragen es im Namen (nichts ist still grün): `grep -rn "TODO(<id>)" <Ordner> figur`. `<Ordner>/index.html` steht in `.git/info/exclude` (pages.yml veröffentlicht jeden Ordner mit index.html – erst bei vorzeigbarer Seite `git add -f`). Überschreibt nichts; `… <Ordner> --entfernen` nimmt eine nur generierte, unveränderte Seite wieder weg. Die Kachel in `figur/kacheln.mjs` bleibt „geplant“, bis die Seite fertig ist; `<Ordner>/.generiert.json` am Ende löschen.
 3. **Ein Kommando als Tor:** `npm run gate -- <Ordner> [--lauefe 5] [--wackel] [--weiter]` fährt `npm test`, Audit, Zerlegen, Neubau + `git diff`, Linien, Browserprüfung × N (mit `--wackel` 8 Läufe und einer unter `taskset -c 0` + Last) mit eigenem Server (PID, wird beendet) und gibt **eine Zeile je Tor** aus (`ok` / `FEHLT … – Details: <Log>` / `WARN`); alles Übrige steht in der Logdatei, deren Pfad am Ende steht. `npm run gate:alle` fährt alle Seiten und druckt die Tabelle Seite × Tor. Die Befehle sind die des Prüfkanons (ein Test vergleicht sie mit `package.json`).
 4. **Brief aus der Vorlage:** der Implementer-Brief (Regeln, Trailer, Prüfkanon, Lehren) steht als Datei; im Auftrag nur Pfad und Paket. Spart wiederholten Text.
 5. **Schnitt-Familie nutzen:** neue Seite = Maße, Hohlräume, Teile, Wege, Modell, Texte; alles andere kommt aus `figur/`. Ziel unter 400 Zeilen Bauskript, unter 20 % gleiche Zeilen zur Nachbarseite.
-6. **Modellwahl:** Controller (Recherche, Entwurf, Bilder ansehen, Freigabe) auf dem stärksten Modell; Implementer und Reviewer Sonnet; nichts davon auf Haiku (Zeichnung, Texte und Prüfungen sind nicht mechanisch genug).
+6. **Modellwahl:** Controller (Recherche, Entwurf, Bilder ansehen, Freigabe) auf dem stärksten Modell; Implementer und Reviewer auf einem günstigeren Modell; nichts davon auf dem kleinsten (Zeichnung, Texte und Prüfungen sind nicht mechanisch genug).
 7. **Reviews bündeln:** Modell-Review nur bei neuer Logik; Bilder-Review entfällt (Controller); ein Abschluss-Review mit Wackel-Suche.
 
 ## Was nicht gekürzt wird
