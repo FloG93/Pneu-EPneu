@@ -30,7 +30,7 @@
 //        silencer D = { gewinde, sechskant, rS, hals, rH, sinter, rD, kuppe }
 //   NT.druckfeder(F, fa, fb, feder)      coil of a compression spring as one
 //        <g data-federx> per tube piece, back to front; feder = { draht,
-//        windungen, rWindung }; with { teilen: true } it returns { hinten, vorn }:
+//        windungen, rWindung, stueck? (longest piece of the wire in mm, default 4: a small spring needs a smaller one to look round) }; with { teilen: true } it returns { hinten, vorn }:
 //        the pieces behind the spring's axis and the pieces in front of it, for a
 //        spring around a rod that has to be drawn between the two halves
 
@@ -227,7 +227,7 @@ export function normteile({ P, rec, put, gruppe }) {
         + (0.5 / WINDUNGEN) * zu((t * WINDUNGEN - (WINDUNGEN - 0.5)) / 0.5);
       return G.pointOf(F, fa + (fb - fa) * anteil, R_WINDUNG, w);
     });
-    const draht = tubePieces(wendel, R_DRAHT, P, { maxLength: 4, caps: true })
+    const draht = tubePieces(wendel, R_DRAHT, P, { maxLength: feder.stueck ?? 4, spacing: feder.stueck ? feder.stueck / 2 : undefined, caps: true })
       .sort((p1, p2) => G.dot3(p1.mid, V) - G.dot3(p2.mid, V));
     const stueck = (teil) => `<g data-federx="${teil.mid[0].toFixed(2)}">${tubeSvg(teil, { tone: "hi" })}</g>`;
     if (!teilen) return draht.map(stueck);

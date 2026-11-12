@@ -119,3 +119,17 @@ test("Verschraubung mit Muffe: statt des Gewindezapfens eine glatte Hülse um ei
   assert.equal(striche(muffe[0].svg), 0, "keine Gewindestriche auf der Hülse");
   assert.equal(muffe[1].svg, stummel[1].svg, "Sechskant, Körper und Ring sind dieselben");
 });
+
+test("Druckfeder: ein kleines Stück je Wendel macht eine kleine Feder glatt (feder.stueck), der Standard bleibt 4 mm", () => {
+  const P = k.fitProjection([[-20, -10, 0], [20, 10, 20]], 900, 800, { pad: 40, azimuth: 38, elevation: 34 });
+  const NT = normteile({ P, rec: (s) => s, put: () => {}, gruppe: () => {} });
+  const F = G.frameOf([0, 0, 9.5], [1, 0, 0], [0, 1, 0], [0, 0, 1]);
+  const feder = { draht: 0.8, windungen: 6, rWindung: 3.1 };
+  const standard = NT.druckfeder(F, 1, 10, feder);
+  const fein = NT.druckfeder(F, 1, 10, { ...feder, stueck: 1.2 });
+  assert.equal(NT.druckfeder(F, 1, 10, { ...feder, stueck: 4 }).length, standard.length, "stueck 4 ist der Standard");
+  assert.ok(fein.length > 2 * standard.length, `${fein.length} feine gegen ${standard.length} grobe Stücke`);
+  // the wire is also sampled finer (the default spacing of 2,2 mm would make a coil of radius 3 an octagon)
+  const punkte = (teile) => teile.join("").match(/ L/g)?.length ?? teile.join("").length;
+  assert.ok(punkte(fein) > 2 * punkte(standard));
+});
