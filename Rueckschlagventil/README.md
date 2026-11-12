@@ -60,7 +60,7 @@ Die Töne sind dieselben wie in allen Figuren (`figur/luft.mjs`) und unterscheid
 Seiten: Mit „Teller zu, 2 unter Druck, 1 drucklos“ ist der Raum hinter dem Sitz kräftig und der davor blass.
 
 **Gemessen:** Im Browsertest ist das gezeichnete Bild eines 6-bar-Raums gegen einen 0-bar-Raum mindestens 2,4 : 1 verschieden (Pixel des
-Bildschirmfotos), in beiden Modi; gemessen: KONTRAST_HELL hell, KONTRAST_DUNKEL dunkel.
+Bildschirmfotos), in beiden Modi; gemessen: **2,76 : 1 hell, 2,49 : 1 dunkel** (Eingang 1 wie Ausgang 2).
 
 **Teilchen** laufen nur, solange der Teller sichtbar abgehoben ist (ab 15 % Hub, unter einem halben Millimeter in der Zeichnung ist er so gut wie
 zu), nur auf dem einen Weg durch den Sitz, den Ringspalt um Teller und Feder und den Durchgang, in Strömungsrichtung (1 nach 2) und nie über
