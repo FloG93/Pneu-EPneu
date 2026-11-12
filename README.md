@@ -161,4 +161,7 @@ npm run pruef:browser:drossel  # Browsertest, Server auf Port 8311 nötig
 npm run bau:wechsel            # erzeugt Wechselventil/index.html neu
 npm run pruef:wechsel          # prüft dort Geometrie in Ruhe und zerlegt
 npm run pruef:browser:wechsel  # Browsertest, Server auf Port 8311 nötig
+npm run gate -- Wechselventil  # alle Tore einer Seite, eine Zeile je Tor (Server wird selbst gestartet)
+npm run gate:alle              # alle Seiten, Tabelle Seite × Tor
+npm run neu:schnittseite -- <Ordner> <id> "<Name>"   # neue Seite der Schnitt-Familie, bau- und prüfbar
 ```

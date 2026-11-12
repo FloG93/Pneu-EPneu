@@ -11,7 +11,7 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 - Nur relative Pfade (läuft lokal mit `python3 -m http.server` und auf GitHub Pages). Design und Bedienelemente aus `shared/`.
 - Jeder Ordner mit einer `index.html` wird von `pages.yml` veröffentlicht: **`index.html` erst anlegen, wenn die Seite vorzeigbar ist.** `figur/` und `docs/` haben bewusst keine.
 - Browser-Speicher: Hell/Dunkel und Kontrast stehen in `3d-druck.theme` und `3d-druck.kontrast` — **gemeinsam mit dem Repo 3D-Druck**, weil beide Seiten auf derselben Domain liegen und sich gleich anfühlen sollen. Alles Eigene beginnt mit `pneumatik.`
-- Tests: `npm test` (Node ≥ 22, `node --test`), dazu `npm run pruef:zylinder`, `pruef:zylinder-ew`, `pruef:ventil`, `pruef:ventil32`, `pruef:drossel` und `pruef:wechsel` für die Geometrie. Vor jedem Commit laufen lassen.
+- Tests: `npm test` (Node ≥ 22, `node --test`), dazu `npm run pruef:zylinder`, `pruef:zylinder-ew`, `pruef:ventil`, `pruef:ventil32`, `pruef:drossel` und `pruef:wechsel` für die Geometrie (alles auf einmal: `npm run gate:alle`). Vor jedem Commit laufen lassen.
 
 ## Die Figuren
 
@@ -83,9 +83,11 @@ Maße, die nicht aus einem Katalog oder einer Norm stammen, sind Annahmen und st
 | … einfachwirkender Zylinder | `npm run pruef:browser:zylinder-ew` (dazu `npm run pruef:zylinder-ew` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 5/2-Wegeventil | `npm run pruef:browser:ventil` (dazu `npm run pruef:ventil` für Audit und Zerlegen) | `all checks passed (90)`, fünfmal hintereinander |
 | … 3/2-Wegeventil | `npm run pruef:browser:ventil32` (dazu `npm run pruef:ventil32` für Audit und Zerlegen) | `all checks passed (132)`, fünfmal hintereinander |
-| … Drosselrückschlagventil | `npm run pruef:browser:drossel` (dazu `npm run pruef:drossel` für Audit und Zerlegen) | `all checks passed (114)`, fünfmal hintereinander |
-| … Wechselventil | `npm run pruef:browser:wechsel` (dazu `npm run pruef:wechsel` für Audit und Zerlegen) | `all checks passed (168)`, fünfmal hintereinander |
+| … Drosselrückschlagventil | `npm run pruef:browser:drossel` (dazu `npm run pruef:drossel` für Audit und Zerlegen) | `all checks passed (136)`, fünfmal hintereinander |
+| … Wechselventil | `npm run pruef:browser:wechsel` (dazu `npm run pruef:wechsel` für Audit und Zerlegen) | `all checks passed (172)`, fünfmal hintereinander |
 | Rest | `npm test` | alles grün |
+
+**Ein Befehl für alle Tore:** `npm run gate -- <Ordner> [--lauefe 5] [--wackel] [--weiter]` fährt `npm test`, Audit, Zerlegen, Neubau mit `git diff`, Linien und die Browserprüfung × N (eigener Server auf 8311, wird über die PID beendet) und gibt eine Zeile je Tor aus; Einzelheiten stehen in einer Logdatei, deren Pfad am Ende steht. `npm run gate:alle` fährt alle Seiten (Tabelle Seite × Tor). Es nutzt genau die Befehle dieser Tabelle; weicht die Zahl der Browserprüfung von der hier genannten ab, warnt es. **Die bauteilfreien Browserprüfungen der Schnitt-Familie stehen einmal in `figur/tests/tools/pruefe-schnitt.mjs`** (Schnittstelle im Kopfkommentar); das Prüfmodul der Seite enthält nur Bauteilspezifisches, jede neue gemeinsame Prüfung bekommt eine RED-Probe an jeder Seite, die sie nutzt. **Neue Seite der Schnitt-Familie:** `npm run neu:schnittseite -- <Ordner> <id> "<Name>"` legt sie bau- und prüfbar an, abgeleitet vom Wechselventil (`TODO(<id>)` an jeder zu ersetzenden Stelle; Ablauf: `.claude/skills/azubi-visualisierung/references/schnittseite.md`).
 
 Die Browserprüfungen laufen **nicht** in der CI: Playwright ist außerhalb des Repos installiert (keine npm-Pakete im Repo). Sie sind ein manueller Schritt vor jeder Veröffentlichung.
 
