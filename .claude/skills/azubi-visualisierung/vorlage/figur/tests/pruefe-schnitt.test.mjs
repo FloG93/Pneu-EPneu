@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { deflateSync } from "node:zlib";
-import { leucht, kontrastVon, farbeAus, pixelAusPng, satzZahl, beschreibungPruefen, hilfen, schnittPruefungen } from "./tools/pruefe-schnitt.mjs";
+import { fehlendeHaken, leucht, kontrastVon, farbeAus, pixelAusPng, satzZahl, beschreibungPruefen, hilfen, schnittPruefungen } from "./tools/pruefe-schnitt.mjs";
 
 /** A description that satisfies the interface. */
 const GUT = () => ({
@@ -13,6 +13,10 @@ const GUT = () => ({
   zerlegen: { zustand: [6, 0], hubTeile: '[data-g="x"] [data-hub]', hubName: "das Teil" },
   stroemung: [{ name: "Zustand A", richte: async () => {} }],
   festeTeile: ["gehaeuse"],
+  zeitlupe: true,
+  luftwege: true,
+  kontrast: { leer: [0, 0], faelle: [{ name: "a", zustand: [6, 0], raum: "L" }] },
+  abhebung: { zustand: [6, 6], raum: "A", teil: "#t", rand: "#r" },
   ruhe: [{ name: "Ruhe", zustand: [0, 0] }],
   telefon: { zustand: [6, 3], regler: ["#a", "#b", "#c"] },
   richtung: [{ name: "vor", strom: "l", richte: async () => {}, vorzeichen: 1 }],
@@ -80,4 +84,37 @@ test("Die Werkzeugkiste bietet, was die Seitenmodule brauchen", () => {
   assert.equal(hilfen({}, "dark").staerker(0.5, 0.2), true);
   assert.equal(h.staerker(0.2, 0.21), false);
   assert.equal(h.gleich(0.2, 0.205), true);
+});
+
+test("Die vier wahlfreien Abschnitte sind an oder ausdrücklich aus – mit Grund –, nie stillschweigend weg", () => {
+  for (const n of ["zeitlupe", "luftwege", "kontrast", "abhebung"]) {
+    for (const wert of [undefined, null, false]) {
+      const b = GUT();
+      b[n] = wert;
+      assert.ok(beschreibungPruefen(b).some((p) => p.includes(n) && /ausdrücklich/.test(p)), `${n}=${wert}`);
+    }
+    const ohneGrund = GUT();
+    ohneGrund[n] = { aus: "  " };
+    assert.ok(beschreibungPruefen(ohneGrund).some((p) => p.includes(n) && /Grund/.test(p)), `${n} ohne Grund`);
+    const mitGrund = GUT();
+    mitGrund[n] = { aus: "weil es das nicht gibt" };
+    assert.deepEqual(beschreibungPruefen(mitGrund), [], `${n} aus mit Grund`);
+  }
+});
+
+test("Fehlende Haken von window.__figur werden vorab mit Namen genannt", () => {
+  const alle = { geometrie: true, offen: true, weiter: true, luftwege: true, zuMm: true, messpunkte: true, bildPunkt: true, bahn: true };
+  assert.deepEqual(fehlendeHaken(GUT(), alle, { "#t": true, "#r": true }), []);
+  for (const n of ["luftwege", "zuMm", "messpunkte", "bildPunkt", "geometrie"]) {
+    const f = fehlendeHaken(GUT(), { ...alle, [n]: false }, { "#t": true, "#r": true });
+    assert.ok(f.some((x) => x.includes(`__figur.${n}`)), `${n}: ${JSON.stringify(f)}`);
+  }
+  const mitBahn = GUT();
+  mitBahn.richtung[0].optionen = { nurBohrung: true };
+  assert.ok(fehlendeHaken(mitBahn, { ...alle, bahn: false }).some((x) => x.includes("bahn")));
+  assert.ok(fehlendeHaken(GUT(), alle, { "#t": false, "#r": true }).some((x) => x.includes("abhebung.teil")));
+  // switched off sections need no hook
+  const aus = GUT();
+  Object.assign(aus, { luftwege: { aus: "x" }, kontrast: { aus: "x" }, abhebung: { aus: "x" } });
+  assert.deepEqual(fehlendeHaken(aus, { geometrie: true, offen: true, weiter: true }), []);
 });

@@ -20,19 +20,23 @@
 // What the page's `window.__figur` must offer: `geometrie` (with LAENGE; HOEHE for the scale on the other
 // axis), `offen()`, `weiter()`; for the pixel contrast `messpunkte` ({ raum: [x, z] } in mm) and
 // `bildPunkt(x, z)`; with `luftwege: true` also `luftwege` (boxes [x0, x1, z0, z1] in mm) and `zuMm(x, y)`;
-// with `nurBohrung` in a direction step `bahn(name)`. The page's drawing carries `data-mass` (the housing's
+// with `nurBohrung` in a direction step `bahn(name)`. Missing hooks are named up front (`fehlendeHaken`). The page's drawing carries `data-mass` (the housing's
 // cut face, bottom left, bottom right, top right, top left), `data-raum`, `data-strom`, `data-piece`,
 // `data-lage`, `data-hub`, `[data-corner="hint"]`, `.leiste .regler`, `.lesetext`.
 //
 // The description (`beschreibung`), all functions run in the Node side with the page's `seite`:
 //   stelle(zustand)            REQUIRED  settle the page in a state at rest (no particles); `zustand` is the
 //                              page's own value (an array, usually)
+//   Four sections are on or explicitly off, never silently skipped: `zeitlupe`, `luftwege`, `kontrast`, `abhebung` must be
+//   given. Off is `{ aus: "reason" }` (the reason is printed once per run); a section that is on is described below.
 //   zeitlupe                   true when the page has the slow-motion slider: it must start at 1/10
 //   ruhe        [{ name, zustand }]                   REQUIRED  states at rest in which no particle may stand
 //   stroemung   [{ name, richte, mindestens }]        REQUIRED  states WITH flow: `richte()` brings the page there and
 //                              waits until particles are drawn; at least `mindestens` (default 0) must be visible
 //   festeTeile  ["data-piece", …]                     REQUIRED  the solid parts no particle may lie over
-//   luftwege    true         also check that every particle lies inside `__figur.luftwege`
+//   luftwege    true         also check that every particle lies inside `__figur.luftwege` (and `__figur.zuMm`)
+//   lagen       "css"        optional: the drawn layers that are blended out when they are not in use (default "[data-lage]";
+//                              the throttle valve adds "[data-lippe]", the two shapes of its lip)
 //   richtung    [{ name, strom, richte, vorzeichen, schwelle, optionen }]  REQUIRED  `richte()` puts the stream in motion;
 //                              the particles of `strom` must run `vorzeichen` (+1 / -1) at more than `schwelle` px
 //                              per frame; `optionen` goes to `hilfen().lauf` (nurBohrung, dtMax, paare, versuche, deckkraft)
@@ -40,9 +44,10 @@
 //                              6 bar against 0 bar, measured on a screenshot pixel in the middle of the room
 //   abhebung    { name, zustand, raum, teil, rand, min }   optional  a part stands out of the strong air by `min`:1
 //   telefon     { zustand, regler, zeilenMin, zusatz }   REQUIRED  at 390 px: the readout (breaks into at least
-//                              `zeilenMin` lines when given) lies inside the window and on no hint, every slider of the
-//                              list `regler` (css selectors; the house contrast slider is always added) lies inside, with
-//                              its label when it has one (`.regler`); `zusatz()` adds the page's own measurements
+//                              `zeilenMin` lines when given) lies inside the window and on no hint; every slider of the
+//                              list `regler` (css selectors; the house contrast slider is always added) exists and lies inside;
+//                              in addition EVERY `.leiste input[type=range]` and EVERY `.regler` lies inside, named or not;
+//                              `zusatz()` adds the page's own measurements
 //   lesetext    ["css selector", …]   further elements of the explanatory text that must hold 4,5:1
 //   zerlegen    { zustand, hubTeile, hubName, zusatz }   REQUIRED  taking apart: the cycle stops, the elements of the
 //                              selector `hubTeile` stand home (no transform) and nothing flows; `zusatz()` while apart
@@ -109,9 +114,32 @@ export function beschreibungPruefen(b) {
   }
   if (!b.telefon || !b.telefon.zustand || !Array.isArray(b.telefon.regler)) p.push("telefon fehlt ({ zustand, regler: [Selektoren] })");
   if (!b.zerlegen || !b.zerlegen.zustand || !b.zerlegen.hubTeile || !b.zerlegen.hubName) p.push("zerlegen fehlt ({ zustand, hubTeile, hubName })");
-  if (b.kontrast && (!b.kontrast.leer || !liste(b.kontrast.faelle))) p.push("kontrast: leer und faelle fehlen");
+  for (const n of ["zeitlupe", "luftwege", "kontrast", "abhebung"]) {
+    if (b[n] === undefined || b[n] === null || b[n] === false) p.push(`${n} fehlt: ausgefüllt oder ausdrücklich { aus: "Grund" } (nie stillschweigend weglassen)`);
+    else if (b[n].aus !== undefined && !(typeof b[n].aus === "string" && b[n].aus.trim())) p.push(`${n}: aus braucht einen Grund als Text`);
+  }
+  if (b.kontrast && b.kontrast.aus === undefined && (!b.kontrast.leer || !liste(b.kontrast.faelle))) p.push("kontrast: leer und faelle fehlen");
+  if (b.abhebung && b.abhebung.aus === undefined && !(b.abhebung.teil && b.abhebung.rand && b.abhebung.raum && b.abhebung.zustand)) p.push("abhebung: zustand, raum, teil und rand fehlen");
   return p;
 }
+
+/**
+ * The hooks of `window.__figur` (and the elements) the description needs, minus those the page has: a list of sentences.
+ * `vorhanden` maps a hook name to true/false; `teile` the selectors of abhebung to whether they match an element.
+ */
+export function fehlendeHaken(b, vorhanden, teile = {}) {
+  const fehlt = [];
+  const brauche = (name, wozu) => { if (!vorhanden[name]) fehlt.push(`__figur.${name} fehlt (${wozu})`); };
+  for (const n of ["geometrie", "offen", "weiter"]) brauche(n, "jede Seite");
+  if (b.luftwege && !b.luftwege.aus) { brauche("luftwege", "luftwege: true"); brauche("zuMm", "luftwege: true"); }
+  if ((b.kontrast && !b.kontrast.aus) || (b.abhebung && !b.abhebung.aus)) { brauche("messpunkte", "kontrast/abhebung"); brauche("bildPunkt", "kontrast/abhebung"); }
+  if ((b.richtung ?? []).some((r) => r.optionen?.nurBohrung)) brauche("bahn", "richtung mit nurBohrung");
+  if (b.abhebung && !b.abhebung.aus) for (const k of ["teil", "rand"]) if (teile[b.abhebung[k]] === false) fehlt.push(`abhebung.${k} „${b.abhebung[k]}“ trifft kein Element`);
+  return fehlt;
+}
+
+const gemeldet = new Set();      // reasons of switched-off sections, said once per run
+const meldeAus = (name, grund) => { if (!gemeldet.has(name)) { gemeldet.add(name); console.log(`  aus     ${name}: ${grund}`); } };
 
 /** The toolbox the page modules and the shared checks use; it holds nothing about a valve. */
 export function hilfen(seite, modus) {
@@ -214,7 +242,7 @@ export function hilfen(seite, modus) {
    * out and the air's own bore of a cut fitting are not there), and with `mitWegen` also inside an air passage of the
    * page's `luftwege` (converted back from the drawing to the cut plane).
    */
-  const luftPruefung = (feste, mitWegen = false) => seite.evaluate(([f, wegen]) => {
+  const luftPruefung = (feste, mitWegen = false, lagen = "[data-lage]") => seite.evaluate(([f, wegen, lagenSel]) => {
     const falsch = [];
     let gezaehlt = 0;
     for (const cc of document.querySelectorAll("[data-strom] circle")) {
@@ -232,7 +260,7 @@ export function hilfen(seite, modus) {
       const r = cc.getBoundingClientRect();
       for (const el of document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2)) {
         // a drawn layer that is blended out (the whole-part layer, the lip's other shape) is not there
-        const lage = el.closest("[data-lippe], [data-lage]");
+        const lage = el.closest(lagenSel);
         if (lage && Number(getComputedStyle(lage).opacity) < 0.1) continue;
         if (el.closest("[data-hohl]")) continue;      // the air's own bore (shading and room) of a cut fitting
         const g = el.closest("[data-piece]");
@@ -240,7 +268,7 @@ export function hilfen(seite, modus) {
       }
     }
     return { gezaehlt, falsch };
-  }, [feste, mitWegen]);
+  }, [feste, mitWegen, lagen]);
   return { nachBildern, text, hell, staerker, gleich, kasten, masstab, teilchen, warteIrgendwoTeilchen, warteTeilchen, zeitlupe,
     pixelAnClient, pixelAnBild, lauf, luftPruefung };
 }
@@ -253,13 +281,21 @@ export async function schnittPruefungen({ seite, V, modus, beschreibung: b, spez
   const probleme = beschreibungPruefen(b);
   if (probleme.length) throw new Error(`Beschreibung der Seite unvollständig: ${probleme.join("; ")}`);
   h = h ?? hilfen(seite, modus);
-  const MESS_MIN = b.kontrast?.min ?? 2.4;
+  const aktiv = (v) => (v && v.aus === undefined ? v : null);
+  for (const n of ["zeitlupe", "luftwege", "kontrast", "abhebung"]) if (b[n].aus !== undefined) meldeAus(n, b[n].aus);
+  const zeitlupeAn = Boolean(aktiv(b.zeitlupe) ?? (b.zeitlupe === true)), luftwegeAn = Boolean(aktiv(b.luftwege) ?? (b.luftwege === true));
+  const kontrast = aktiv(b.kontrast), abhebung = aktiv(b.abhebung);
+  const haken = await seite.evaluate(() => Object.fromEntries(["geometrie", "offen", "weiter", "luftwege", "zuMm", "messpunkte", "bildPunkt", "bahn"].map((n) => [n, Boolean(window.__figur && window.__figur[n])])));
+  const teile = await seite.evaluate((sels) => Object.fromEntries(sels.map((q) => [q, Boolean(document.querySelector(q))])), abhebung ? [abhebung.teil, abhebung.rand] : []);
+  const fehlt = fehlendeHaken({ ...b, luftwege: luftwegeAn ? true : { aus: "aus" }, kontrast, abhebung }, haken, teile);
+  if (fehlt.length) throw new Error(`Die Seite bietet nicht, was ihre Beschreibung braucht: ${fehlt.join("; ")}`);
+  const MESS_MIN = kontrast?.min ?? 2.4;
   const aria = (id) => seite.getAttribute(id, "aria-pressed");
 
   // --- at the load: the scale, the slow motion, the cycle, the legend ----------------------------------------
   const m = await h.masstab();
   V(`die Zeichnung hat einen Maßstab (${m.mm.x.toFixed(2)} / ${m.mm.y.toFixed(2)} px je mm längs der Bohrung)`, m.pxX > 3);
-  if (b.zeitlupe) V("Zeitlupe beginnt bei 1/10", (await seite.inputValue("#zeitlupe")) === "10" && (await seite.textContent("#zeitlupe-wert")) === "1/10");
+  if (zeitlupeAn) V("Zeitlupe beginnt bei 1/10", (await seite.inputValue("#zeitlupe")) === "10" && (await seite.textContent("#zeitlupe-wert")) === "1/10");
   V("die Automatik läuft beim Laden", (await aria("#btn-auto")) === "true");
   const knoepfe = await seite.evaluate(() => document.querySelectorAll(".pickbtn").length);
   const duenn = [];
@@ -284,9 +320,9 @@ export async function schnittPruefungen({ seite, V, modus, beschreibung: b, spez
   V(`die festen Teile der Prüfung gibt es in der Zeichnung${fehlen.length ? " — fehlen: " + fehlen.join(", ") : ""}`, fehlen.length === 0);
   for (const z of b.stroemung) {
     await z.richte();
-    const t = await h.luftPruefung(b.festeTeile, Boolean(b.luftwege));
+    const t = await h.luftPruefung(b.festeTeile, luftwegeAn, b.lagen);
     const noetig = z.mindestens ?? 0;
-    V(`${z.name} mit Strömung: alle ${t.gezaehlt} Teilchen liegen ${b.luftwege ? "in den Luftwegen und " : ""}auf keinem festen Teil${t.falsch.length ? " — " + t.falsch.slice(0, 3).join(", ") : ""}`,
+    V(`${z.name} mit Strömung: alle ${t.gezaehlt} Teilchen liegen ${luftwegeAn ? "in den Luftwegen und " : ""}auf keinem festen Teil${t.falsch.length ? " — " + t.falsch.slice(0, 3).join(", ") : ""}`,
       t.falsch.length === 0 && t.gezaehlt >= noetig);
   }
   for (const s of b.richtung) {
@@ -299,8 +335,8 @@ export async function schnittPruefungen({ seite, V, modus, beschreibung: b, spez
   // --- the drawn colour: pressurised and vented air can be told apart at a glance -----------------------
   // Measured on the composited picture: a pixel of the screenshot in the middle of each room (the air's tint over the
   // cut face and the bore's shading under it), pressure against none: at least 2,4:1 in both modes.
-  if (b.kontrast) {
-    const k = b.kontrast;
+  if (kontrast) {
+    const k = kontrast;
     const punkte = await seite.evaluate(() => window.__figur.messpunkte);
     await b.stelle(k.leer);
     const leer = {};
@@ -321,19 +357,26 @@ export async function schnittPruefungen({ seite, V, modus, beschreibung: b, spez
       V(`${k.mitte.name} liegt gezeichnet zwischen drucklos und voll`, l > Math.min(a, c) && l < Math.max(a, c));
     }
   }
-  if (b.abhebung) {
+  if (abhebung) {
     // a part stands out of the strong air: either its fill or its edge differs from the room by 3:1
-    const a = b.abhebung;
+    const a = abhebung;
     const punkte = await seite.evaluate(() => window.__figur.messpunkte);
     await b.stelle(a.zustand);
     const t = await seite.evaluate(([teil, rand]) => {
-      const r = document.querySelector(teil).getBoundingClientRect();
-      return { mitte: [r.left + r.width / 2, r.top + r.height / 2], rand: getComputedStyle(document.querySelector(rand)).stroke };
+      const el = document.querySelector(teil);
+      const r = el.getBoundingClientRect();
+      // what is really drawn: the opacity of the part times that of every ancestor, and an edge that has width and opacity
+      let deckkraft = 1;
+      for (let e = el; e; e = e.parentElement) deckkraft *= Number(getComputedStyle(e).opacity);
+      const st = getComputedStyle(document.querySelector(rand));
+      return { mitte: [r.left + r.width / 2, r.top + r.height / 2], rand: st.stroke, deckkraft, randBreite: parseFloat(st.strokeWidth) * Number(st.strokeOpacity) };
     }, [a.teil, a.rand]);
     const fuellung = kontrastVon(await h.pixelAnClient(t.mitte), await h.pixelAnBild(punkte[a.raum]));
     const randFarbe = farbeAus(t.rand);              // `none` has no colour: then the edge does not count
-    const kante = randFarbe ? kontrastVon(randFarbe, await h.pixelAnBild(punkte[a.raum])) : 0;
-    V(`${a.name} hebt sich vom kräftigen Blau ab (Füllung ${fuellung.toFixed(2)}:1, Rand ${kante.toFixed(2)}:1)`, Math.max(fuellung, kante) >= (a.min ?? 3));
+    const kante = randFarbe && t.randBreite > 0 ? kontrastVon(randFarbe, await h.pixelAnBild(punkte[a.raum])) : 0;
+    // an invisible part has no edge to count, whatever its computed stroke says
+    V(`${a.name} hebt sich vom kräftigen Blau ab (Füllung ${fuellung.toFixed(2)}:1, Rand ${kante.toFixed(2)}:1, Deckkraft ${t.deckkraft.toFixed(2)})`,
+      t.deckkraft > 0.5 && Math.max(fuellung, kante) >= (a.min ?? 3));
   }
 
   // --- the explanatory text is readable ------------------------------------------------------------------
@@ -368,18 +411,21 @@ export async function schnittPruefungen({ seite, V, modus, beschreibung: b, spez
     const hint = document.querySelector('[data-corner="hint"]');
     const hr = hint && getComputedStyle(hint).display !== "none" ? hint.getBoundingClientRect() : null;
     const schneidet = hr ? !(r.right <= hr.left || r.left >= hr.right || r.bottom <= hr.top || r.top >= hr.bottom) : false;
+    const innen = (el) => { const q = el.getBoundingClientRect(); return q.width > 0 && q.left >= 0 && q.right <= innerWidth; };
     const regler = reglerSel.map((sel) => {
       const el = document.querySelector(sel);
-      if (!el) return false;
-      const q = (el.closest(".regler") ?? el).getBoundingClientRect();
-      return q.width > 0 && q.left >= 0 && q.right <= innerWidth;
+      return Boolean(el) && innen(el) && innen(el.closest(".regler") ?? el);
     });
-    return { l: r.left, r: r.right, w: innerWidth, zeilen: Math.round(r.height / hoehe), schneidet, hinweis: Boolean(hr), regler };
+    // and every slider and every unit of the bar, whether the page named it or not
+    const alle = [...document.querySelectorAll('.leiste input[type="range"], .regler')];
+    const draussen = alle.filter((el) => !innen(el)).map((el) => el.id || el.className || el.tagName);
+    return { l: r.left, r: r.right, w: innerWidth, zeilen: Math.round(r.height / hoehe), schneidet, hinweis: Boolean(hr), regler, alle: alle.length, draussen };
   }, [...t.regler, "#kontrast"]);
   V(`die Anzeige ${t.zeilenMin ? "bricht um und " : ""}liegt bei 390 px im Fenster (${zeile.l.toFixed(0)}…${zeile.r.toFixed(0)}${t.zeilenMin ? `, ${zeile.zeilen} Zeilen` : ""})`,
     zeile.l >= 0 && zeile.r <= zeile.w && zeile.zeilen >= (t.zeilenMin ?? 0));
   V(`die Anzeige liegt bei 390 px auf keinem Text der Karte (Hinweis ${zeile.hinweis ? "sichtbar" : "ausgeblendet"})`, !zeile.schneidet);
   V(`bei 390 px liegen alle ${zeile.regler.length} Regler im Fenster (${t.regler.join(", ")} und der Kontrastregler)`, zeile.regler.every(Boolean));
+  V(`bei 390 px liegen alle ${zeile.alle} Regler und Reglereinheiten der Leiste im Fenster${zeile.draussen.length ? " — draußen: " + zeile.draussen.join(", ") : ""}`, zeile.alle >= t.regler.length && zeile.draussen.length === 0);
   if (t.zusatz) await t.zusatz();
   await seite.setViewportSize({ width: 1280, height: 900 });
   await seite.waitForFunction(() => innerWidth === 1280);

@@ -35,6 +35,11 @@ export default async function pruefeDrossel(ctx) {
     h,
     beschreibung: {
       stelle,
+      lagen: "[data-lippe], [data-lage]",         // the lip is drawn twice (spread / folded); the other shape is blended out
+      zeitlupe: { aus: "die Seite hat keinen Zeitlupenregler (#zeitlupe)" },
+      luftwege: { aus: "window.__figur bietet weder luftwege noch zuMm" },
+      kontrast: { aus: "window.__figur bietet weder messpunkte noch bildPunkt (kein Pixelkontrast 6 bar gegen 0 bar möglich); Töne messen die Prüfungen der Seite am gezeichneten Raum" },
+      abhebung: { aus: "wie kontrast: kein bildPunkt/messpunkte; kein Teil, das sich vom Blau abheben müsste" },
       ruhe: [{ name: "Drossel zu in Drosselrichtung", zustand: ["drossel", 0] }],
       stroemung: [["drossel", 3], ["frei", 3], ["frei", 6], ["drossel", 6]].map(([r, u]) => ({
         name: `${name(r)}, ${u} Umdrehungen`, mindestens: 4,
