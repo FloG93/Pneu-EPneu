@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { hermite, stummel, federPruefen, normteile, sechskant } from "../normteile.mjs";
 import { LAUFZEIT } from "../bedienung.mjs";
 import * as k from "../../.claude/skills/anatomy/kit/iso-kit.mjs";
+import * as G from "../../.claude/skills/anatomy/kit/lathe.mjs";
 
 test("Druckfeder: Blocklänge passt – zu viele Windungen werfen", () => {
   // 15 mm in Ruhe, 7 mm Hub: 8 mm bei vollem Hub
@@ -94,4 +95,27 @@ test("Druckfeder mit teilen: hinten und vorn zusammen sind genau die ganze Wende
   assert.equal(hinten.length + vorn.length, ganz.length);
   assert.ok(hinten.length > 10 && vorn.length > 10, `hinten ${hinten.length}, vorn ${vorn.length}`);
   assert.ok([...hinten, ...vorn].every((s) => s.startsWith("<g data-federx=")));
+});
+
+test("Verschraubung mit Muffe: statt des Gewindezapfens eine glatte Hülse um ein Außengewinde, ohne Gewindestriche", () => {
+  const P = k.fitProjection([[-20, -10, 0], [20, 10, 20]], 900, 800, { pad: 40, azimuth: 38, elevation: 34 });
+  const gebaut = (D, r) => {
+    const items = [];
+    const NT = normteile({ P, rec: (s) => s, put: (pos, svg, shapes, extra) => items.push({ svg, shapes, extra }), gruppe: () => {} });
+    NT.verschraubung(G.frameOf([48, 0, 9.5], [1, 0, 0], [0, 1, 0], [0, 0, 1]), D, "a", "a", ([a, b]) => [48 + (a + b) / 2, 0, 9.5], r);
+    return items;
+  };
+  const D = { gewinde: [-6.5, 0], sechskant: [0, 3.5], rS: 7.6, koerper: [3.5, 8], rK: 6, ring: [8, 9.5], rR: 5.2 };
+  const stummel = gebaut(D, 6.3);
+  const muffe = gebaut({ ...D, muffe: { rIn: 6.5 } }, 7.6);
+  assert.equal(muffe.length, stummel.length, "gleich viele Teile");
+  assert.equal(muffe[0].extra.name, "a.gewinde", "die Hülse trägt den Namen des Gewindeteils (daran hängt der Schnitt)");
+  const radien = (teil) => teil.shapes[0].poly.map(([, r]) => r);
+  assert.equal(Math.min(...radien(stummel[0])), 0, "der Zapfen ist ein voller Zylinder");
+  assert.equal(Math.min(...radien(muffe[0])), 6.5, "die Hülse ist ein Ring um das Außengewinde (Innenradius 6,5)");
+  assert.equal(Math.max(...radien(muffe[0])), 7.6);
+  const striche = (svg) => (svg.match(/<path class="iso-line"/g) || []).length;   // the thread rings are one line path
+  assert.equal(striche(stummel[0].svg), 1);
+  assert.equal(striche(muffe[0].svg), 0, "keine Gewindestriche auf der Hülse");
+  assert.equal(muffe[1].svg, stummel[1].svg, "Sechskant, Körper und Ring sind dieselben");
 });

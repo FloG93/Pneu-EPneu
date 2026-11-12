@@ -448,14 +448,17 @@ export function schnittTeile({ P, MOVE, R, rec, put, gruppe, NT }) {
     return { KEYS, LIFT, VIEW0, VIEW1, MITTE };
   }
 
-  /** The drawing: every item in its group, and the empty layer the page puts the particles of the hoses in. */
+  /**
+   * The drawing: every item in its group (a spring's group carries its x range as `data-feder`, for figur/normteile.mjs `FEDER_LAUFZEIT`),
+   * and the empty layer the page puts the particles of the hoses in.
+   */
   function figur({ W, H, label }) {
     return k.figureSvg({
       width: W,
       height: H,
       label,
       body: [
-        R.items.map((it) => `<g data-g="${it.gruppe}" data-piece="${it.piece}">${it.svg}</g>`).join(""),
+        R.items.map((it) => `<g data-g="${it.gruppe}" data-piece="${it.piece}"${it.feder ? ` data-feder="${it.feder.join(" ")}"` : ""}>${it.svg}</g>`).join(""),
         `<g class="luft" data-luftlage=""></g>`,
       ],
     });

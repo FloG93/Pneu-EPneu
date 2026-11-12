@@ -24,7 +24,8 @@
 //   NT.gewinde(F, s0, s1, r)             threaded stub, thread as rings
 //   NT.verschraubung(F, D, gruppe, name, ort, rGewinde)
 //        push-in fitting D = { gewinde, sechskant, rS, koerper, rK, ring, rR };
-//        ort([a, b]) gives the middle of a range along the axis
+//        ort([a, b]) gives the middle of a range along the axis; with D.muffe = { rIn } the
+//        range `gewinde` is a plain sleeve of the outer radius rGewinde for an external thread
 //   NT.schalldaempfer(F, D, nr, ort, rGewinde)
 //        silencer D = { gewinde, sechskant, rS, hals, rH, sinter, rD, kuppe }
 //   NT.druckfeder(F, fa, fb, feder)      coil of a compression spring as one
@@ -157,8 +158,13 @@ export function normteile({ P, rec, put, gruppe }) {
 
   function verschraubung(F, D, gr, name, ort, rGewinde) {
     gruppe(gr);
-    put(ort(D.gewinde), gewinde(F, D.gewinde[0], D.gewinde[1], rGewinde),
-      [rec(A.disc(F, D.gewinde[0], D.gewinde[1], rGewinde, { name: `${name}.gewinde` }))],
+    // With `D.muffe = { rIn }` the fitting does not screw into a port: it is a sleeve of the outer radius `rGewinde` that
+    // is screwed onto an external thread of the radius `rIn` (a plain sleeve, no thread rings, recorded as a ring).
+    const muffe = D.muffe;
+    put(ort(D.gewinde), muffe ? SV(G.disc(D.gewinde[0], D.gewinde[1], rGewinde, F, P), { tone: "mid" }) : gewinde(F, D.gewinde[0], D.gewinde[1], rGewinde),
+      [rec(muffe
+        ? A.ring(F, D.gewinde[0], D.gewinde[1], muffe.rIn, rGewinde, { name: `${name}.gewinde` })
+        : A.disc(F, D.gewinde[0], D.gewinde[1], rGewinde, { name: `${name}.gewinde` }))],
       { name: `${name}.gewinde` });
     const hx = sechskant(D.rS);
     put(ort([D.sechskant[0], D.ring[1]]), [

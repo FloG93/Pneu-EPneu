@@ -133,6 +133,17 @@ test("Zeichnung: jede Gruppe mit Baugruppe, dazu die leere Luftlage", () => {
   assert.match(svg, /<g class="luft" data-luftlage=""><\/g>/);
 });
 
+test("Zeichnung: ein Teil mit Feder trägt data-feder (x-Bereich der Windungen), die anderen nicht", () => {
+  const { ST, put, gruppe } = neu();
+  gruppe("feder");
+  put([50, 0, 20], "<g class=\"w\"/>", [], { name: "feder.wendel", feder: [12.5, 31.4] });
+  gruppe("teil");
+  put([50, 0, 20], "<g class=\"x\"/>", [], { name: "teil.a" });
+  const svg = ST.figur({ W: 900, H: 800, label: "Ein Test" });
+  assert.match(svg, /<g data-g="feder" data-piece="feder" data-feder="12\.5 31\.4"><g class="w"\/><\/g>/);
+  assert.match(svg, /<g data-g="teil" data-piece="teil"><g class="x"\/><\/g>/);
+});
+
 test("Anschluss im Schnitt: acht Wände, zwei Schlauchwände, Luftraum und Bohrung, am ersten Teil der Verschraubung aufgehängt", () => {
   const { ST, R, put, gruppe } = neu();
   gruppe("verschraubung");
