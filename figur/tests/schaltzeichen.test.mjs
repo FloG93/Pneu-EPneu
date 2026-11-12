@@ -6,6 +6,7 @@ import {
   VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, zylinderSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT,
   drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT,
   wechselventilSymbol, WECHSEL_SYMBOL_CSS, WECHSEL_SYMBOL_LAUFZEIT,
+  rueckschlagventilSymbol, RUECK_SYMBOL_CSS, RUECK_SYMBOL_LAUFZEIT, VENTIL_RUECK,
 } from "../schaltzeichen.mjs";
 
 test("5/2 hat zwei Felder mit je zwei Wegen", () => {
@@ -418,4 +419,134 @@ test("Das Wechselventil-Symbol ändert die anderen Symbole nicht: Ausgaben byte-
   assert.equal(h(drosselRueckschlagSymbol({ feder: false, feld: 90 }).svg), "34d9394e4f1a3dde1d7d3027d4a1127c5199564ef82af6e9f3b5031713564c0e");
   assert.equal(h(zylinderSymbol().svg), "ea6d02816f27cc00ff1ee42b9fe10a0548aecbd43bd35c74cafeb1beba322e56");
   assert.equal(h(SYMBOL_CSS + DROSSEL_SYMBOL_CSS + SYMBOL_LAUFZEIT + DROSSEL_SYMBOL_LAUFZEIT), "5b19288f6a576f50d1f8bdb45dc4627b3d4d91abf96e788a3b634fbd2e1506d9");
+});
+
+// --- Rückschlagventil mit Feder (ISO 1219-1) ---------------------------------------------
+// A line from port 1 (left) to port 2 (right); in it a ball in a V seat whose apex points to 1 and whose arms open
+// towards the ball, a spring on the other side of the ball pressing it into the seat, a stop bar behind the spring.
+// Flow 1 -> 2 lifts the ball off the seat (free), flow 2 -> 1 presses it in (blocked).
+
+test("Rückschlagventil: eine Kugel, ein V-Sitz mit der Spitze zum Anschluss 1, Feder und Anschlag auf der Seite von 2", () => {
+  const { svg, breite, hoehe } = rueckschlagventilSymbol();
+  assert.ok(!svg.includes("NaN"));
+  assert.match(svg, new RegExp(`viewBox="0 0 ${breite} ${hoehe}"`));
+  assert.match(svg, /role="img"/);
+  assert.match(svg, /aria-label="Schaltzeichen Rückschlagventil/);
+  assert.equal((svg.match(/<circle class="sz-kugel"/g) || []).length, 1);
+  assert.equal((svg.match(/<path class="sz-sitz"/g) || []).length, 1);
+  assert.equal((svg.match(/<path class="sz-feder"/g) || []).length, 1);
+  assert.equal((svg.match(/<path class="sz-anschlag"/g) || []).length, 1);
+  assert.equal((svg.match(/<rect/g) || []).length, 0, "ein Rückschlagventil hat kein Rechteck");
+  const sitz = svg.match(/<path class="sz-sitz" d="M([\d.]+) ([\d.]+)L([\d.]+) ([\d.]+)L([\d.]+) ([\d.]+)"/).slice(1).map(Number);
+  assert.ok(sitz[0] > sitz[2] && sitz[4] > sitz[2], "Spitze links, Schenkel nach rechts");
+  assert.equal(sitz[3], sitz[1] + (sitz[5] - sitz[1]) / 2, "Spitze auf der Mitte der Schenkel");
+  const kugel = svg.match(/<circle class="sz-kugel" cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/).slice(1).map(Number);
+  assert.ok(Math.abs(kugel[0] - kugel[2] * Math.SQRT2 - sitz[2]) < 0.02, "Ruhelage: die Schenkel berühren die Kugel (Mitte = Spitze + r·√2)");
+  assert.equal(kugel[1], sitz[3]);
+  const anschlag = svg.match(/<path class="sz-anschlag" d="M([\d.]+) /)[1];
+  assert.ok(Number(anschlag) > kugel[0] + kugel[2], "Anschlag rechts von der Kugel");
+});
+
+test("Rückschlagventil: nur die Texte 1 und 2; 1 über der Leitung links, 2 über der Leitung rechts", () => {
+  const { svg } = rueckschlagventilSymbol({ feld: 90 });
+  const texte = [...svg.matchAll(/<text[^>]*x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]*)<\/text>/g)].map((m) => ({ x: +m[1], y: +m[2], t: m[3] }));
+  assert.deepEqual(texte.map((t) => t.t).sort(), ["1", "2"]);
+  const sitzX = Number(svg.match(/<path class="sz-sitz" d="M[\d.]+ [\d.]+L([\d.]+) /)[1]);
+  assert.ok(texte.find((t) => t.t === "1").x < sitzX && texte.find((t) => t.t === "2").x > sitzX);
+  for (const nr of ["1", "2"]) assert.match(svg, new RegExp(`data-anschluss="${nr}"`));
+});
+
+test("Rückschlagventil: die drei Teile für die Laufzeit tragen data-teil (Eingang, Kugel, Ausgang)", () => {
+  const { svg } = rueckschlagventilSymbol();
+  for (const t of ["eingang", "kugel", "ausgang"]) assert.equal((svg.match(new RegExp(`data-teil="${t}"`, "g")) || []).length, 1, t);
+  const eingang = svg.slice(svg.indexOf('data-teil="eingang"'), svg.indexOf('data-teil="kugel"'));
+  assert.match(eingang, /data-mitte/);
+  const ausgang = svg.slice(svg.indexOf('data-teil="ausgang"'));
+  assert.match(ausgang, /class="sz-feder"/);       // the spring chamber is at the pressure of output 2
+  assert.match(ausgang, /class="sz-anschlag"/);
+});
+
+test("Rückschlagventil: alle Koordinaten liegen in der viewBox, die Kugel auch bei offenem Teller", () => {
+  for (const feld of [60, 90]) {
+    const { svg, breite, hoehe } = rueckschlagventilSymbol({ feld });
+    for (const m of svg.matchAll(/ d="([^"]+)"/g)) {
+      for (const p of m[1].matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)) {
+        assert.ok(+p[1] >= 0 && +p[1] <= breite && +p[2] >= 0 && +p[2] <= hoehe, `${feld}: ${p[0]}`);
+      }
+    }
+    const k = svg.match(/<circle class="sz-kugel" cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/).map(Number);
+    const weg = Number(svg.match(/data-kugelweg="([\d.]+)"/)[1]);
+    const anschlag = Number(svg.match(/<path class="sz-anschlag" d="M([\d.]+) /)[1]);
+    assert.ok(k[1] + weg + k[3] < anschlag - 0.15 * feld, "die Feder bleibt auch bei offenem Teller sichtbar lang");
+  }
+});
+
+function rueckDom(svg) {
+  const klassen = () => { const set = new Set(); return { set, add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) }; };
+  const attrs = Object.fromEntries([...svg.match(/<svg[^>]*>/)[0].matchAll(/ (data-[a-z0-9-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
+  const feder = { attrs: {}, getAttribute(n) { return n === "class" ? "sz-feder" : this.attrs[n] ?? null; }, setAttribute(n, v) { this.attrs[n] = v; } };
+  feder.attrs.d = svg.match(/<path class="sz-feder" d="([^"]*)"/)[1];
+  const teile = ["kugel", "eingang", "ausgang"].map((t) => ({ t, attrs: {}, classList: klassen(),
+    getAttribute(n) { return n === "data-teil" ? t : this.attrs[n] ?? null; }, setAttribute(n, v) { this.attrs[n] = v; } }));
+  const mitte = { attrs: {}, getAttribute(n) { return n === "data-mitte" ? "" : this.attrs[n] ?? null; }, setAttribute(n, v) { this.attrs[n] = v; } };
+  return {
+    teile, mitte, feder,
+    getAttribute: (n) => attrs[n] ?? null,
+    querySelector: (s) => (s === "[data-feder]" ? feder : null),
+    querySelectorAll: (s) => (s === "[data-teil]" ? teile : s === "[data-mitte]" ? [mitte] : []),
+  };
+}
+
+test("Rückschlagventil: Laufzeit hebt die Kugel um h · Weg, staucht die Feder und färbt Eingang und Ausgang", () => {
+  const { svg } = rueckschlagventilSymbol({ feld: 60 });
+  const el = rueckDom(svg);
+  const stellen = new Function(`${RUECK_SYMBOL_LAUFZEIT}; return rueckSymbolStellen;`)();
+  const weg = Number(svg.match(/data-kugelweg="([\d.]+)"/)[1]);
+  const kugel = el.teile[0];
+  const ton = (t) => [...el.teile.find((x) => x.t === t).classList.set].join(" ");
+  const federEnde = (d) => Number([...d.matchAll(/[ML]([-\d.]+) /g)].map((m) => m[1]).at(-1));
+  stellen(el, { h: 0, eingang: "blass", ausgang: "stark" });
+  assert.match(kugel.attrs.transform, /translate\(0 0\)/);
+  assert.equal(ton("eingang"), "blass"); assert.equal(ton("ausgang"), "stark");
+  const d0 = el.feder.attrs.d;
+  assert.equal(d0, svg.match(/<path class="sz-feder" d="([^"]*)"/)[1], "h = 0 zeichnet die Feder wie die statische Zeichnung");
+  assert.equal(el.mitte.attrs.d, "", "auf dem Sitz: kein Leitungsstück zwischen Spitze und Kugel");
+  stellen(el, { h: 1, eingang: "stark", ausgang: null });
+  assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 100) / 100} 0)`);
+  assert.equal(ton("eingang"), "stark"); assert.equal(ton("ausgang"), "");
+  assert.match(el.mitte.attrs.d, /^M[\d.]+ [\d.]+L[\d.]+ [\d.]+$/, "offen: das Leitungsstück zwischen Spitze und Kugel erscheint");
+  // the spring is shorter by exactly the lift, its stop end stays
+  const anschlag = Number(svg.match(/<path class="sz-anschlag" d="M([\d.]+) /)[1]);
+  const laenge = (d) => anschlag - Number([...d.matchAll(/[ML]([-\d.]+) /g)].map((m) => m[1])[1]);
+  assert.ok(laenge(el.feder.attrs.d) < laenge(d0) - weg + 0.5 && laenge(el.feder.attrs.d) > laenge(d0) - weg - 3, "Feder um den Hub kürzer");
+  void federEnde;
+  stellen(el, { h: 7 });                       // out of range is clamped, missing tones clear
+  assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 100) / 100} 0)`);
+  assert.equal(ton("eingang"), "");
+  stellen(el, { h: Number.NaN });
+  assert.match(kugel.attrs.transform, /translate\(0 0\)/);
+  stellen(el, { h: 0.5 });
+  assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 50) / 100} 0)`);
+});
+
+test("Rückschlagventil: Laufzeit und Stil ohne Backtick, Laufzeit gültig, Namen kollidieren nicht mit den anderen Laufzeiten", () => {
+  assert.ok(!RUECK_SYMBOL_LAUFZEIT.includes("`") && !RUECK_SYMBOL_CSS.includes("`"));
+  assert.doesNotThrow(() => new Function(RUECK_SYMBOL_LAUFZEIT));
+  assert.doesNotThrow(() => new Function(`${SYMBOL_LAUFZEIT}\n${DROSSEL_SYMBOL_LAUFZEIT}\n${WECHSEL_SYMBOL_LAUFZEIT}\n${RUECK_SYMBOL_LAUFZEIT}`));
+  assert.ok(typeof VENTIL_RUECK === "object" && VENTIL_RUECK.frei === "1-2");
+});
+
+test("Das Rückschlagventil-Symbol ändert die anderen Symbole nicht: Ausgaben byte-gleich", async () => {
+  const { createHash } = await import("node:crypto");
+  const h = (s) => createHash("sha256").update(s).digest("hex");
+  assert.equal(h(drosselRueckschlagSymbol().svg), "2accc274edc18de7d68066ec356a28231b165bfa10469b9c03f7ffa2df534274");
+  assert.equal(h(drosselRueckschlagSymbol({ feder: false, feld: 90 }).svg), "34d9394e4f1a3dde1d7d3027d4a1127c5199564ef82af6e9f3b5031713564c0e");
+  assert.equal(h(zylinderSymbol().svg), "ea6d02816f27cc00ff1ee42b9fe10a0548aecbd43bd35c74cafeb1beba322e56");
+  assert.equal(h(SYMBOL_CSS + DROSSEL_SYMBOL_CSS + SYMBOL_LAUFZEIT + DROSSEL_SYMBOL_LAUFZEIT), "5b19288f6a576f50d1f8bdb45dc4627b3d4d91abf96e788a3b634fbd2e1506d9");
+  assert.equal(h(wechselventilSymbol().svg), "d3deb1c0faa09a0b6ec3df1717f695517530df0b0a8a157a3b4054151cc900ac");
+  assert.equal(h(wechselventilSymbol({ feld: 90 }).svg), "91a1d40defd3b3074dbbc543665380aa818a4ff030cba8c3f96a742a452a8f86");
+  assert.equal(h(WECHSEL_SYMBOL_CSS + WECHSEL_SYMBOL_LAUFZEIT), "cd8f7528e4bf350150259dd883961d8f259d139efe9a592789b771466e968d2e");
+  assert.equal(h(wegeventilSymbol(VENTIL_5_2).svg), "637573278cf67f4292340f13587e8e0fe24f78856d65b684ff75bce11264285a");
+  assert.equal(h(wegeventilSymbol(VENTIL_3_2_NC).svg), "ff4923901b55559e44a706ecff2fde89f05d3940c72d290d00daf31e588608af");
+  assert.equal(h(wegeventilSymbol(VENTIL_3_2_NO).svg), "71676cac767375e535260c7131341e57834498535cce9450a6496f6f8a565355");
 });
