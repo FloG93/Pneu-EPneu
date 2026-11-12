@@ -55,6 +55,10 @@ jobs:
         if: steps.pages.outputs.enabled == 'true'
         run: |
           mkdir -p _site
+          if grep -q 'TODO(' index.html; then
+            echo "::error title=Entwurf nicht veröffentlichen::index.html enthält TODO("
+            exit 1
+          fi
           cp index.html _site/
           # Gemeinsamer Code der Seiten (Design, Bedienelemente, Kontrastregler).
           cp -r shared _site/shared
@@ -63,9 +67,14 @@ jobs:
           for dir in */; do
             page="${dir%/}"
             [ "$page" != _site ] && [ "$page" != shared ] && [ -f "$page/index.html" ] || continue
+            # Ein Entwurf (Seite aus neue-schnittseite.mjs, noch mit TODO-Marken) wird nicht veröffentlicht.
+            if grep -q 'TODO(' "$page/index.html"; then
+              echo "::error title=Entwurf nicht veröffentlichen::$page/index.html enthält TODO( – die Seite ist noch ein Entwurf. Marken ersetzen oder die index.html nicht einchecken."
+              exit 1
+            fi
             # Nicht auf die Seite: Tests, Bauskripte, Doku-Bilder.
             cp -r "$page" "_site/$page"
-            rm -rf "_site/$page/tests" "_site/$page/docs" "_site/$page/README.md"
+            rm -rf "_site/$page/tests" "_site/$page/docs" "_site/$page/README.md" "_site/$page/.generiert.json"
             echo "Veröffentlicht: /$page/"
           done
       - uses: actions/configure-pages@v5
