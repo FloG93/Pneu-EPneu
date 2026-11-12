@@ -33,7 +33,8 @@
     "pruef:browser:ventil32": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Wegeventil-3-2/ Wegeventil-3-2/tests/tools/pruefe-ventil-3-2.mjs",
     "pruef:browser:drossel": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Drosselrueckschlagventil/ Drosselrueckschlagventil/tests/tools/pruefe-drossel.mjs",
     "pruef:browser:wechsel": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Wechselventil/ Wechselventil/tests/tools/pruefe-wechsel.mjs",
-    "pruef:linien": "node .claude/skills/anatomy/scripts/lines.mjs Zylinder-Doppeltwirkend/index.html"
+    "pruef:linien": "node .claude/skills/anatomy/scripts/lines.mjs Zylinder-Doppeltwirkend/index.html",
+    "neu:schnittseite": "node .claude/skills/azubi-visualisierung/scripts/neue-schnittseite.mjs"
   },
   "engines": {
     "node": ">=22"
