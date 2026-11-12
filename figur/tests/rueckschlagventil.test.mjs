@@ -203,18 +203,18 @@ test("anzeige: Gegendruck zeigt negatives Δp, Teller zu, Durchfluss 0; Begrenzu
   assert.deepEqual(w, { p1: 6, p2: 0, dp: 6, teller: "offen", q: 2000, begrenzt: true, gegendruck: false });
 });
 
-test("anzeigeZeilen: zwei Zeilen, deutsches Komma, echtes Minus, nennt Gegendruck und Begrenzung", () => {
+test("anzeigeZeilen: zwei Zeilen, deutsches Komma, echtes Minus, feste Leerzeichen zwischen Zahl und Einheit, nennt Gegendruck und Begrenzung", () => {
   assert.deepEqual(anzeigeZeilen(anzeige(zustand(1, b(6), b(5)), M)), [
-    "Eingang 1 6,0 bar · Ausgang 2 5,0 bar · Δp 1,0 bar",
-    "Teller offen · Durchfluss 1000 l/min",
+    "Eingang 1 6,0 bar · Ausgang 2 5,0 bar · Δp 1,0 bar",
+    "Teller offen · Durchfluss 1000 l/min",
   ]);
   assert.deepEqual(anzeigeZeilen(anzeige(zustand(0, b(3), b(6)), M)), [
-    "Eingang 1 3,0 bar · Ausgang 2 6,0 bar · Δp −3,0 bar",
-    "Teller zu (Gegendruck) · Durchfluss 0 l/min",
+    "Eingang 1 3,0 bar · Ausgang 2 6,0 bar · Δp −3,0 bar",
+    "Teller zu (Gegendruck) · Durchfluss 0 l/min",
   ]);
   assert.deepEqual(anzeigeZeilen(anzeige(zustand(0.5, b(0.3), b(0)), M)), [
-    "Eingang 1 0,3 bar · Ausgang 2 0,0 bar · Δp 0,3 bar",
-    "Teller halb offen · Durchfluss 150 l/min",
+    "Eingang 1 0,3 bar · Ausgang 2 0,0 bar · Δp 0,3 bar",
+    "Teller halb offen · Durchfluss 150 l/min",
   ]);
-  assert.match(anzeigeZeilen(anzeige(zustand(1, b(6), b(0)), M))[1], /^Teller offen · Durchfluss 2000 l\/min \(begrenzt\)$/);
+  assert.match(anzeigeZeilen(anzeige(zustand(1, b(6), b(0)), M))[1], /^Teller offen · Durchfluss 2000\u00a0l\/min \(begrenzt\)$/);
 });

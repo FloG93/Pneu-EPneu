@@ -15,6 +15,7 @@ import * as k from "../../../.claude/skills/anatomy/kit/iso-kit.mjs";
 import * as G from "../../../.claude/skills/anatomy/kit/lathe.mjs";
 import * as A from "../../../.claude/skills/anatomy/kit/audit.mjs";
 import { tubePieces, tubeSvg } from "../../../.claude/skills/anatomy/kit/tube.mjs";
+import * as LU from "../../../figur/luft.mjs";
 import * as VS from "../../../figur/ventilseite.mjs";
 import * as SS from "../../../figur/schnittseite.mjs";
 import * as SCH from "../../../figur/schnitt.mjs";
@@ -298,12 +299,33 @@ const svg = ST.figur({
 const ANZEIGE = anzeigeZeilen(anzeige(neuerZustand(), M)).join("\n");
 const P_MAX = 8;                                     // bar: the slider's top
 const P_VOLL = 6;                                    // bar: from here on a room shows the full strong blue
+const OFFEN_AB = 0.15;                               // lift: from here on the poppet counts as open and the particles show (below it, the lift is under half a millimetre)
 // The automatic cycle, eight steps (the spec's order): [pressure at 1 in bar, vent of 2 open]. Open, hold, shut, hold (2 keeps its
 // pressure), a lower pressure at 1 than at 2 (the poppet stays shut), hold, vent 2, hold.
 const AUTO_SCHRITTE = [[6, 0], [6, 0], [0, 0], [0, 0], [3, 0], [3, 0], [0, 1], [0, 1]];
 
+// --- Air: the way the particles take, in the cut plane ---------------------------------------------------------------------
+// One route from the hose of port 1 to the hose of port 2, only through free space: along the axis through the fitting and the seat's
+// hole, out through the gap between the seat's cone and the lifted poppet, along the annular gap round the poppet and the spring
+// (the bore is Ø 9, the poppet Ø 8, the spring Ø 7: the gap lies between them), then down to the axis at the stop and through the
+// passage and the right fitting to the hose of port 2. It is drawn for the FULLY lifted poppet; the page shows particles only while the
+// model lets air flow, that is, while the poppet is lifted. A shut poppet carries nothing, so no particle stands at it.
+const ENDE_1 = punktAn("1", VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE)[0] + 1;
+const ENDE_2 = punktAn("2", VERSCHRAUBUNG.ring[1] + SCHLAUCH_LAENGE)[0] - 1;
+const R_SPALT = (R_TELLER + R_BOHR) / 2;            // the annular gap round the poppet
+const ROUTEN = {
+  a: [[ENDE_1, 0, ZA], [X_KEGEL - 0.5, 0, ZA], [X_KEGEL + 0.8, 0, ZA + 2.9], [X_SITZ1 + 0.6, 0, ZA + R_SPALT], [X_ANSCHLAG - 1.2, 0, ZA + R_SPALT],
+    [X_ANSCHLAG - 0.4, 0, ZA + 1.4], [X_ANSCHLAG + 0.8, 0, ZA], [ENDE_2, 0, ZA]],
+};
+const BAHNEN = Object.fromEntries(Object.entries(ROUTEN).map(([name, punkte]) => [name, LU.bahn(punkte, P, k.iso)]));
+
 // Where there is air, in mm in the cut plane (x0, x1, z0, z1): what the particles may run through. The browser test reads it.
-const LUFTWEGE = [];
+const LUFTWEGE = [
+  [ENDE_1, 0, ZA - R_SCHLAUCH_INNEN, ZA + R_SCHLAUCH_INNEN], [0, X_GEW, ZA - 4, ZA + 4],                  // the hose and the bore of the left fitting
+  [X_SITZ0, X_KEGEL, ZA - R_SITZ, ZA + R_SITZ], [X_KEGEL, X_SITZ1, ZA - R_BOHR, ZA + R_BOHR],            // the seat's hole and its cone
+  [X_SITZ1, X_ANSCHLAG, ZA - R_BOHR, ZA + R_BOHR],                                                       // the chamber with the poppet and the spring
+  [X_ANSCHLAG, X_ENDE, ZA - R_DURCH, ZA + R_DURCH], [X_ENDE, ENDE_2 + 1, ZA - 4, ZA + 4],               // the passage and the bore of the right fitting and its hose
+];
 
 // Where the browser test reads the drawn colour of each room: a point of air in the cut plane (mm), clear of every part.
 const MESSPUNKTE = {
@@ -317,6 +339,7 @@ const MESSPUNKTE = ${JSON.stringify(MESSPUNKTE)};
 const GEO = ${JSON.stringify({ LAENGE: X_ENDE, HOEHE, HUB: M.hub, ZA })};
 const LUFTWEGE = ${JSON.stringify(LUFTWEGE)};
 const P_AUTO = 6;
+const OFFEN_AB = ${OFFEN_AB};
 const P_VOLL = ${P_VOLL};
 const AUTO_SCHRITTE = ${JSON.stringify(AUTO_SCHRITTE)};`;
 
@@ -368,7 +391,9 @@ function zeichneLuft(dm, dt) {
   const F = luftFarben();
   const ton = { L: rauTon(F, zustand.p1), R: rauTon(F, zustand.p2) };
   setzeRaumFarben(ton);
-  luftStroeme(dt, ton, {});
+  // The one stream carries the model's flow (never negative: a shut poppet carries nothing, even against back pressure) in the tone of
+  // the air it comes from, the pressure at 1. It shows only while the poppet is visibly lifted: the way it takes is drawn for the open poppet.
+  luftStroeme(dt, { a: ton.L }, { a: zustand.h >= OFFEN_AB ? durchfluss(zustand, H_1_4) : 0 });
 }
 
 const anzeigeText = () => anzeigeZeilen(anzeige(zustand, H_1_4)).join("\\n");
@@ -449,9 +474,9 @@ figurStarten({
 `;
 
 const live = SS.lebendSkript({
-  wurzel: WURZEL, P, MOVE, STAGGER, ansicht: ANSICHT, LEGENDE, BAHNEN: {}, SEITE_VON: {},
-  ANZAHL: {},
-  VORNE: [],
+  wurzel: WURZEL, P, MOVE, STAGGER, ansicht: ANSICHT, LEGENDE, BAHNEN, SEITE_VON: { a: "a" },
+  ANZAHL: Object.fromEntries(Object.entries(BAHNEN).map(([name, b]) => [name, Math.max(6, Math.round(b.gesamt / 24))])),
+  VORNE: Object.keys(BAHNEN),                          // the stream runs in front of everything: the fittings' bores are painted over the housing
   SKALA: { tempo: 0.25, tempoMax: 160, bezug: M.qn },
   AUTO_TAKT: 0.3,                                      // model seconds: at the start's slow motion 1/10 that is 3 s a step
   raumDeckung: 0.97,
@@ -467,32 +492,68 @@ const LEISTE = SS.leiste(
   + SS.regler(knopf("btn-entlueften", "Ausgang 2 entlüften", { titel: "Öffnet eine Entlüftungsblende am Ausgang 2, solange der Knopf gedrückt ist" })),
   { zeitlupe: 10 });
 
-// TODO(rueckschlagventil): der Hinweistext der Karte (Paket C)
 const INFO = "Stelle den Druck am Eingang 1 ein oder lass die Automatik laufen: Der Teller hebt ab, sobald der Druck an 1 den Druck an 2 um mehr als 0,1 bar übersteigt. "
-  + "Das kräftige Blau steht unter Druck, das blasse ist drucklos. Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
+  + "Drückt der Ausgang 2 stärker, liegt er fest auf dem Sitz und nichts strömt zurück. Das kräftige Blau steht unter Druck, das blasse ist drucklos. Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
 
 const BEIFIGUR = SS.schaltzeichenBlock({
   svg: rueckschlagventilSymbol({ feld: 60 }).svg,
   text: "Die Kugel ist der Ventilteller, die Feder drückt sie in den V-Sitz. Von 1 nach 2 hebt der Druck die Kugel vom Sitz ab (frei), von 2 nach 1 presst er sie hinein (gesperrt). "
-    + "Die Teile der Leitung zeigen nur zwei Töne: kräftig ab 0,5 bar, sonst blass; die Zeichnung daneben mischt die Töne nach dem Druck.",
+    + "Die Teile der Leitung zeigen nur zwei Töne: kräftig ab 0,5 bar, sonst blass; die Zeichnung daneben mischt die Töne nach dem Druck, darum sieht 3 bar dort anders aus als 6 bar. Der Raum hinter dem Sitz kann unter Druck stehen, während die Leitung vor dem Sitz drucklos ist.",
 });
 
 // --- The prose underneath ---------------------------------------------------------------------------
-// TODO(rueckschlagventil): der Erklärtext (Paket C): Lehrer-Sprache, Wahrheitstabelle, nur belegte Zahlen, Annahmen als solche
+const bar = (x) => absolut(x);
+const Q1 = durchfluss({ h: 1, p1: bar(6), p2: bar(5) }, M);                       // 1 bar over the open poppet: the catalogue's point
+const QMAX = M.qn * M.qMaxFaktor;
+const ms = Math.round(M.schaltzeit * 1000);
+const ENDE_P2 = komma(6 - M.oeffnungsdruck, 1);                                    // what 2 reaches with 6 bar at 1: p1 minus the opening pressure
 const LESETEXT = `<div class="lesetext">
 <h2>Was man sieht</h2>
-<p>Das Rückschlagventil ist durch seine Mitte aufgeschnitten und nach dem Funktionsprinzip des Tellerrückschlagventils mit Feder nachgezeichnet; der Katalog zeigt keinen Schnitt.</p>
+<p>Das Rückschlagventil ist durch seine Mitte aufgeschnitten. Die Zahlen und die Außenmaße stammen vom Festo-Ventil H-1/4-B; <strong>der Katalog zeigt aber keinen Schnitt</strong>, darum ist das Innere <strong>nachgezeichnet nach dem Funktionsprinzip</strong> eines federbelasteten Tellerrückschlagventils: ein eingepresster <strong>Sitzeinsatz</strong> mit Kegelsenkung, ein <strong>Ventilteller</strong> mit Dichtfläche aus Gummi (NBR) und eine schwache <strong>Druckfeder</strong>, die den Teller auf den Sitz drückt.
+Links liegt der Eingang <strong>1</strong> im Innengewinde, rechts der Ausgang <strong>2</strong> am Außengewinde mit Dichtring. Der Sechskant des Gehäuses ist in der Zeichnung ein <strong>Zylinder</strong>, die rechte Verschraubung eine aufgeschraubte <strong>Hülse</strong> (angenommen: der Katalog zeigt das Gegenstück nicht), und der Dichtring, der in Wirklichkeit blau ist, ist dunkel gezeichnet, weil Blau in dieser Sammlung der Luft gehört.
+Hub und Federweg sind überhöht, alle Innenmaße angenommen.</p>
+
+<h2>Offen, zu, fester zu</h2>
+<p>Das Ventil lässt die Luft nur <strong>von 1 nach 2</strong> durch. Es öffnet, sobald der Druck am Eingang den Druck am Ausgang um mehr als ${komma(M.oeffnungsdruck, 1)} bar übersteigt (<strong>Öffnungsdruck</strong>, angenommen: von der Schwesterreihe H-QS des Katalogs übernommen); ab ${komma(M.vollDp, 1)} bar Unterschied ist der Teller im Modell ganz offen. Drückt dagegen der Ausgang stärker als der Eingang, presst dieser Druck den Teller <strong>fester</strong> auf den Sitz: Es strömt nichts zurück.</p>
+<table class="wahrheit">
+<caption>Zustände des Rückschlagventils (Δp = Druck an 1 minus Druck an 2)</caption>
+<thead><tr><th scope="col">Druckunterschied</th><th scope="col">Teller</th><th scope="col">Luft</th></tr></thead>
+<tbody>
+<tr><td>Δp &gt; ${komma(M.oeffnungsdruck, 1)} bar</td><td>offen</td><td>strömt von 1 nach 2</td></tr>
+<tr><td>Δp ≤ ${komma(M.oeffnungsdruck, 1)} bar</td><td>zu</td><td>nichts strömt</td></tr>
+<tr><td>p2 &gt; p1 (Gegendruck)</td><td>zu, fester angedrückt</td><td>nichts strömt zurück</td></tr>
+</tbody>
+</table>
+<p>Die Automatik spielt das in acht Schritten durch: 6 bar an 1 (der Teller öffnet, 2 füllt sich), halten, 1 auf 0 (der Teller schließt), halten, 3 bar an 1 (weniger als an 2: der Teller bleibt zu), halten, den Ausgang 2 entlüften, halten. Mit dem Regler und dem Knopf „Ausgang 2 entlüften“ stellst du jeden Fall selbst ein.</p>
+
+<h2>Der Druck bleibt eingesperrt</h2>
+<p>Fällt der Druck an 1 auf null, schließt die Feder den Teller, und der Ausgang 2 behält seinen Druck, bis er auf anderem Weg entlüftet wird: Ein Spannzylinder bleibt gespannt, auch wenn die Leitung abfällt. Das Modell ist dabei ideal dicht, ein echtes Ventil verliert etwas.
+<strong>Achtung bei der Anzeige:</strong> Mit ${komma(6, 0)} bar an 1 steigt der Druck an 2 nur bis ${ENDE_P2} bar. Dann beträgt der Unterschied nur noch ${komma(M.oeffnungsdruck, 1)} bar, der Teller schließt wieder, und die Anzeige zeigt „${ENDE_P2} bar“ und „Δp ${komma(M.oeffnungsdruck, 1)} bar“. Das ist der Öffnungsdruck (angenommen), kein Fehler. Der Teller braucht im Modell ${ms} ms bis ganz offen (angenommen); mit der Zeitlupe siehst du ihn auf dem Weg.</p>
+<p class="formel">
+Teller ganz offen, ${komma(1, 0)} bar Druckabfall: <strong>${Q1} l/min</strong> (Katalog: Normnenndurchfluss)<br>
+Teller zu, in beide Richtungen: <strong>0 l/min</strong>
+</p>
+
+<h2>Wozu das gut ist</h2>
+<p>Das Rückschlagventil <strong>hält Druck</strong> (eine Spannvorrichtung bleibt gespannt, wenn der Druck abfällt) und <strong>verhindert das Rückströmen</strong> (aus einem Behälter in den Kompressor, aus einem Zweig in den anderen). Es steckt als Baustein in anderen Ventilen: in der Rückschlagklappe des <a href="../Drosselrueckschlagventil/">Drosselrückschlagventils</a> und im Körper des <a href="../Wechselventil/">Wechselventils</a>. Eingebaut wird es <strong>in Pfeilrichtung</strong>: Eingang 1 zur Druckquelle, Ausgang 2 zum Verbraucher; das Schaltzeichen zeigt die Richtung, in der die Kugel frei ist.
+Das <em>entsperrbare</em> Rückschlagventil, das sich von außen öffnen lässt, ist nicht Teil dieser Seite.</p>
+<p class="hinweis">Alle Zahlen kommen aus dem Modell, das auch den Teller und die Farben bewegt. Katalog sind nur ${M.qn} l/min bei ${komma(M.bezugsDp, 0)} bar Druckabfall, G1/4 an beiden Anschlüssen, der Betriebsdruck von 0,4 bis 12 bar (die Regler gehen bis ${P_MAX} bar) und die Maße 48 mm lang, Schlüsselweite 19 mm, Gewinde 8 mm.
+Alles andere ist angenommen: Der Durchfluss wächst im Modell linear mit dem Druckabfall; ein echtes Ventil drosselt bei großem Druckabfall ab. Die Anzeige begrenzt ihn deshalb auf das Doppelte des Katalogwerts, <strong>${QMAX} l/min</strong>, und schreibt dann „(begrenzt)“ dazu (zum Beispiel bei ${komma(5, 0)} bar Druckabfall, wo linear ${5 * M.qn} l/min herauskämen). Angenommen sind außerdem die ${komma(M.volumen2 / 1000, 0)} cm³ hinter dem Ausgang, die Entlüftungsblende (Zeitkonstante ${komma(M.entlueftZeit, 1)} s, damit man das Entlüften in der Zeitlupe sieht) und alle Maße im Inneren. Die Teilchen zeigen die Luft in der Schnittebene und nur, solange der Teller sichtbar abgehoben ist.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;
 
-const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .97 }\n${RUECK_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}`;
+const TABELLE_CSS = `.lesetext table.wahrheit { border-collapse: collapse; margin: 0 0 11px; max-width: 100%; font-variant-numeric: tabular-nums }
+.lesetext table.wahrheit caption { text-align: left; font-size: 12.5px; padding-bottom: 5px; color: color-mix(in srgb, currentColor 80%, transparent) }
+.lesetext table.wahrheit th, .lesetext table.wahrheit td { border: 1px solid color-mix(in srgb, currentColor 30%, transparent); padding: 6px 12px; text-align: left }
+.lesetext table.wahrheit th { background: var(--anatomy-card); color: var(--anatomy-strong); font-weight: 600; line-height: 1.3 }`;
+const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .97 }\n${RUECK_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}\n${TABELLE_CSS}`;
 SS.seiteSchreiben({
   ziel: ZIEL,
   css: EIGENES_CSS,
   titel: "Rückschlagventil – Pneumatik",
   kartenTitel: "Rückschlagventil",
   // TODO(rueckschlagventil): der Hinweis der Karte; ENTWURF und die Aufgabenmarke in der Klammer erst entfernen, wenn die Seite vorzeigbar ist (die Wächter in pages.yml und im Test sehen daran, dass sie nicht veröffentlicht werden darf)
-  hinweis: "ENTWURF – nicht veröffentlichen (TODO(rueckschlagventil)) · Eingang, Entlüften, Automatik, Zeitlupe, zerlegen",
+  hinweis: "ENTWURF – nicht veröffentlichen (TODO(rueckschlagventil))",
   anzeige: ANZEIGE,
   schluessel: [
     { mark: "blue", label: "Kräftiges Blau: Druckluft unter Druck" },
@@ -500,8 +561,7 @@ SS.seiteSchreiben({
     { mark: "lit", label: "Ventilteller – er hebt ab, wenn 1 höher ist als 2" },
     { mark: "dim", label: "Alles ist durch die Mitte aufgeschnitten; Hub und Federweg sind überhöht, der Sechskant ist ein Zylinder" },
   ],
-  // TODO(rueckschlagventil): Bildunterschrift (Paket C)
-  caption: "Rückschlagventil, G1/4 (Vorbild Festo H-1/4-B), im Schnitt durch die Mitte, nachgezeichnet nach dem Funktionsprinzip: Die Feder drückt den Teller auf den Sitz. Der Druck von links hebt ihn ab und die Luft strömt durch den Ringspalt nach rechts; der Druck von rechts presst ihn fester auf den Sitz.",
+  caption: "Rückschlagventil, G1/4 (Vorbild Festo H-1/4-B), im Schnitt durch die Mitte, das Innere nachgezeichnet nach dem Funktionsprinzip: Die Feder drückt den Teller auf den Sitz. Der Druck von links hebt ihn ab, und die Luft strömt durch den Ringspalt nach rechts; der Druck von rechts presst ihn fester auf den Sitz und sperrt.",
   svg,
   leiste: LEISTE,
   legende: LEGENDE,

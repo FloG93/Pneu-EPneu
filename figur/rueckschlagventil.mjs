@@ -120,12 +120,15 @@ export function anzeige(z, masse = H_1_4) {
   };
 }
 
-/** The readout in two lines (German decimal comma, a proper minus), built once for build and page. */
+/**
+ * The readout in two lines (German decimal comma, a proper minus), built once for build and page. A number and its unit are joined
+ * by a no-break space, so that a line that wraps on a phone never leaves "bar" alone.
+ */
 export function anzeigeZeilen(a) {
-  const bar = (x) => (x < 0 ? "−" : "") + Math.abs(x).toFixed(1).replace(".", ",");
+  const bar = (x) => (x < 0 ? "−" : "") + Math.abs(x).toFixed(1).replace(".", ",") + "\u00a0bar";
   const wort = a.teller === "halb" ? "halb offen" : a.teller;
   return [
-    `Eingang 1 ${bar(a.p1)} bar · Ausgang 2 ${bar(a.p2)} bar · Δp ${bar(a.dp)} bar`,
-    `Teller ${wort}${a.gegendruck ? " (Gegendruck)" : ""} · Durchfluss ${a.q} l/min${a.begrenzt ? " (begrenzt)" : ""}`,
+    `Eingang 1 ${bar(a.p1)} · Ausgang 2 ${bar(a.p2)} · Δp ${bar(a.dp)}`,
+    `Teller ${wort}${a.gegendruck ? " (Gegendruck)" : ""} · Durchfluss ${a.q}\u00a0l/min${a.begrenzt ? " (begrenzt)" : ""}`,
   ];
 }
