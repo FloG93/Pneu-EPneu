@@ -307,6 +307,18 @@ export async function schnittPruefungen({ seite, V, modus, beschreibung: b, spez
   }
   V(`jeder Legendeneintrag erklärt sich beim Anklicken in mindestens zwei Sätzen (${knoepfe})${duenn.length ? " — " + duenn.join(", ") : ""}`, knoepfe >= 3 && duenn.length === 0);
 
+  // The readout grows upwards from the card's bottom right corner and the hint stands in the bottom left: on the desktop window
+  // (where the hint is shown) the two must not lie on each other, in the state with the longest readout.
+  await b.stelle(b.telefon.zustand);
+  await h.nachBildern(2);
+  const ueberdeckt = await seite.evaluate(() => {
+    const r = document.querySelector("[data-readout]").getBoundingClientRect();
+    const hint = document.querySelector('[data-corner="hint"]');
+    const hr = hint && getComputedStyle(hint).display !== "none" ? hint.getBoundingClientRect() : null;
+    return { breite: innerWidth, hinweis: Boolean(hr), schneidet: hr ? !(r.right <= hr.left || r.left >= hr.right || r.bottom <= hr.top || r.top >= hr.bottom) : false };
+  });
+  V(`die Anzeige liegt bei ${ueberdeckt.breite} px auf keinem Text der Karte (Hinweis ${ueberdeckt.hinweis ? "sichtbar" : "ausgeblendet"})`, !ueberdeckt.schneidet);
+
   // --- what only this valve promises ----------------------------------------------------------------------------
   if (spezifisch) await spezifisch(h);
 
