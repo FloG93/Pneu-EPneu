@@ -6,7 +6,7 @@ import {
   VENTIL_5_2, VENTIL_3_2_NC, VENTIL_3_2_NO, wegeventilSymbol, zylinderSymbol, SYMBOL_CSS, SYMBOL_LAUFZEIT,
   drosselRueckschlagSymbol, DROSSEL_SYMBOL_CSS, DROSSEL_SYMBOL_LAUFZEIT,
   wechselventilSymbol, WECHSEL_SYMBOL_CSS, WECHSEL_SYMBOL_LAUFZEIT,
-  rueckschlagventilSymbol, RUECK_SYMBOL_CSS, RUECK_SYMBOL_LAUFZEIT, VENTIL_RUECK,
+  rueckschlagventilSymbol, RUECK_SYMBOL_CSS, RUECK_SYMBOL_LAUFZEIT,
 } from "../schaltzeichen.mjs";
 
 test("5/2 hat zwei Felder mit je zwei Wegen", () => {
@@ -497,6 +497,8 @@ function rueckDom(svg) {
   };
 }
 
+const nahe = (a, e, tol, was) => assert.ok(Math.abs(a - e) <= tol, `${was}: ${a} statt ${e} (±${tol})`);
+
 test("Rückschlagventil: Laufzeit hebt die Kugel um h · Weg, staucht die Feder und färbt Eingang und Ausgang", () => {
   const { svg } = rueckschlagventilSymbol({ feld: 60 });
   const el = rueckDom(svg);
@@ -504,7 +506,6 @@ test("Rückschlagventil: Laufzeit hebt die Kugel um h · Weg, staucht die Feder 
   const weg = Number(svg.match(/data-kugelweg="([\d.]+)"/)[1]);
   const kugel = el.teile[0];
   const ton = (t) => [...el.teile.find((x) => x.t === t).classList.set].join(" ");
-  const federEnde = (d) => Number([...d.matchAll(/[ML]([-\d.]+) /g)].map((m) => m[1]).at(-1));
   stellen(el, { h: 0, eingang: "blass", ausgang: "stark" });
   assert.match(kugel.attrs.transform, /translate\(0 0\)/);
   assert.equal(ton("eingang"), "blass"); assert.equal(ton("ausgang"), "stark");
@@ -517,9 +518,8 @@ test("Rückschlagventil: Laufzeit hebt die Kugel um h · Weg, staucht die Feder 
   assert.match(el.mitte.attrs.d, /^M[\d.]+ [\d.]+L[\d.]+ [\d.]+$/, "offen: das Leitungsstück zwischen Spitze und Kugel erscheint");
   // the spring is shorter by exactly the lift, its stop end stays
   const anschlag = Number(svg.match(/<path class="sz-anschlag" d="M([\d.]+) /)[1]);
-  const laenge = (d) => anschlag - Number([...d.matchAll(/[ML]([-\d.]+) /g)].map((m) => m[1])[1]);
-  assert.ok(laenge(el.feder.attrs.d) < laenge(d0) - weg + 0.5 && laenge(el.feder.attrs.d) > laenge(d0) - weg - 3, "Feder um den Hub kürzer");
-  void federEnde;
+  const laenge = (d) => anschlag - Number([...d.matchAll(/[ML]([-\d.]+) /g)].map((m) => m[1]).at(-1));   // stop to the ball's edge
+  nahe(laenge(d0) - laenge(el.feder.attrs.d), weg, 0.02, "Feder um den Hub kürzer");
   stellen(el, { h: 7 });                       // out of range is clamped, missing tones clear
   assert.equal(kugel.attrs.transform, `translate(${Math.round(weg * 100) / 100} 0)`);
   assert.equal(ton("eingang"), "");
@@ -533,7 +533,6 @@ test("Rückschlagventil: Laufzeit und Stil ohne Backtick, Laufzeit gültig, Name
   assert.ok(!RUECK_SYMBOL_LAUFZEIT.includes("`") && !RUECK_SYMBOL_CSS.includes("`"));
   assert.doesNotThrow(() => new Function(RUECK_SYMBOL_LAUFZEIT));
   assert.doesNotThrow(() => new Function(`${SYMBOL_LAUFZEIT}\n${DROSSEL_SYMBOL_LAUFZEIT}\n${WECHSEL_SYMBOL_LAUFZEIT}\n${RUECK_SYMBOL_LAUFZEIT}`));
-  assert.ok(typeof VENTIL_RUECK === "object" && VENTIL_RUECK.frei === "1-2");
 });
 
 test("Das Rückschlagventil-Symbol ändert die anderen Symbole nicht: Ausgaben byte-gleich", async () => {

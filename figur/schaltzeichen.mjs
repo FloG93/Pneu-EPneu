@@ -446,3 +446,102 @@ function wechselSymbolStellen(svgEl, zustand) {
   }
 }
 `;
+
+/**
+ * The zigzag of a spring between two x positions, from the stop `x1` to the ball `x0` (x0 < x1), on the line at height `y`.
+ * Self-contained (no free variables, plain syntax) because the runtime below embeds its text; the static drawing and the
+ * runtime therefore draw the same spring.
+ */
+function rueckFederPfad(x0, x1, y, amp, n) {
+  var rd = function (v) { return Math.round(v * 100) / 100; };
+  var pad = 0.06 * (x1 - x0), xa = x1 - pad, xe = x0 + pad;
+  var d = "M" + rd(x1) + " " + rd(y);
+  for (var i = 0; i < n; i += 1) d += "L" + rd(xa + ((xe - xa) * (i + 0.5)) / n) + " " + rd(y + (i % 2 === 0 ? -amp : amp));
+  return d + "L" + rd(x0) + " " + rd(y);
+}
+
+/**
+ * The symbol of a spring-loaded check valve (ISO 1219-1): a line from port 1 on the left to port 2 on the right, in it a ball
+ * in a V seat whose apex points to 1 and whose arms open towards the ball, on the far side of the ball a spring against a stop
+ * bar. The spring presses the ball into the seat; air from 1 lifts it off (free flow 1 to 2), air from 2 presses it in (blocked).
+ * The standard draws no rectangle round it. Parts for the runtime: `data-teil` = "eingang" (the line of port 1 and the short
+ * piece between apex and ball, which exists only while the ball is lifted: the opened seat), "kugel" (the ball, lifted by up to
+ * `data-kugelweg` px) and "ausgang" (spring, stop bar and the line of port 2: the spring chamber is at the pressure of 2).
+ * `feld` is the scale in px.
+ */
+export function rueckschlagventilSymbol({ feld = 60 } = {}) {
+  const f = feld;
+  const q = (v) => Math.round(v * 100) / 100;      // every placed number is rounded once, so that the runtime redraws the same picture
+  const rand = 4, tH = f * 0.2;
+  const ym = q(rand + tH + 4);
+  const r = q(f * 0.14), d = f * 0.2;
+  const xA = q(rand + f * 0.65);                   // seat apex
+  const kx0 = q(xA + r * Math.SQRT2);              // ball centre on the seat: the arms touch it
+  const weg = q(f * 0.2);                          // lift of the ball in the picture
+  const anschlag = q(kx0 + r + f * 0.55);          // the spring's stop bar
+  const xE = q(anschlag + f * 0.45);
+  const amp = q(f * 0.07), n = 6;
+  const strich = `fill="none" stroke="currentColor" stroke-width="${STRICH}"`;
+  const waag = (x0, x1) => `M${zahl(x0)} ${zahl(ym)}L${zahl(x1)} ${zahl(ym)}`;
+
+  const eingang = `<g data-teil="eingang" class="sz-teil"><path class="sz-leitung" d="${waag(rand, xA)}" ${strich}/>`
+    + `<path class="sz-leitung" data-mitte d="" ${strich}/></g>`;
+  const kugel = `<g data-teil="kugel" transform="translate(0 0)"><circle class="sz-kugel" cx="${zahl(kx0)}" cy="${zahl(ym)}" r="${zahl(r)}" ${strich}/></g>`;
+  const ausgang = `<g data-teil="ausgang" class="sz-teil">`
+    + `<path class="sz-anschlag" d="M${zahl(anschlag)} ${zahl(ym - d * 0.8)}L${zahl(anschlag)} ${zahl(ym + d * 0.8)}" ${strich}/>`
+    + `<path class="sz-feder" d="${rueckFederPfad(q(kx0 + r), anschlag, ym, amp, n)}" data-feder ${strich} stroke-linejoin="round"/>`
+    + `<path class="sz-leitung" d="${waag(anschlag, xE)}" ${strich}/></g>`;
+  const sitz = `<path class="sz-sitz" d="M${zahl(xA + d)} ${zahl(ym - d)}L${zahl(xA)} ${zahl(ym)}L${zahl(xA + d)} ${zahl(ym + d)}" ${strich} stroke-linejoin="miter"/>`;
+  const text = (nr, x) => `<g data-anschluss="${nr}"><text class="sz-text" x="${zahl(x)}" y="${zahl(ym - 4)}" text-anchor="middle" font-size="${zahl(tH)}" fill="currentColor">${nr}</text></g>`;
+
+  const breite = Math.ceil(xE + rand);
+  const hoehe = Math.ceil(ym + d + rand);
+  const beschr = "Schaltzeichen Rückschlagventil mit Feder: eine Leitung von Anschluss 1 links nach Anschluss 2 rechts, darin eine Kugel in einem V-Sitz, von einer Feder gegen den Sitz gedrückt; frei von 1 nach 2, gesperrt von 2 nach 1";
+  const attr = `data-kugelweg="${zahl(weg)}" data-kugel-x0="${zahl(kx0)}" data-kugel-r="${zahl(r)}" data-apex="${zahl(xA)}" data-ym="${zahl(ym)}" data-luecke="${zahl(f * 0.08)}" data-anschlag="${zahl(anschlag)}" data-feder-amp="${zahl(amp)}" data-feder-n="${n}"`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="sz-symbol" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" role="img" aria-label="${beschr}" ${attr} color="currentColor">`
+    + sitz + eingang + ausgang + kugel + text(1, (rand + xA) / 2) + text(2, (anschlag + xE) / 2) + "</svg>";
+  return { svg, breite, hoehe };
+}
+
+/** Styles for the check valve symbol; add to SYMBOL_CSS on the page. */
+export const RUECK_SYMBOL_CSS = `
+.sz-symbol .sz-teil { color: var(--sz-strich, currentColor); }
+.sz-symbol .sz-teil.stark { color: var(--sz-stark, #123f87); }
+.sz-symbol .sz-teil.blass { color: var(--sz-blass, #5a8cbf); }
+.sz-symbol [data-teil="kugel"] { color: var(--sz-strich, currentColor); }
+`;
+
+/**
+ * Runtime, inlined as a classic script. `rueckSymbolStellen(svgEl, { h, eingang, ausgang })` lifts the ball: `h` 0 = on the
+ * seat, 1 = fully lifted (the model's `h`); the spring is redrawn shorter by the lift. The line of port 1 and the line of
+ * port 2 with the spring take the tone given: "stark", "blass", or nothing (null) for the ink colour. The piece of line
+ * between apex and ball appears only while the ball is away from the seat, so a shut seat shows its gap as in the standard symbol.
+ */
+export const RUECK_SYMBOL_LAUFZEIT = String.raw`
+${rueckFederPfad.toString()}
+function rueckSymbolStellen(svgEl, zustand) {
+  var num = function (n) { return Number(svgEl.getAttribute(n)) || 0; };
+  var h = Number(zustand && zustand.h);
+  h = h > 1 ? 1 : h >= 0 ? h : 0;                 // also catches a value that is not a number
+  var weg = num("data-kugelweg");
+  var schub = Math.round(h * weg * 100) / 100;
+  var teile = svgEl.querySelectorAll("[data-teil]");
+  for (var i = 0; i < teile.length; i += 1) {
+    var t = teile[i];
+    var name = t.getAttribute("data-teil");
+    if (name === "kugel") { t.setAttribute("transform", "translate(" + schub + " 0)"); continue; }
+    t.classList.remove("stark");
+    t.classList.remove("blass");
+    var ton = zustand && zustand[name];
+    if (ton === "stark" || ton === "blass") t.classList.add(ton);
+  }
+  var cx = num("data-kugel-x0") + schub, r = num("data-kugel-r"), ym = num("data-ym");
+  var apex = num("data-apex"), luecke = num("data-luecke");
+  var stuecke = svgEl.querySelectorAll("[data-mitte]");
+  for (var j = 0; j < stuecke.length; j += 1) {
+    stuecke[j].setAttribute("d", cx - r - apex > luecke ? "M" + apex + " " + ym + "L" + (Math.round((cx - r) * 100) / 100) + " " + ym : "");
+  }
+  var feder = svgEl.querySelector("[data-feder]");
+  if (feder) feder.setAttribute("d", rueckFederPfad(Math.round((cx + r) * 100) / 100, num("data-anschlag"), ym, num("data-feder-amp"), num("data-feder-n")));
+}
+`;
