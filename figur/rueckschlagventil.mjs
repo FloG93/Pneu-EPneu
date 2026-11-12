@@ -29,7 +29,8 @@ export const H_1_4 = {
   qMaxFaktor: 2,         // the flow is capped at this multiple of qn (a real valve chokes; the display stays honest) – Annahme
   schaltzeit: 0.008,     // s, travel from the seat to fully open and back – Annahme
   volumen2: 50000,       // mm³ = 50 cm³, hose and consumer behind output 2 – Annahme
-  entlueftZeit: 1,       // s, time constant of the fixed vent orifice at 2 (the button "Ausgang 2 entlüften") – Annahme
+  entlueftZeit: 0.1,     // s, time constant of the fixed vent orifice at 2 (the button "Ausgang 2 entlüften"); chosen small so that the venting
+                         // can be seen within a step of the automatic cycle in the page's slow motion (1/10) – Annahme
   hub: 3,                // mm, lift of the poppet in the drawing (exaggerated) – Annahme
 };
 

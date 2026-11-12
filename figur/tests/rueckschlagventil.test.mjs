@@ -27,7 +27,7 @@ test("Katalogwerte und Annahmen: 1000 l/min bei 1 bar, 0,1 bar Öffnungsdruck, 8
   assert.equal(M.schaltzeit, 0.008);
   assert.equal(M.volumen2, 50000);       // 50 cm³ in mm³
   assert.equal(M.hub, 3);
-  assert.equal(M.entlueftZeit, 1);
+  assert.equal(M.entlueftZeit, 0.1);
 });
 
 test("Startzustand: Teller auf dem Sitz, alles drucklos; absolut(6) = 7", () => {
@@ -139,23 +139,23 @@ test("Gegendruck, der kommt während der Teller offen ist: er schließt in 8 ms 
   assert.equal(z.p2, b(5));
 });
 
-test("Entlüften des Ausgangs: p2 fällt mit der Zeitkonstante 1 s (6 bar · e^-1 = 2,21 bar nach 1 s)", () => {
+test("Entlüften des Ausgangs: p2 fällt mit der Zeitkonstante 0,1 s (6 bar · e^-1 = 2,21 bar nach 0,1 s)", () => {
   const z = zustand(0, b(0), b(6));
-  lauf(z, 1, b(0), true, 0.0005);
-  nahe(z.p2 - AUSSEN, 6 * Math.exp(-1), 0.01, "nach 1 s");      // 2,207
-  lauf(z, 4, b(0), true, 0.0005);
-  nahe(z.p2 - AUSSEN, 6 * Math.exp(-5), 0.01, "nach 5 s");      // 0,040
+  lauf(z, 0.1, b(0), true, 0.0005);
+  nahe(z.p2 - AUSSEN, 6 * Math.exp(-1), 0.01, "nach 0,1 s");      // 2,207
+  lauf(z, 0.4, b(0), true, 0.0005);
+  nahe(z.p2 - AUSSEN, 6 * Math.exp(-5), 0.01, "nach 0,5 s");      // 0,040
   assert.ok(z.p2 >= AUSSEN, "p2 unter Umgebung");
   assert.equal(z.h, 0);                                          // with p1 at 0 bar the poppet stays shut
 });
 
-test("Entlüften bei anliegendem Eingang: der Teller öffnet gerade so weit, dass p2 bei p1 − 0,148 bar steht", () => {
-  // steady state: the flow through the poppet equals the flow out of the vent. Vent: V / tau = 50000 mm³/s per bar = 3 l/min
-  // per bar; at p2 about 5,85 bar gauge: 17,6 l/min = 1000 · h · dp with h = (dp - 0,1) / 0,4:
-  // dp² - 0,1 · dp - 0,00702 = 0 -> dp = (0,1 + sqrt(0,01 + 0,02808)) / 2 = 0,1476; p2 = 7 - 0,1476 = 6,852 abs
-  const z = lauf(zustand(0, b(6), b(6)), 3, b(6), true, 0.0005);
-  nahe(z.p2, b(6) - 0.1476, 0.003, "p2");
-  nahe(z.h, (0.1476 - 0.1) / 0.4, 0.01, "h");
+test("Entlüften bei anliegendem Eingang: der Teller öffnet gerade so weit, dass p2 bei p1 − 0,316 bar steht", () => {
+  // steady state: the flow through the poppet equals the flow out of the vent. Vent: V / tau = 500000 mm³/s per bar = 30 l/min
+  // per bar; at p2 about 5,68 bar gauge: 170,5 l/min = 1000 · h · dp with h = (dp - 0,1) / 0,4:
+  // dp² - 0,1 · dp - 0,06816 = 0 -> dp = (0,1 + sqrt(0,01 + 0,27264)) / 2 = 0,3158; p2 = 7 - 0,3158 = 6,684 abs
+  const z = lauf(zustand(0, b(6), b(6)), 1, b(6), true, 0.0005);
+  nahe(z.p2, b(6) - 0.3158, 0.003, "p2");
+  nahe(z.h, (0.3158 - 0.1) / 0.4, 0.01, "h");
 });
 
 test("p2 bleibt immer zwischen Umgebung und dem höchsten je gegebenen Eingangsdruck", () => {
