@@ -5,9 +5,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alleSeiten, befehle, browserErgebnis, browserSkript, erkenne, formatiere, fuehreTore, kanonZahl, starteServer, tabelle, tapSumme, tore } from "./tools/gate.mjs";
+import { lauefeAus, alleSeiten, befehle, browserErgebnis, browserSkript, erkenne, formatiere, fuehreTore, kanonZahl, starteServer, tabelle, tapSumme, tore } from "./tools/gate.mjs";
 
 test("Eine Seite wird an den Namen ihrer Skripte erkannt, sonst nicht", () => {
   const w = mkdtempSync(join(tmpdir(), "gate-"));
@@ -100,7 +102,9 @@ test("Ein Tor, das eine Ausnahme wirft, ist rot und bricht nichts anderes mit", 
 
 // --- the server -----------------------------------------------------------------------------------------------
 const lebt = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
-const mini = (port) => [process.execPath, ["-e", `require("http").createServer((q, s) => s.end("x")).listen(${port}, "127.0.0.1")`]];
+const mini = (port, inhalt = "x") => [process.execPath, ["-e", `require("http").createServer((q, s) => s.end(q.url === "/package.json" ? ${JSON.stringify(inhalt)} : "x")).listen(${port}, "127.0.0.1")`]];
+/** A root folder with a package.json of the given content. */
+const wurzelMit = (inhalt) => { const w = mkdtempSync(join(tmpdir(), "gate-w-")); writeFileSync(join(w, "package.json"), inhalt); return w; };
 const freierPort = () => 20000 + Math.floor(Math.random() * 20000);
 
 test("Der Server wird gestartet und über seine PID wieder beendet", async () => {
@@ -112,14 +116,25 @@ test("Der Server wird gestartet und über seine PID wieder beendet", async () =>
   assert.ok(!lebt(s.pid), "der Server läuft nach stoppe() noch");
 });
 
-test("Antwortet auf dem Port schon ein Server, wird er benutzt und nicht beendet", async () => {
-  const port = freierPort();
-  const erster = await starteServer({ port, befehl: mini(port) });
-  const zweiter = await starteServer({ port, befehl: mini(port) });
+test("Antwortet auf dem Port schon ein Server, der DIESEN Ordner ausliefert, wird er benutzt und nicht beendet", async () => {
+  const port = freierPort(), w = wurzelMit('{"a":1}');
+  const erster = await starteServer({ wurzel: w, port, befehl: mini(port, '{"a":1}') });
+  const zweiter = await starteServer({ wurzel: w, port, befehl: mini(port, '{"a":1}') });
   assert.ok(zweiter.vorhanden && zweiter.pid === null);
   await zweiter.stoppe();
   assert.ok(lebt(erster.pid), "der fremde Server wurde beendet");
   await erster.stoppe();
+  rmSync(w, { recursive: true, force: true });
+});
+
+test("Antwortet auf dem Port ein Server, der einen ANDEREN Ordner ausliefert, wird er abgelehnt und nicht beendet", async () => {
+  const port = freierPort(), w = wurzelMit('{"a":1}');
+  const fremd = spawn(mini(port, '{"b":2}')[0], mini(port, '{"b":2}')[1], { stdio: "ignore" });
+  try {
+    for (let i = 0; i < 100 && !(await new Promise((f) => { const r = httpRequest({ host: "127.0.0.1", port, method: "HEAD", path: "/" }, (res) => { res.resume(); f(true); }); r.on("error", () => f(false)); r.end(); })); i += 1) await new Promise((f) => setTimeout(f, 50));
+    await assert.rejects(() => starteServer({ wurzel: w, port, befehl: mini(port) }), /nicht diesen Ordner/);
+    assert.ok(lebt(fremd.pid), "der fremde Server wurde beendet");
+  } finally { fremd.kill("SIGKILL"); rmSync(w, { recursive: true, force: true }); }
 });
 
 test("Auch wenn ein Tor fehlschlägt oder wirft, ist der Server danach weg", async () => {
@@ -136,4 +151,37 @@ test("Auch wenn ein Tor fehlschlägt oder wirft, ist der Server danach weg", asy
 test("Kommt der Server nicht hoch, gibt es eine Fehlermeldung und keinen liegengebliebenen Prozess", async () => {
   const port = freierPort();
   await assert.rejects(() => starteServer({ port, versuche: 5, befehl: [process.execPath, ["-e", "setTimeout(() => {}, 60000)"]] }), /kam nicht hoch/);
+});
+
+test("--lauefe: nur ganze Zahlen ab 1", () => {
+  assert.equal(lauefeAus("5"), 5);
+  assert.equal(lauefeAus("1"), 1);
+  for (const schlecht of ["0", "abc", "-1", "2.5", "", null, undefined, "1e2"]) assert.equal(lauefeAus(schlecht), null, `${schlecht}`);
+});
+
+test("Das Browser-Tor mit null oder ungültig vielen Läufen ist rot, es läuft nichts und es gibt kein grünes Tor", () => {
+  const seite = { ordner: "Ordn", bau: "Ordn/tests/tools/build-o.mjs", pruefe: "Ordn/tests/tools/pruefe-o.mjs" };
+  for (const n of [0, -1, NaN, 2.5, undefined]) {
+    const r = tore("/nirgends", seite, { lauefe: n }).find((t) => t.id === "browser").lauf();
+    assert.equal(r.ok, false, `lauefe ${n}`);
+    assert.match(r.text, /ungültige Zahl der Läufe/);
+  }
+});
+
+test("gate.mjs beendet sich bei ungültigem --lauefe mit Exit 2 und sagt es, bevor etwas läuft", () => {
+  for (const wert of ["0", "abc", "-3"]) {
+    const r = spawnSync(process.execPath, [join(import.meta.dirname, "tools", "gate.mjs"), "GibtEsNicht", "--lauefe", wert], { encoding: "utf8" });
+    assert.equal(r.status, 2, wert);
+    assert.match(r.stderr, /--lauefe braucht eine ganze Zahl ab 1/);
+  }
+});
+
+test("Scheitert der Server, steht das als rote Zeile da, nicht als Stapelspur; spätere Tore laufen nicht", async () => {
+  const ran = [];
+  const erg = await fuehreTore([{ id: "b", name: "b", braucht: "server", lauf: () => { ran.push("b"); return { ok: true, text: "" }; } }, attrappe("c", true, ran)],
+    { mitServer: async () => { throw new Error("Port belegt"); } });
+  assert.deepEqual(ran, []);
+  assert.equal(erg[0].status, "FEHLT");
+  assert.equal(erg[0].text, "Server: Port belegt");
+  assert.equal(erg[1].status, "-");
 });

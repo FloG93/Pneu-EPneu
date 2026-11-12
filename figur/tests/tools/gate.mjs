@@ -23,6 +23,13 @@ import { fileURLToPath } from "node:url";
 const WURZEL = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const PORT = 8311;
 
+/** `--lauefe`: a whole number of at least 1, else null. */
+export function lauefeAus(wert) {
+  if (!/^\d+$/.test(String(wert ?? ""))) return null;
+  const n = Number(wert);
+  return n >= 1 ? n : null;
+}
+
 // --- finding the page's scripts --------------------------------------------------------------------
 /** The scripts of one page by the naming convention; null when it has none. */
 export function erkenne(wurzel, ordner) {
@@ -86,12 +93,30 @@ const antwortet = (port) => new Promise((fertig) => {
   r.on("timeout", () => { r.destroy(); fertig(false); });
   r.end();
 });
+/** The body of GET `pfad` on `port`, or null. */
+const holeText = (port, pfad) => new Promise((fertig) => {
+  const r = request({ host: "127.0.0.1", port, path: pfad, method: "GET", timeout: 1500 }, (res) => {
+    const teile = [];
+    res.on("data", (c) => teile.push(c));
+    res.on("end", () => fertig(res.statusCode === 200 ? Buffer.concat(teile).toString("utf8") : null));
+  });
+  r.on("error", () => fertig(null));
+  r.on("timeout", () => { r.destroy(); fertig(null); });
+  r.end();
+});
 /**
- * Start a static server on `port` in `wurzel` (or use the one that already answers) and give back its PID and a `stoppe()`
+ * Start a static server on `port` in `wurzel` (or use the one that already answers, if it serves this folder) and give back its PID and a `stoppe()`
  * that ends exactly this process. `befehl` is replaceable for tests.
  */
 export async function starteServer({ wurzel = WURZEL, port = PORT, versuche = 60, befehl = ["python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"]] } = {}) {
-  if (await antwortet(port)) return { pid: null, vorhanden: true, stoppe: async () => {} };
+  if (await antwortet(port)) {
+    // A server that is already there may serve another folder: it must serve THIS repo's package.json byte for byte.
+    const lokal = readFileSync(join(wurzel, "package.json"), "utf8");
+    if ((await holeText(port, "/package.json")) !== lokal) {
+      throw new Error(`Auf Port ${port} antwortet schon ein Server, der nicht diesen Ordner (${wurzel}) ausliefert – beenden oder einen anderen Port wählen`);
+    }
+    return { pid: null, vorhanden: true, stoppe: async () => {} };
+  }
   const kind = spawn(befehl[0], befehl[1], { cwd: wurzel, stdio: "ignore", detached: false });
   const aus = new Promise((fertig) => kind.once("exit", fertig));
   const stoppe = async () => {
@@ -154,7 +179,7 @@ export function tore(wurzel, seite, opt, { log = null, claudeMd = null, paketJso
     if (!existsSync(join(wurzel, ".git"))) return { ok: true, text: "kein .git, nicht verglichen" };
     const verfolgt = ausfuehren(["git", "ls-files", "--error-unmatch", `${ordner}/index.html`], { titel: "git ls-files" }).status === 0;
     const pfade = verfolgt ? [`${ordner}/index.html`, "index.html"] : ["index.html"];
-    const d = ausfuehren(["git", "diff", "--exit-code", "--stat", "--", ...pfade], { titel: "git diff" });
+    const d = ausfuehren(["git", "diff", "HEAD", "--exit-code", "--stat", "--", ...pfade], { titel: "git diff HEAD" });
     return { ok: d.status === 0, text: d.status === 0 ? `${verfolgt ? "Seite und " : ""}Übersicht gleich dem Commit${verfolgt ? "" : " (Seite noch nicht in git)"}` : `weicht vom Commit ab: ${d.ausgabe.split("\n").filter(Boolean).slice(0, 2).join(" | ")}` };
   } });
   liste.push({ id: "linien", name: "linien", lauf: () => {
@@ -168,6 +193,7 @@ export function tore(wurzel, seite, opt, { log = null, claudeMd = null, paketJso
   };
   /** n runs; all must pass with the same count. */
   const mehrfach = (n, name, titel, zusatz) => () => {
+    if (!(Number.isInteger(n) && n >= 1)) return { ok: false, text: `ungültige Zahl der Läufe: ${n}` };
     const zahlen = [];
     for (let i = 1; i <= n; i += 1) {
       const r = browserLauf(`${ordner}: ${titel} ${i}/${n}`, zusatz);
@@ -175,6 +201,7 @@ export function tore(wurzel, seite, opt, { log = null, claudeMd = null, paketJso
       if (!e.ok || r.status !== 0) return { ok: false, text: `Lauf ${i}/${n}: ${e.fehler ?? "?"} von ${e.von ?? "?"} fehlgeschlagen${e.erste ? " – " + e.erste.slice(0, 110) : ""}` };
       zahlen.push(e.n);
     }
+    if (zahlen.length !== n) return { ok: false, text: `nur ${zahlen.length} von ${n} Läufen gezählt` };
     if (new Set(zahlen).size > 1) return { ok: false, text: `die Zahl der Prüfungen schwankt: ${[...new Set(zahlen)].join(", ")}` };
     const res = { ok: true, text: `${zahlen[0]} ×${n}` };
     if (name === "browser" && claudeMd && paketJson) {
@@ -208,9 +235,11 @@ export async function fuehreTore(liste, { weiter = false, zeile = () => {}, mitS
   try {
     for (const t of liste) {
       if (rot && !weiter) { ergebnis.push({ id: t.id, name: t.name, status: "-", text: "nicht gelaufen" }); continue; }
-      if (t.braucht === "server" && !server && mitServer) server = await mitServer();
       let r;
-      try { r = await t.lauf(); } catch (e) { r = { ok: false, text: `Ausnahme: ${e.message}` }; }
+      try {
+        if (t.braucht === "server" && !server && mitServer) server = await mitServer();
+        r = await t.lauf();
+      } catch (e) { r = { ok: false, text: `${t.braucht === "server" && !server ? "Server: " : "Ausnahme: "}${e.message}` }; }
       ergebnis.push({ id: t.id, name: t.name, status: r.ok ? "ok" : "FEHLT", text: r.text, warn: r.warn });
       zeile(r.ok ? "ok" : "FEHLT", t.name, r.text);
       if (r.warn) zeile("WARN", t.name, r.warn);
@@ -249,12 +278,16 @@ async function main() {
     console.error("Aufruf: npm run gate -- <Ordner> [--lauefe 5] [--wackel] [--weiter]\n        npm run gate:alle [-- --lauefe 1] [--weiter]");
     process.exit(2);
   }
+  const lauefe = laeufeArg === null ? (alle ? 1 : 5) : lauefeAus(laeufeArg);
+  if (lauefe === null) {
+    console.error(`--lauefe braucht eine ganze Zahl ab 1 (bekommen: ${laeufeArg})`);
+    process.exit(2);
+  }
   const seiten = alle ? alleSeiten(WURZEL).map((o) => erkenne(WURZEL, o)) : [erkenne(WURZEL, ordner)];
   if (!seiten[0]) {
     console.error(`${ordner}: keine Skripte tests/tools/build-*.mjs und pruefe-*.mjs gefunden`);
     process.exit(2);
   }
-  const lauefe = Number(laeufeArg ?? (alle ? 1 : 5));
   const logPfad = join(process.env.GATE_LOG_DIR ?? tmpdir(), `gate-${alle ? "alle" : ordner}-${new Date().toISOString().replace(/[:.]/g, "-")}.log`);
   const log = new Log(logPfad);
   const claudeMd = existsSync(join(WURZEL, "CLAUDE.md")) ? readFileSync(join(WURZEL, "CLAUDE.md"), "utf8") : null;
