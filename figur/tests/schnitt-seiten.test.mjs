@@ -8,6 +8,7 @@ import { join } from "node:path";
 const WURZEL = join(import.meta.dirname, "..", "..");
 const SEITEN = [
   ["Drosselrueckschlagventil", "pruefe-drossel.mjs"],
+  ["Wechselventil", "pruefe-wechsel.mjs"],
 ];
 
 for (const [ordner, modul] of SEITEN) {
