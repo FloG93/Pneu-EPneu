@@ -1,0 +1,18 @@
+<svg viewBox="0 0 240 135" role="img" aria-label="Schnitt durch ein Wechselventil, links ist Druck angeschlossen: Die Luft kommt in kräftigem Blau durch den linken Sitz, strömt durch den Spalt um den losen Gummikörper und steigt zum Ausgang 2 oben. Der Körper liegt am rechten Sitz und sperrt den rechten Eingang, dessen Leitung drucklos und blass ist">
+  <path class="v-wand" d="M40 28H200V114H40Z"/>
+  <path class="v-stark" d="M40 76H100V92H40ZM100 80H106V88H100Z"/>
+  <path class="v-stark" d="M106 68H156V100H106ZM114 28H130V68H114Z"/>
+  <path class="v-blass" d="M156 80H172V88H156ZM172 74H200V94H172Z"/>
+  <path class="v-teil" d="M36 70H102V76H36ZM36 92H102V98H36Z"/>
+  <path class="v-wand" d="M102 76H106V80H102ZM102 88H106V92H102Z"/>
+  <circle class="v-teil" cx="76" cy="73" r="3.4"/>
+  <circle class="v-teil" cx="76" cy="95" r="3.4"/>
+  <path class="v-teil" d="M137 84Q135 74 143 74H151Q158 74 157 84Q158 94 151 94H143Q135 94 137 84Z"/>
+  <path class="v-teil" d="M112 14H132V28H112Z"/>
+  <path class="v-teil" d="M52 62H64V70H52ZM52 98H64V106H52Z"/>
+  <path class="v-hilfslinie" d="M40 122H200"/>
+  <path class="v-leitung" d="M14 84H36M122 4V14M200 84H226"/>
+  <circle class="v-stark" cx="20" cy="84" r="3.2"/>
+  <circle class="v-stark" cx="30" cy="84" r="3.2"/>
+  <circle class="v-stark" cx="122" cy="20" r="3.2"/>
+</svg>

@@ -9,6 +9,7 @@ const WURZEL = join(import.meta.dirname, "..", "..");
 const SEITEN = [
   ["Drosselrueckschlagventil", "pruefe-drossel.mjs"],
   ["Wechselventil", "pruefe-wechsel.mjs"],
+  ["Rueckschlagventil", "pruefe-rueckschlagventil.mjs"],
 ];
 
 for (const [ordner, modul] of SEITEN) {
