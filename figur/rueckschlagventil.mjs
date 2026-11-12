@@ -1,137 +1,130 @@
-// The air model of a shuttle valve (Rückschlagventil, OR element) as Festo builds it
-// (OS-1/4-B): a loose rubber body between two seats, two inputs (both "1") at the ends
-// of a through bore and one output "2" in the middle. The higher pressure pushes the
-// body onto the seat of the OTHER input and shuts it; the output takes the air of the
-// open input. Pure functions, no drawing. The page and its tests compute with this, so
-// the figure can never disagree about the numbers it shows.
+// The air model of a check valve (Rückschlagventil) with a spring-loaded poppet, after the
+// Festo H-1/4-B: G1/4 at both ends, input 1 on the left, output 2 on the right. The pressure
+// at 1 lifts the poppet off its seat against a weak spring; the air flows round the poppet
+// to 2. The pressure at 2 presses the poppet harder onto the seat: nothing flows back, and
+// the pressure behind the valve stays "locked in". Pure functions, no drawing. The page and
+// its tests compute with this, so the figure can never disagree about the numbers it shows.
 //
-// Units: mm³ (chamber), bar, standard litres per minute (l/min), s.
-// Origin of every constant: "Katalog" = Festo data sheet 6682 (OS-1/4-B),
-// "abgeleitet" = computed from catalogue values, "Annahme" = assumed.
+// Units: mm³ (volume behind 2), bar, standard litres per minute (l/min), s, mm.
+// Origin of every constant: "Katalog" = Festo data sheet 11689 (H-1/4-B) and the catalogue
+// H/HA/HB, "Schwesterreihe" = the catalogue's H-QS series, "Annahme" = assumed.
 //
 // Conventions, stated once:
-// - Pressures (`pL`, `pR`, `p2`) are ABSOLUTE bar, ambient = AUSSEN = 1 (as in
-//   ventil.mjs). The page's sliders show gauge pressure; `absolut(bar)` converts.
-//   `pL`/`pR` in the state are the pressures of the two input lines as last given to
-//   `schritt` (the lines are held by their sources), `p2` is the chamber and the
-//   volume behind output 2.
-// - `s` is the position of the body, 0…1: 0 = on the LEFT seat (shuts the left
-//   input), 1 = on the RIGHT seat (shuts the right input). The opening of the left
-//   input is `s`, that of the right input `1 − s`.
-// - Flow signs: positive = from an input into the chamber, negative = from the chamber
-//   back out through that input (venting).
-// No top-level name here may clash with one in pneumatik.mjs, ventil.mjs or
-// stromventil.mjs: pages inline model files into one classic script. This file
-// needs `AUSSEN` and `kammerSchritt` from ventil.mjs; pages inline that file first.
+// - Pressures (`p1`, `p2`) are ABSOLUTE bar, ambient = AUSSEN = 1 (as in ventil.mjs). The
+//   page's slider shows gauge pressure; `absolut(bar)` converts. `p1` in the state is the
+//   pressure of the input line as last given to `schritt` (the line is held by its source),
+//   `p2` is the volume behind output 2 (hose and consumer).
+// - `h` is the lift of the poppet, 0…1: 0 = on the seat (shut), 1 = fully open.
+// - The valve is ideally tight: a shut poppet carries nothing, in either direction.
+// No top-level name here may clash with one in pneumatik.mjs, ventil.mjs, stromventil.mjs or
+// wechselventil.mjs: pages inline model files into one classic script. This file needs
+// `AUSSEN` and `kammerSchritt` from ventil.mjs; pages inline that file first.
 import { AUSSEN, kammerSchritt } from "./ventil.mjs";
 
-// TODO(rueckschlagventil): die Katalogwerte des Bauteils (mit Herkunft: Katalog / abgeleitet / Annahme); den Namen der Konstante anpassen
-export const OS_1_4 = {
-  qn: 1170,              // l/min at bezugsDp, body fully clear of the open seat – Katalog
-  bezugsDp: 1,           // bar, pressure drop of the catalogue flow – Annahme (norm condition)
-  nennweite: 6.5,        // mm, seat bore – Katalog
-  schaltdruck: 0.05,     // bar, the body only changes seat above this pressure difference – Annahme (stiction, inertia)
-  schaltzeit: 0.008,     // s, travel from one seat to the other – Annahme
+export const H_1_4 = {
+  qn: 1000,              // l/min at bezugsDp, poppet fully open – Katalog (data sheet 11689: 6 -> 5 bar)
+  bezugsDp: 1,           // bar, pressure drop of the catalogue flow – Katalog (6 -> 5 bar)
+  oeffnungsdruck: 0.1,   // bar, the poppet lifts only above this drop p1 - p2 – Schwesterreihe H-QS (open > 0,1 bar), for the H-1/4-B Annahme
+  vollDp: 0.5,           // bar, from this drop on the poppet is fully open, linear from oeffnungsdruck – Annahme
+  qMaxFaktor: 2,         // the flow is capped at this multiple of qn (a real valve chokes; the display stays honest) – Annahme
+  schaltzeit: 0.008,     // s, travel from the seat to fully open and back – Annahme
   volumen2: 50000,       // mm³ = 50 cm³, hose and consumer behind output 2 – Annahme
-  hub: 6,                // mm, travel of the body between the seats (drawing, exaggerated) – Annahme
+  entlueftZeit: 1,       // s, time constant of the fixed vent orifice at 2 (the button "Ausgang 2 entlüften") – Annahme
+  hub: 3,                // mm, lift of the poppet in the drawing (exaggerated) – Annahme
 };
 
-const wechselLminMm3s = 1e6 / 60;   // 1 l/min in mm³/s (abgeleitet)
-const wechselSprungMax = 0.1;       // s, a longer frame is cut, not integrated
-const wechselTeilH = 0.0005;        // s, fixed sub-step: the chamber's time constant is
-                                    // V / (qn in mm³/s per bar) = 50000 / 19.5e6 = 2,6 ms (abgeleitet)
+const rueckLminMm3s = 1e6 / 60;   // 1 l/min in mm³/s (abgeleitet)
+const rueckSprungMax = 0.1;       // s, a longer frame is cut, not integrated
+const rueckTeilH = 0.0005;        // s, fixed sub-step: near the opening pressure the chamber's time constant is
+                                  // V / (qn in mm³/s per bar · 0,25) = 50000 / (16,67e6 · 0,25) = 12 ms (abgeleitet)
 
 /** Gauge pressure of the page's slider → absolute pressure of the model. */
 export function absolut(bar) {
   return AUSSEN + bar;
 }
 
-/** Fresh state: body on the left seat (shuts left), everything at ambient. */
+/** Fresh state: poppet on the seat, everything at ambient. */
 export function neuerZustand() {
-  return { s: 0, pL: AUSSEN, pR: AUSSEN, p2: AUSSEN };
-}
-
-/** "links" / "rechts" while the body sits on a seat, `null` while it is on its way. */
-export function sperrSeite(z) {
-  return z.s <= 0 ? "links" : z.s >= 1 ? "rechts" : null;
+  return { h: 0, p1: AUSSEN, p2: AUSSEN };
 }
 
 /**
- * Flow through both inputs in l/min, linear in the pressure drop and equal to the
- * catalogue value at `bezugsDp` (Annahme: the catalogue gives only this one point).
- * A shut seat carries nothing. An input to which the body is travelling (its line is
- * lower than the other by more than `schaltdruck`) does not take air out of the chamber
- * either: the stream would pull the body into that seat (Annahme).
+ * The lift the pressure drop `dp` = p1 - p2 asks for: 0 up to and including the opening pressure,
+ * 1 from `vollDp` on, linear between (Annahme: the spring's rate).
  */
-export function durchfluss(z, masse = OS_1_4) {
-  const unterschied = z.pL - z.pR;
-  const links = wechselSeite(z.s, z.pL, z.p2, unterschied < -masse.schaltdruck, masse);
-  const rechts = wechselSeite(1 - z.s, z.pR, z.p2, unterschied > masse.schaltdruck, masse);
-  return { links, rechts, gesamt: links + rechts };
-}
-
-function wechselSeite(oeffnung, pEingang, p2, zielSitz, masse) {
-  const dp = pEingang - p2;
-  if (dp < 0 && zielSitz) return 0;
-  // + 0 turns a negative zero into 0 and leaves a broken input broken, so that a test sees it
-  return (masse.qn * oeffnung * dp) / masse.bezugsDp + 0;
+export function sollHub(dp, masse = H_1_4) {
+  if (dp <= masse.oeffnungsdruck) return 0;
+  if (dp >= masse.vollDp) return 1;
+  return (dp - masse.oeffnungsdruck) / (masse.vollDp - masse.oeffnungsdruck);
 }
 
 /**
- * Advance the state by `dt` seconds with the input line pressures `pL`, `pR` (absolute).
- * The body runs to the seat of the lower input when the difference exceeds
- * `schaltdruck`; below it, it stays where it is (whoever came first keeps the output).
- * A body in flight whose difference has vanished finishes its way to the nearer seat.
- * The chamber follows through `kammerSchritt`. Fixed sub-steps, any frame rate gives
- * the same motion. Mutates and returns `z`.
+ * Flow from 1 to 2 in l/min: linear in the pressure drop and equal to the catalogue value at
+ * `bezugsDp` with the poppet fully open (Annahme: the catalogue gives only this one point),
+ * proportional to the lift, capped at `qMaxFaktor · qn`. Never negative: with back pressure
+ * (p2 above p1) or a shut poppet nothing flows.
  */
-// TODO(rueckschlagventil): die Physik des Bauteils; jede Zahl von Hand nachrechnen und im Test belegen
-export function schritt(z, masse, dt, { pL, pR }) {
-  z.pL = pL;
-  z.pR = pR;
-  const gesamt = dt > 0 ? Math.min(dt, wechselSprungMax) : 0;
-  const teile = Math.max(1, Math.ceil(gesamt / wechselTeilH - 1e-9));
+export function durchfluss(z, masse = H_1_4) {
+  const dp = z.p1 - z.p2;
+  if (dp <= 0 || z.h <= 0) return 0;
+  return Math.min((masse.qn * z.h * dp) / masse.bezugsDp, masse.qn * masse.qMaxFaktor) + 0;
+}
+
+/**
+ * Advance the state by `dt` seconds with the input line pressure `p1` (absolute) and the vent
+ * of output 2 open or shut. The poppet runs towards the lift the drop asks for (`sollHub`) at
+ * the rate 1 / schaltzeit. Output 2 is filled through the poppet and, while `entlueften` is on,
+ * drained through a fixed orifice towards ambient. A shut poppet carries nothing: p2 stays
+ * where it is. Fixed sub-steps, any frame rate gives the same motion. Mutates and returns `z`.
+ */
+export function schritt(z, masse, dt, { p1, entlueften = false }) {
+  z.p1 = p1;
+  const gesamt = dt > 0 ? Math.min(dt, rueckSprungMax) : 0;
+  const teile = Math.max(1, Math.ceil(gesamt / rueckTeilH - 1e-9));
   const h = gesamt / teile;
-  for (let i = 0; i < teile; i += 1) wechselTeilschritt(z, masse, h);
+  for (let i = 0; i < teile; i += 1) rueckTeilschritt(z, masse, h, entlueften);
   return z;
 }
 
-function wechselTeilschritt(z, masse, h) {
-  const unterschied = z.pL - z.pR;
-  let ziel = null;
-  if (unterschied > masse.schaltdruck) ziel = 1;
-  else if (unterschied < -masse.schaltdruck) ziel = 0;
-  else if (z.s > 0 && z.s < 1) ziel = z.s >= 0.5 ? 1 : 0;
-  if (ziel !== null) {
-    const weg = h / masse.schaltzeit;
-    z.s = Math.abs(ziel - z.s) <= weg + 1e-9 ? ziel : z.s + Math.sign(ziel - z.s) * weg;
-  }
-  const q = durchfluss(z, masse).gesamt * wechselLminMm3s;   // mm³/s
-  z.p2 = kammerSchritt(z.p2, q, 0, masse.volumen2, h, Math.max(z.pL, z.pR, z.p2));
+function rueckTeilschritt(z, masse, h, entlueften) {
+  const ziel = sollHub(z.p1 - z.p2, masse);
+  const weg = h / masse.schaltzeit;
+  z.h = Math.abs(ziel - z.h) <= weg + 1e-9 ? ziel : z.h + Math.sign(ziel - z.h) * weg;
+  const zu = durchfluss(z, masse) * rueckLminMm3s;   // mm³/s into the volume
+  // the vent: a fixed orifice whose conductance gives the time constant V / entlueftZeit (abgeleitet)
+  const ab = entlueften ? ((masse.volumen2 / masse.entlueftZeit) * (z.p2 - AUSSEN)) : 0;
+  z.p2 = kammerSchritt(z.p2, zu - ab, 0, masse.volumen2, h, Math.max(z.p1, z.p2));
 }
 
-const wechselBar = (x) => Math.max(0, Math.round(x * 10) / 10);
+/** "zu" on the seat (under 2 % lift), "offen" (over 98 %), else "halb": what the readout and the page call the poppet. */
+export function tellerZustand(z, masse = H_1_4) {
+  void masse;
+  return z.h < 0.02 ? "zu" : z.h > 0.98 ? "offen" : "halb";
+}
 
-/** Rounded values for the card's readout: gauge bar to 0,1, flow to whole l/min. */
-export function anzeige(z, masse = OS_1_4) {
+const rueckBar = (x) => Math.round(x * 10) / 10 + 0;
+
+/** Rounded values for the card's readout: gauge bar to 0,1 (the drop may be negative), flow to whole l/min. */
+export function anzeige(z, masse = H_1_4) {
   const q = durchfluss(z, masse);
+  const dp = rueckBar(z.p1 - z.p2);
   return {
-    pL: wechselBar(z.pL - AUSSEN),
-    pR: wechselBar(z.pR - AUSSEN),
-    p2: wechselBar(z.p2 - AUSSEN),
-    sperrt: sperrSeite(z),
-    links: Math.round(q.links) + 0,
-    rechts: Math.round(q.rechts) + 0,
-    gesamt: Math.round(q.gesamt) + 0,
+    p1: Math.max(0, rueckBar(z.p1 - AUSSEN)),
+    p2: Math.max(0, rueckBar(z.p2 - AUSSEN)),
+    dp,
+    teller: tellerZustand(z, masse),
+    q: Math.round(q) + 0,
+    begrenzt: q >= masse.qn * masse.qMaxFaktor,
+    gegendruck: dp < 0,
   };
 }
 
 /** The readout in two lines (German decimal comma, a proper minus), built once for build and page. */
 export function anzeigeZeilen(a) {
-  const bar = (x) => x.toFixed(1).replace(".", ",");
-  const q = a.gesamt < 0 ? `−${-a.gesamt}` : String(a.gesamt);
+  const bar = (x) => (x < 0 ? "−" : "") + Math.abs(x).toFixed(1).replace(".", ",");
+  const wort = a.teller === "halb" ? "halb offen" : a.teller;
   return [
-    `Eingang links ${bar(a.pL)} bar · Eingang rechts ${bar(a.pR)} bar · Ausgang 2 ${bar(a.p2)} bar`,
-    `Körper sperrt: ${a.sperrt ?? "–"} · Durchfluss ${q} l/min`,
+    `Eingang 1 ${bar(a.p1)} bar · Ausgang 2 ${bar(a.p2)} bar · Δp ${bar(a.dp)} bar`,
+    `Teller ${wort}${a.gegendruck ? " (Gegendruck)" : ""} · Durchfluss ${a.q} l/min${a.begrenzt ? " (begrenzt)" : ""}`,
   ];
 }
