@@ -39,6 +39,8 @@ const PAARE = [
   ["vorlage/figur/tests/tools/pruefe-figur.mjs", "figur/tests/tools/pruefe-figur.mjs"],
   ["vorlage/figur/tests/tools/pruefe-schnitt.mjs", "figur/tests/tools/pruefe-schnitt.mjs"],
   ["vorlage/figur/tests/pruefe-schnitt.test.mjs", "figur/tests/pruefe-schnitt.test.mjs"],
+  ["vorlage/figur/tests/tools/gate.mjs", "figur/tests/tools/gate.mjs"],
+  ["vorlage/figur/tests/gate.test.mjs", "figur/tests/gate.test.mjs"],
   ["vorlage/shared/css/kontrast.css", "shared/css/kontrast.css"],
   ["vorlage/shared/js/kontrast.js", "shared/js/kontrast.js"],
   ["vorlage/shared/js/util.js", "shared/js/util.js"],

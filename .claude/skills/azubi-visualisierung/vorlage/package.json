@@ -8,7 +8,9 @@
     "test": "npm run test:shared && npm run test:figur",
     "test:shared": "node --test \"shared/tests/*.test.mjs\"",
     "test:figur": "node --test \"figur/tests/*.test.mjs\"",
-    "bau:uebersicht": "node figur/tests/tools/build-uebersicht.mjs"
+    "bau:uebersicht": "node figur/tests/tools/build-uebersicht.mjs",
+    "gate": "node figur/tests/tools/gate.mjs",
+    "gate:alle": "node figur/tests/tools/gate.mjs --alle"
   },
   "engines": {
     "node": ">=22"

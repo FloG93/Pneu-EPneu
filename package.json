@@ -34,6 +34,8 @@
     "pruef:browser:drossel": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Drosselrueckschlagventil/ Drosselrueckschlagventil/tests/tools/pruefe-drossel.mjs",
     "pruef:browser:wechsel": "node figur/tests/tools/pruefe-figur.mjs http://127.0.0.1:8311/Wechselventil/ Wechselventil/tests/tools/pruefe-wechsel.mjs",
     "pruef:linien": "node .claude/skills/anatomy/scripts/lines.mjs Zylinder-Doppeltwirkend/index.html",
+    "gate": "node figur/tests/tools/gate.mjs",
+    "gate:alle": "node figur/tests/tools/gate.mjs --alle",
     "neu:schnittseite": "node .claude/skills/azubi-visualisierung/scripts/neue-schnittseite.mjs"
   },
   "engines": {
