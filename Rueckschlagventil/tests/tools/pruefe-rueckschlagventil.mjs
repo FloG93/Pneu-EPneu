@@ -31,7 +31,21 @@ export default async function pruefeRueckschlagventil(ctx) {
   const stelle = async ([p1, ent = false, p2 = null]) => { await seite.evaluate(([a, b, c]) => window.__figur.stelle(a, b, c), [p1, ent, p2]); await h.nachBildern(4); };
   /** The same as the slider: the pressure at 1 changes and the model runs on. */
   const schalte = async (p1, ent = false) => { await seite.evaluate(([a, b]) => window.__figur.schalte(a, b), [p1, ent]); };
-  const warteModell = (bedingung, arg = null, timeout = 8000) => seite.waitForFunction(([src, a]) => new Function("z", "a", `return (${src})(z, a)`)(window.__figur.modell(), a), [String(bedingung), arg], { timeout });
+  /**
+   * Wait for a state of the model. A timeout is not silence and not an abort: it is a failing check with the name of what did not happen,
+   * and the run goes on (the checks after it then say what that left wrong). Returns whether the state was reached.
+   */
+  const warteModell = async (was, bedingung, arg = null, timeout = 8000) => {
+    const ok = await seite.waitForFunction(([src, a]) => new Function("z", "a", `return (${src})(z, a)`)(window.__figur.modell(), a), [String(bedingung), arg], { timeout }).then(() => true, () => false);
+    if (!ok) V(`Zustand erreicht: ${was} (nach ${timeout} ms nicht)`, false);
+    return ok;
+  };
+  /** The same for a state of the page itself (here: how far the taking apart is). */
+  const warteSeite = async (was, bedingung, timeout) => {
+    const ok = await seite.waitForFunction(bedingung, null, { timeout }).then(() => true, () => false);
+    if (!ok) V(`Zustand erreicht: ${was} (nach ${timeout} ms nicht)`, false);
+    return ok;
+  };
   const raeume = async () => ({ L: await h.hell('[data-raum="L"]'), R: await h.hell('[data-raum="R"]') });
   /** The poppet's screen position: the middle of its drawn half section. */
   const teller = () => seite.evaluate(() => {
@@ -142,11 +156,11 @@ export default async function pruefeRueckschlagventil(ctx) {
       // --- opening pressure and the locked-in pressure, with the model running ---------------------------------------------------
       await stelle([0, false, 0]);
       await schalte(6);
-      await warteModell((z) => z.h < 1e-3 && z.p2 > 6.85);
+      await warteModell("6 bar an 1: 2 hat p1 − 0,1 bar erreicht und der Teller ist zu", (z) => z.h < 1e-3 && z.p2 > 6.85);
       let t = await text();
       V("6 bar an 1: 2 füllt sich nur bis p1 − 0,1 bar (Anzeige 5,9 bar und Δp 0,1 bar) und der Teller schließt wieder", /Ausgang 2 5,9 bar · Δp 0,1 bar/.test(t) && /^Teller zu · Durchfluss 0 l\/min$/m.test(t));
       await schalte(0);
-      await warteModell((z) => z.p1 < 1.001);
+      await warteModell("1 ist auf 0 bar gefallen", (z) => z.p1 < 1.001);
       const eingesperrt = await modell();
       await h.nachBildern(30);
       const spaeter = await modell();
@@ -167,7 +181,7 @@ export default async function pruefeRueckschlagventil(ctx) {
       await stelle([0, false, 6]);
       await seite.click("#btn-entlueften");
       V("der Knopf „Ausgang 2 entlüften“ ist gedrückt", (await seite.getAttribute("#btn-entlueften", "aria-pressed")) === "true");
-      await warteModell((z) => z.p2 < 1.05, null, 12000);
+      await warteModell("2 ist entlüftet", (z) => z.p2 < 1.05, null, 12000);
       V("entlüftet: 2 fällt auf 0 bar, der Teller blieb zu", (await modell()).h === 0 && /Ausgang 2 0,0 bar/.test(await text()));
       await seite.click("#btn-entlueften");
       V("ein zweiter Druck nimmt die Entlüftung wieder weg", (await seite.getAttribute("#btn-entlueften", "aria-pressed")) === "false");
@@ -176,10 +190,10 @@ export default async function pruefeRueckschlagventil(ctx) {
       await zeitlupe(10);
       await stelle([0, false, 0]);
       await schalte(6);
-      await warteModell((z) => z.h > 0.5, null, 5000).catch(() => {});
+      await warteModell("beim Füllen öffnet der Teller über die Hälfte", (z) => z.h > 0.5, null, 5000);
       const fuellung = await beobachte(120);
       V(`beim Füllen laufen Teilchen (${fuellung.max}), aber nie bei einem Teller unter 15 % Hub (${fuellung.zuViele} Bilder)`, fuellung.max >= 6 && fuellung.zuViele === 0);
-      await warteModell((z) => z.p2 > 6.85, null, 15000);
+      await warteModell("in der Zeitlupe ist 2 gefüllt", (z) => z.p2 > 6.85, null, 15000);
       V("ist 2 voll, steht kein Teilchen mehr", (await beobachte(20)).max === 0);
       await zeitlupe(1);
 
@@ -266,7 +280,7 @@ export default async function pruefeRueckschlagventil(ctx) {
       await stelle([0, false, 0]);
       await seite.fill("#druck-eingang", "6");
       await seite.dispatchEvent("#druck-eingang", "input");
-      await warteModell((z) => z.p2 > 6.85, null, 8000);
+      await warteModell("der Regler füllt den Ausgang", (z) => z.p2 > 6.85, null, 8000);
       V("der Regler Eingang 1 füllt den Ausgang (Modell und Anzeige)", /Ausgang 2 5,9 bar/.test(await text()) && /Eingang 1 6,0 bar/.test(await text()));
       V("die Anzeige des Reglers nennt den Wert mit Komma", (await seite.textContent("#druck-eingang-wert")) === "6,0 bar");
       V("der Regler geht bis 8 bar in Schritten von 0,5", (await seite.getAttribute("#druck-eingang", "max")) === "8" && (await seite.getAttribute("#druck-eingang", "step")) === "0.5");
@@ -329,7 +343,7 @@ export default async function pruefeRueckschlagventil(ctx) {
       await seite.waitForFunction(() => innerWidth === 390);
       await stelle([0, false, 0]);
       await seite.click("#btn-explode");
-      await seite.waitForFunction(() => window.__figur.offen() > 0.97, null, { timeout: 15000 }).catch(() => {});
+      await warteSeite("bei 390 px ist die Figur auseinandergefahren", () => window.__figur.offen() > 0.97, 15000);
       const groessen = await seite.evaluate(() => {
         const aus = {};
         for (const g of document.querySelectorAll("[data-g]")) {
@@ -342,7 +356,7 @@ export default async function pruefeRueckschlagventil(ctx) {
       const klein = groessen.filter((g) => Math.max(g.w, g.h) < 30);
       V(`zerlegt bei 390 px ist keine Baugruppe kleiner als 30 px (kleinste: ${groessen.map((g) => `${g.p} ${Math.round(Math.max(g.w, g.h))}`).sort((a, b) => parseInt(a.split(" ")[1]) - parseInt(b.split(" ")[1]))[0]})${klein.length ? " — zu klein: " + klein.map((g) => g.p).join(", ") : ""}`, klein.length === 0);
       await seite.click("#btn-explode");
-      await seite.waitForFunction(() => window.__figur.offen() < 0.02, null, { timeout: 30000 }).catch(() => {});
+      await warteSeite("bei 390 px ist die Figur wieder zusammengebaut", () => window.__figur.offen() < 0.02, 30000);
       await seite.setViewportSize({ width: 1280, height: 900 });
       await seite.waitForFunction(() => innerWidth === 1280);
       await h.nachBildern(3);
