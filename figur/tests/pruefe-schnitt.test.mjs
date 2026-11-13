@@ -118,3 +118,44 @@ test("Fehlende Haken von window.__figur werden vorab mit Namen genannt", () => {
   Object.assign(aus, { luftwege: { aus: "x" }, kontrast: { aus: "x" }, abhebung: { aus: "x" } });
   assert.deepEqual(fehlendeHaken(aus, { geometrie: true, offen: true, weiter: true }), []);
 });
+
+/**
+ * A stand-in page for `hilfen().lauf`: the function runs in Node with a document of `strom` particles and a frame clock that ticks
+ * `luecke` ms per frame; each particle moves `schritte[i]` px (both coordinates together) per frame.
+ */
+async function laufMit({ luecke, schritte }) {
+  const kugeln = schritte.map((st, i) => ({ op: 0.9, x: 10 + i * 20, y: 5 + i * 20, st }));
+  const el = (k) => ({ getAttribute: (n) => ({ opacity: k.op, cx: k.x, cy: k.y })[n] });
+  let t = 0;
+  const alt = { document: globalThis.document, raf: globalThis.requestAnimationFrame, window: globalThis.window };
+  globalThis.document = { querySelectorAll: () => kugeln.map(el) };
+  globalThis.window = { __figur: {} };
+  globalThis.requestAnimationFrame = (cb) => setImmediate(() => { t += luecke; for (const k of kugeln) { k.x += k.st / 2; k.y += k.st / 2; } cb(t); });
+  try {
+    const seite = { evaluate: (fn, arg) => fn(arg) };
+    return await hilfen(seite, "light").lauf("a");
+  } finally {
+    Object.assign(globalThis, { document: alt.document, requestAnimationFrame: alt.raf, window: alt.window });
+  }
+}
+
+test("lauf: bei 16 ms Bildabstand gilt der Schritt von 3 px und das Vorzeichen stimmt", async () => {
+  const l = await laufMit({ luecke: 16, schritte: [3, 3, 3, 3, 3, 3, 3] });
+  assert.ok(l.n > 0 && Math.abs(l.schritt - 3) < 1e-9, JSON.stringify(l));
+  const rueck = await laufMit({ luecke: 16, schritte: [-3, -3, -3, -3, -3, -3, -3] });
+  assert.ok(rueck.schritt < -2, "ein Strom in der Gegenrichtung (Phase umgedreht) fällt mit dem Vorzeichen auf");
+});
+
+test("lauf: unter Last (Bilder 33 ms auseinander, wahrer Schritt 7,5 px) entscheidet kein einzelnes Streuteilchen", async () => {
+  // six particles move 7,5 px per frame, one stray particle moves -2,7 px: the old limit of 6 px dropped the six and let the stray decide
+  const l = await laufMit({ luecke: 33, schritte: [7.5, 7.5, 7.5, 7.5, 7.5, 7.5, -2.7] });
+  assert.ok(l.n > 0 && l.schritt > 7, `Schritt ${l.schritt} aus ${l.n} Paaren`);
+  // the same with the sign flipped still reads as running backwards
+  const rueck = await laufMit({ luecke: 33, schritte: [-7.5, -7.5, -7.5, -7.5, -7.5, -7.5, 2.7] });
+  assert.ok(rueck.n > 0 && rueck.schritt < -7, `Schritt ${rueck.schritt}`);
+});
+
+test("lauf: ein einzelnes Teilchen im Schritt, die übrigen springen (Umlauf), zählt nicht als Paar", async () => {
+  const l = await laufMit({ luecke: 16, schritte: [-2.7, 90, 90, 90, 90] });
+  assert.equal(l.n, 0, "ein Streuteilchen von fünf reicht nicht");
+});

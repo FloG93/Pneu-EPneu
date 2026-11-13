@@ -215,6 +215,7 @@ export function hilfen(seite, modus) {
    * route's first stretch in the direction of the flow) and how many pairs it is made of.
    *   nurBohrung  count only particles on the first stretch of the route (`__figur.bahn(name)`)
    *   dtMax       a pair whose frames are further apart than this many ms is dropped
+   * The limit of a step is max(6 px, 0,4 px per ms of the pair's gap); a pair needs min(3, visible) particles inside it.
    */
   const lauf = (name, { nurBohrung = false, dtMax = 35, paare = 5, versuche = 40, deckkraft = 0.1 } = {}) => seite.evaluate(async ([n, o]) => {
     const lies = () => [...document.querySelectorAll(`[data-strom="${n}"] circle`)]
@@ -231,9 +232,14 @@ export function hilfen(seite, modus) {
     for (let versuch = 0; versuch < o.versuche && ergebnis.length < o.paare; versuch += 1) {
       const t0 = await bild(); const a = lies(); const t1 = await bild(); const b = lies();
       if (t1 - t0 >= o.dtMax) continue;
-      const d = a.map((p, i) => (p[0] > o.deckkraft && b[i][0] > o.deckkraft && p[1] >= xMin && p[1] <= xMax ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null))
-        .filter((v) => v !== null && Math.abs(v) < 6);
-      if (d.length) ergebnis.push(mitteVon(d));
+      const alle = a.map((p, i) => (p[0] > o.deckkraft && b[i][0] > o.deckkraft && p[1] >= xMin && p[1] <= xMax ? (b[i][1] - p[1]) + (b[i][2] - p[2]) : null))
+        .filter((v) => v !== null);
+      // A step is what a particle really moves in one frame; the jump of a wrapping particle is a whole spacing. The limit grows with the
+      // measured gap of the two frames (on a loaded machine they are 30 ms apart and a true step is over 7 px), and a pair counts only
+      // when at least three particles (or all there are, when fewer are visible) are left, so that one stray particle cannot decide.
+      const grenze = Math.max(6, 0.4 * (t1 - t0));
+      const d = alle.filter((v) => Math.abs(v) < grenze);
+      if (d.length > 0 && d.length >= Math.min(3, alle.length)) ergebnis.push(mitteVon(d));
     }
     return { n: ergebnis.length, schritt: mitteVon(ergebnis) };
   }, [name, { nurBohrung, dtMax, paare, versuche, deckkraft }]);
