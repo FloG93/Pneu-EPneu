@@ -11,7 +11,7 @@ Datenblatt noch der Katalog zeigen einen Schnitt.
 Das Rückschlagventil lässt die Luft nur **von 1 nach 2** durch. Von 2 nach 1 sperrt es, und der Druck am Ausgang presst den Teller
 sogar fester auf den Sitz.
 
-- **Gehäuse** (Aluminium eloxiert, Katalog): links das Innengewinde G¼ (Anschluss 1), rechts ein Gewindezapfen G¼ von 8 mm (Anschluss 2),
+- **Gehäuse** (Aluminium eloxiert, Katalog): links das Innengewinde G¼ (Anschluss 1), rechts ein Gewindezapfen G¼ von 8 mm (Anschluss 2; welches Ende innen und welches außen ist und welches der Eingang, nennt das Datenblatt nicht: **angenommen**, im Katalogbild hat ein Ende Außengewinde mit Dichtring und das andere Innengewinde),
   innen eine Bohrung mit dem **Federanschlag** und dem Durchgang zum Ausgang. Der Sechskant (Schlüsselweite 19 mm) ist in der Zeichnung ein
   **Zylinder** Ø 19.
 - **Sitzeinsatz**, eingepresst, mit der Kegelsenkung Ø 6 mm. In der Schnittfläche ist er bräunlich und gegenläufig schraffiert, damit man
@@ -28,9 +28,11 @@ in anderen Ventilen ([Drosselrückschlagventil](../Drosselrueckschlagventil/), [
 
 | Druckunterschied Δp = p1 − p2 | Teller | Luft |
 | --- | --- | --- |
-| Δp > 0,1 bar | offen | strömt von 1 nach 2 |
+| Δp > 0,1 bar (angenommen) | offen (zwischen 0,1 und 0,5 bar erst teilweise, ab 0,5 bar ganz) | strömt von 1 nach 2 |
 | Δp ≤ 0,1 bar | zu | nichts strömt |
 | p2 > p1 (Gegendruck) | zu, fester angedrückt | nichts strömt zurück |
+
+**In Wirklichkeit eingeschraubt:** Das Ventil ist laut Katalog einschraubbar; sein Außengewinde wird in einen Anschluss geschraubt, und der Dichtring dichtet dagegen ab. Die Zeichnung zeigt statt dieses Anschlusses eine Verschraubung (als Hülse auf dem Gewindezapfen). Eingebaut wird es in **Durchflussrichtung**: Eingang 1 zur Druckquelle, Ausgang 2 zum Verbraucher.
 
 **Der Druck bleibt eingesperrt:** Fällt der Druck an 1 auf null, schließt der Teller, und 2 behält seinen Druck. Mit 6 bar an 1 steigt der Druck
 an 2 nur bis **5,9 bar** (p1 − Öffnungsdruck): Dann ist der Unterschied nur noch 0,1 bar, der Teller schließt wieder, und die Anzeige zeigt
@@ -98,7 +100,7 @@ kleiner als 30 px ist) und das Zerlegen.
 ## Was die Figur nicht zeigt
 
 **Belegt** (Festo-Datenblatt 11689 und Katalog H/HA/HB, H-1/4-B): Rückschlagfunktion, Anschlüsse **G¼** an 1 und 2, einschraubbar, Betriebsdruck
-**0,4 bis 12 bar** (die Regler gehen bis 8 bar), Normnenndurchfluss **1000 l/min** (6 → 5 bar), Gehäuse aus Aluminium-Knetlegierung eloxiert, Dichtungen
+**0,4 bis 12 bar** (die Regler gehen bis 8 bar und beginnen bei 0 bar; **unter 0,4 bar gilt das nur im Modell**, dafür gibt der Katalog keinen Betrieb an), Normnenndurchfluss **1000 l/min** (6 → 5 bar), Gehäuse aus Aluminium-Knetlegierung eloxiert, Dichtungen
 aus NBR, **25,4 g**, größtes Anziehdrehmoment **11 Nm**, Einbaulage beliebig; Länge **48 mm**, Gewindelänge **8 mm**, Schlüsselweite **19 mm**; Dichtring
 für das Außengewinde im Lieferumfang; Außengewinde mit blauem Dichtring an einem, Innengewinde am anderen Ende; Schaltzeichen: Kugel auf Sitz mit Feder.
 
