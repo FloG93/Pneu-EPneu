@@ -48,7 +48,7 @@ test("Die Legende ist vollständig: sechs Einträge, ein Knopf je Eintrag, jede 
   for (const e of LEGENDE) assert.ok(gezeichnet.has(e.piece), `Legendeneintrag "${e.piece}" hat keine Teile in der Zeichnung`);
 });
 
-test("Jeder Legendensatz hat mindestens zwei Sätze, höchstens drei bis vier", () => {
+test("Jeder Legendensatz hat zwei bis fünf Sätze", () => {
   for (const e of LEGENDE) {
     const saetze = e.satz.split(/(?<=[.!?])\s+/).filter(Boolean);
     assert.ok(saetze.length >= 2 && saetze.length <= 5, `${e.piece}: ${saetze.length} Sätze`);
@@ -122,4 +122,14 @@ test("Das Gehäuse trägt Maße des Katalogs: 48 mm lang, Schlüsselweite 19 mm 
   const bau = readFileSync(BAU, "utf8");
   assert.match(bau, /const RA = 9\.5, HOEHE = 2 \* RA/);
   assert.match(bau, /const X_HEX = 40, X_ENDE = 48/);
+});
+
+/** The text a reader sees: no script, no style, no drawing, no markup. */
+const sichtbarerText = (seite) => seite.replace(/<(script|style|svg)[\s\S]*?<\/\1>/g, " ").replace(/<[^>]+>/g, " ");
+
+test("Im Text der Seite steht keine Zahl mit sechs oder mehr Nachkommastellen (Fließkommareste wie 0,010000000000000002)", () => {
+  const treffer = sichtbarerText(html).match(/\d+[.,]\d{6,}/g) ?? [];
+  assert.deepEqual(treffer, []);
+  const legende = LEGENDE.map((e) => e.satz).join(" ").match(/\d+[.,]\d{6,}/g) ?? [];
+  assert.deepEqual(legende, []);
 });
