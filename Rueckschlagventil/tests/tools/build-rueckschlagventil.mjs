@@ -210,10 +210,13 @@ function teller() {
   const nbr = [[T.spitze, T.rSpitze], [T.kegelEnde, R_TELLER], [T.nbrEnde, R_TELLER]];   // the upper edge of the sealing face (x, r)
   const umrissNbr = [...nbr.map(([x, r]) => [x, 0, ZA + r]), ...nbr.slice().reverse().map(([x, r]) => [x, 0, ZA - r])];
   const kern = [[T.nbrEnde, ZA - R_TELLER], [T.hinten, ZA - R_TELLER], [T.hinten, ZA + R_TELLER], [T.nbrEnde, ZA + R_TELLER]].map(([x, z]) => [x, 0, z]);
+  // One part: a light metal core (its own section tone "k", so that it differs from the grey housing and the tan seat insert), the black
+  // NBR face in front of it, and one strong outline round the whole poppet.
   const schnitt = [
-    schnittFlaeche(kern, -1, { strich: "mid" }),
+    schnittFlaeche(kern, -1, { ton: "k", strich: "mid" }),
     L(ring3(kern), { tone: "hi" }),
     `<path class="iso-shade" data-shade="0" style="${RUBBER_SCHNITT}" d="${ring3(umrissNbr)}"/>`,
+    L(ring3(umrissNbr), { tone: "hi" }),
   ].join("");
   const ganz = [
     `<g class="gummi">${SV(G.solidOf([[T.spitze, T.rSpitze], [T.kegelEnde, R_TELLER], [T.nbrEnde, R_TELLER]], F, P), { tone: "lo" })}</g>`,
@@ -549,7 +552,8 @@ const TABELLE_CSS = `.lesetext table.wahrheit { border-collapse: collapse; margi
 .lesetext table.wahrheit caption { text-align: left; font-size: 12.5px; padding-bottom: 5px; color: color-mix(in srgb, currentColor 80%, transparent) }
 .lesetext table.wahrheit th, .lesetext table.wahrheit td { border: 1px solid color-mix(in srgb, currentColor 30%, transparent); padding: 6px 12px; text-align: left }
 .lesetext table.wahrheit th { background: var(--anatomy-card); color: var(--anatomy-strong); font-weight: 600; line-height: 1.3 }`;
-const EIGENES_CSS = `${VS.CSS}\n.kammer { opacity: .97 }\n${RUECK_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}\n${TABELLE_CSS}`;
+const KERN_CSS = `.iso { --schnitt-k: #d6d2c6 }\n.iso-svg .iso-shade[data-schnitt="k"][data-shade] { fill: var(--schnitt-k) }`;
+const EIGENES_CSS = `${KERN_CSS}\n${VS.CSS}\n.kammer { opacity: .97 }\n${RUECK_SYMBOL_CSS}\n${SS.CSS}\n${SS.GUMMI_CSS}\n${TABELLE_CSS}`;
 SS.seiteSchreiben({
   ziel: ZIEL,
   css: EIGENES_CSS,
