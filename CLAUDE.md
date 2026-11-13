@@ -11,7 +11,7 @@ Das Vorgehen dieses Repos steht allgemein im Skill **`azubi-visualisierung`** (`
 - Nur relative Pfade (läuft lokal mit `python3 -m http.server` und auf GitHub Pages). Design und Bedienelemente aus `shared/`.
 - Jeder Ordner mit einer `index.html` wird von `pages.yml` veröffentlicht: **`index.html` erst anlegen, wenn die Seite vorzeigbar ist.** `figur/` und `docs/` haben bewusst keine.
 - Browser-Speicher: Hell/Dunkel und Kontrast stehen in `3d-druck.theme` und `3d-druck.kontrast` — **gemeinsam mit dem Repo 3D-Druck**, weil beide Seiten auf derselben Domain liegen und sich gleich anfühlen sollen. Alles Eigene beginnt mit `pneumatik.`
-- Tests: `npm test` (Node ≥ 22, `node --test`), dazu `npm run pruef:zylinder`, `pruef:zylinder-ew`, `pruef:ventil`, `pruef:ventil32`, `pruef:drossel` und `pruef:wechsel` für die Geometrie (alles auf einmal: `npm run gate:alle`). Vor jedem Commit laufen lassen.
+- Tests: `npm test` (Node ≥ 22, `node --test`), dazu `npm run pruef:zylinder`, `pruef:zylinder-ew`, `pruef:ventil`, `pruef:ventil32`, `pruef:drossel`, `pruef:wechsel` und `pruef:rueckschlagventil` für die Geometrie (alles auf einmal: `npm run gate:alle`). Vor jedem Commit laufen lassen.
 
 ## Die Figuren
 
