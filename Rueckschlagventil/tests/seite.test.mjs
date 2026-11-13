@@ -80,8 +80,9 @@ test("Der Erklärtext hat die Zustandstabelle als echte HTML-Tabelle: offen, zu,
   assert.equal((tabelle.match(/<th scope="col">/g) || []).length, 3);
   const zeilen = [...tabelle.matchAll(/<tr><td>([^<]*)<\/td><td>([^<]*)<\/td><td>([^<]*)<\/td><\/tr>/g)].map((m) => m.slice(1));
   assert.equal(zeilen.length, 3);
-  assert.deepEqual(zeilen.map((z) => z[1]), ["offen", "zu", "zu, fester angedrückt"]);
-  assert.match(zeilen[0][0], /Δp &gt; 0,1 bar/);
+  assert.match(zeilen[0][1], /^offen \(zwischen 0,1 und 0,5 bar erst teilweise, ab 0,5 bar ganz\)$/);
+  assert.deepEqual(zeilen.slice(1).map((z) => z[1]), ["zu", "zu, fester angedrückt"]);
+  assert.match(zeilen[0][0], /Δp &gt; 0,1 bar \(angenommen\)/);
   assert.match(zeilen[2][2], /nichts strömt zurück/);
 });
 
@@ -95,7 +96,12 @@ test("Der Text sagt die Annahmen: Öffnungsdruck, 5,9 bar, begrenzte Anzeige, na
   assert.match(html, /aufgeschraubte <strong>Hülse<\/strong> \(angenommen/);
   assert.match(html, /href="\.\.\/Drosselrueckschlagventil\/"/);
   assert.match(html, /href="\.\.\/Wechselventil\/"/);
-  assert.match(html, /Eingebaut wird es <strong>in Pfeilrichtung<\/strong>/);
+  assert.match(html, /Eingebaut wird es <strong>in Durchflussrichtung<\/strong>/);
+  assert.match(html, /arbeitet nach demselben Prinzip/);
+  assert.ok(!/Pfeilrichtung/.test(html), "kein Pfeil in der Zeichnung, also keine Pfeilrichtung");
+  assert.match(html, /welches Ende das Innengewinde hat und welches der Eingang ist<\/strong>, nennt das Datenblatt nicht und ist <strong>angenommen<\/strong>/);
+  assert.match(html, /wird das Außengewinde in einen Anschluss <strong>eingeschraubt<\/strong>/);
+  assert.match(html, /unter 0,4 bar gilt das nur im Modell/);
 });
 
 test("Das Schaltzeichen trägt nur die Ziffern 1 und 2, und nur die Nummern stehen als Schrift in der Zeichnung", () => {

@@ -495,7 +495,7 @@ const LEISTE = SS.leiste(
   + SS.regler(knopf("btn-entlueften", "Ausgang 2 entlüften", { titel: "Öffnet eine Entlüftungsblende am Ausgang 2, solange der Knopf gedrückt ist" })),
   { zeitlupe: 10 });
 
-const INFO = "Stelle den Druck am Eingang 1 ein oder lass die Automatik laufen: Der Teller hebt ab, sobald der Druck an 1 den Druck an 2 um mehr als 0,1 bar übersteigt. "
+const INFO = "Stelle den Druck am Eingang 1 ein oder lass die Automatik laufen: Der Teller hebt ab, sobald der Druck an 1 den Druck an 2 um mehr als 0,1 bar (angenommen) übersteigt. "
   + "Drückt der Ausgang 2 stärker, liegt er fest auf dem Sitz und nichts strömt zurück. Das kräftige Blau steht unter Druck, das blasse ist drucklos. Ein Klick auf einen Legendeneintrag hebt die Baugruppe hervor.";
 
 const BEIFIGUR = SS.schaltzeichenBlock({
@@ -513,7 +513,7 @@ const ENDE_P2 = komma(6 - M.oeffnungsdruck, 1);                                 
 const LESETEXT = `<div class="lesetext">
 <h2>Was man sieht</h2>
 <p>Das Rückschlagventil ist durch seine Mitte aufgeschnitten. Die Zahlen und die Außenmaße stammen vom Festo-Ventil H-1/4-B; <strong>der Katalog zeigt aber keinen Schnitt</strong>, darum ist das Innere <strong>nachgezeichnet nach dem Funktionsprinzip</strong> eines federbelasteten Tellerrückschlagventils: ein eingepresster <strong>Sitzeinsatz</strong> mit Kegelsenkung, ein <strong>Ventilteller</strong> mit Dichtfläche aus Gummi (NBR) und eine schwache <strong>Druckfeder</strong>, die den Teller auf den Sitz drückt.
-Links liegt der Eingang <strong>1</strong> im Innengewinde, rechts der Ausgang <strong>2</strong> am Außengewinde mit Dichtring. Der Sechskant des Gehäuses ist in der Zeichnung ein <strong>Zylinder</strong>, die rechte Verschraubung eine aufgeschraubte <strong>Hülse</strong> (angenommen: der Katalog zeigt das Gegenstück nicht), und der Dichtring, der in Wirklichkeit blau ist, ist dunkel gezeichnet, weil Blau in dieser Sammlung der Luft gehört.
+In der Zeichnung liegt links der Eingang <strong>1</strong> im Innengewinde, rechts der Ausgang <strong>2</strong> am Außengewinde mit Dichtring. Aus dem Katalog stammt nur das Gewinde G1/4; <strong>welches Ende das Innengewinde hat und welches der Eingang ist</strong>, nennt das Datenblatt nicht und ist <strong>angenommen</strong> (das Katalogbild zeigt ein Ende mit Außengewinde und Dichtring und eines mit Innengewinde). In Wirklichkeit wird das Außengewinde in einen Anschluss <strong>eingeschraubt</strong> (der Katalog nennt das Ventil „einschraubbar“) und der Dichtring dichtet gegen diesen Anschluss ab; die Zeichnung zeigt statt des Anschlusses eine Verschraubung. Der Sechskant des Gehäuses ist in der Zeichnung ein <strong>Zylinder</strong>, die rechte Verschraubung eine aufgeschraubte <strong>Hülse</strong> (angenommen: der Katalog zeigt das Gegenstück nicht), und der Dichtring, der in Wirklichkeit blau ist, ist dunkel gezeichnet, weil Blau in dieser Sammlung der Luft gehört.
 Hub und Federweg sind überhöht, alle Innenmaße angenommen.</p>
 
 <h2>Offen, zu, fester zu</h2>
@@ -522,7 +522,7 @@ Hub und Federweg sind überhöht, alle Innenmaße angenommen.</p>
 <caption>Zustände des Rückschlagventils (Δp = Druck an 1 minus Druck an 2)</caption>
 <thead><tr><th scope="col">Druckunterschied</th><th scope="col">Teller</th><th scope="col">Luft</th></tr></thead>
 <tbody>
-<tr><td>Δp &gt; ${komma(M.oeffnungsdruck, 1)} bar</td><td>offen</td><td>strömt von 1 nach 2</td></tr>
+<tr><td>Δp &gt; ${komma(M.oeffnungsdruck, 1)} bar (angenommen)</td><td>offen (zwischen ${komma(M.oeffnungsdruck, 1)} und ${komma(M.vollDp, 1)} bar erst teilweise, ab ${komma(M.vollDp, 1)} bar ganz)</td><td>strömt von 1 nach 2</td></tr>
 <tr><td>Δp ≤ ${komma(M.oeffnungsdruck, 1)} bar</td><td>zu</td><td>nichts strömt</td></tr>
 <tr><td>p2 &gt; p1 (Gegendruck)</td><td>zu, fester angedrückt</td><td>nichts strömt zurück</td></tr>
 </tbody>
@@ -538,9 +538,9 @@ Teller zu, in beide Richtungen: <strong>0 l/min</strong>
 </p>
 
 <h2>Wozu das gut ist</h2>
-<p>Das Rückschlagventil <strong>hält Druck</strong> (eine Spannvorrichtung bleibt gespannt, wenn der Druck abfällt) und <strong>verhindert das Rückströmen</strong> (aus einem Behälter in den Kompressor, aus einem Zweig in den anderen). Es steckt als Baustein in anderen Ventilen: in der Rückschlagklappe des <a href="../Drosselrueckschlagventil/">Drosselrückschlagventils</a> und im Körper des <a href="../Wechselventil/">Wechselventils</a>. Eingebaut wird es <strong>in Pfeilrichtung</strong>: Eingang 1 zur Druckquelle, Ausgang 2 zum Verbraucher; das Schaltzeichen zeigt die Richtung, in der die Kugel frei ist.
+<p>Das Rückschlagventil <strong>hält Druck</strong> (eine Spannvorrichtung bleibt gespannt, wenn der Druck abfällt) und <strong>verhindert das Rückströmen</strong> (aus einem Behälter in den Kompressor, aus einem Zweig in den anderen). Es steckt als Baustein in anderen Ventilen: in der Rückschlagklappe des <a href="../Drosselrueckschlagventil/">Drosselrückschlagventils</a>; das <a href="../Wechselventil/">Wechselventil</a> arbeitet nach demselben Prinzip. Eingebaut wird es <strong>in Durchflussrichtung</strong>: Eingang 1 zur Druckquelle, Ausgang 2 zum Verbraucher; das Schaltzeichen zeigt die Richtung, in der die Kugel frei ist.
 Das <em>entsperrbare</em> Rückschlagventil, das sich von außen öffnen lässt, ist nicht Teil dieser Seite.</p>
-<p class="hinweis">Alle Zahlen kommen aus dem Modell, das auch den Teller und die Farben bewegt. Katalog sind nur ${M.qn} l/min bei ${komma(M.bezugsDp, 0)} bar Druckabfall, G1/4 an beiden Anschlüssen, der Betriebsdruck von 0,4 bis 12 bar (die Regler gehen bis ${P_MAX} bar) und die Maße 48 mm lang, Schlüsselweite 19 mm, Gewinde 8 mm.
+<p class="hinweis">Alle Zahlen kommen aus dem Modell, das auch den Teller und die Farben bewegt. Katalog sind nur ${M.qn} l/min bei ${komma(M.bezugsDp, 0)} bar Druckabfall, G1/4 an beiden Anschlüssen, der Betriebsdruck von 0,4 bis 12 bar (die Regler gehen bis ${P_MAX} bar und beginnen bei 0 bar; unter 0,4 bar gilt das nur im Modell, ein echtes Ventil ist dafür nicht angegeben) und die Maße 48 mm lang, Schlüsselweite 19 mm, Gewinde 8 mm.
 Alles andere ist angenommen: Der Durchfluss wächst im Modell linear mit dem Druckabfall; ein echtes Ventil drosselt bei großem Druckabfall ab. Die Anzeige begrenzt ihn deshalb auf das Doppelte des Katalogwerts, <strong>${QMAX} l/min</strong>, und schreibt dann „(begrenzt)“ dazu (zum Beispiel bei ${komma(5, 0)} bar Druckabfall, wo linear ${5 * M.qn} l/min herauskämen). Angenommen sind außerdem die ${komma(M.volumen2 / 1000, 0)} cm³ hinter dem Ausgang, die Entlüftungsblende (Zeitkonstante ${komma(M.entlueftZeit, 1)} s, damit man das Entlüften in der Zeitlupe sieht) und alle Maße im Inneren. Die Teilchen zeigen die Luft in der Schnittebene und nur, solange der Teller sichtbar abgehoben ist.</p>
 <a class="zurueck" href="../">← Zurück zur Übersicht</a>
 </div>`;

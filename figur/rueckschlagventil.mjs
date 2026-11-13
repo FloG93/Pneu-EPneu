@@ -128,7 +128,7 @@ export function anzeigeZeilen(a) {
   const bar = (x) => (x < 0 ? "−" : "") + Math.abs(x).toFixed(1).replace(".", ",") + "\u00a0bar";
   const wort = a.teller === "halb" ? "halb offen" : a.teller;
   return [
-    `Eingang 1 ${bar(a.p1)} · Ausgang 2 ${bar(a.p2)} · Δp ${bar(a.dp)}`,
+    `Eingang 1 ${bar(a.p1)} · Ausgang 2 ${bar(a.p2)} · Δp\u00a0${bar(a.dp)}`,
     `Teller ${wort}${a.gegendruck ? " (Gegendruck)" : ""} · Durchfluss ${a.q}\u00a0l/min${a.begrenzt ? " (begrenzt)" : ""}`,
   ];
 }

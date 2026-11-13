@@ -318,7 +318,7 @@ export default async function pruefeRueckschlagventil(ctx) {
         return t ? [...t.querySelectorAll("tbody tr")].map((r) => [...r.children].map((c) => c.textContent.trim())) : null;
       });
       V("der Erklärtext enthält die Zustandstabelle mit den drei Fällen (offen, zu, zu und fester angedrückt)",
-        Array.isArray(tab) && tab.length === 3 && tab[0][1] === "offen" && tab[1][1] === "zu" && /fester/.test(tab[2][1]) && /nichts strömt zurück/.test(tab[2][2]));
+        Array.isArray(tab) && tab.length === 3 && /^offen/.test(tab[0][1]) && tab[1][1] === "zu" && /fester/.test(tab[2][1]) && /nichts strömt zurück/.test(tab[2][2]));
       const lese = await seite.textContent(".lesetext");
       V("der Text nennt die Annahmen: Öffnungsdruck 0,1 bar (Schwesterreihe H-QS), nachgezeichnet, Dichtring blau, Zylinder, Hülse",
         /angenommen: von der Schwesterreihe H-QS/.test(lese) && /nachgezeichnet nach dem Funktionsprinzip/.test(lese) && /in Wirklichkeit blau/.test(lese) && /Sechskant[^.]*Zylinder/.test(lese) && /Hülse/.test(lese));

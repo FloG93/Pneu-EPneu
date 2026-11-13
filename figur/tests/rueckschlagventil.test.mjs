@@ -70,7 +70,7 @@ test("Teller öffnet in 8 ms: nach 4 ms halb, nach 8 ms ganz offen (Druckuntersc
   nahe(z.h, 1, 1e-9, "h nach 8 ms");
 });
 
-test("Öffnungsdruck: bei Δp = 0,1 bar und darunter bleibt der Teller zu, p2 ändert sich nicht", () => {
+test("Öffnungsdruck: bei Δp = 0,1 bar und darunter bleibt der Teller zu, p2 ändert sich nicht", () => {
   const a = lauf(zustand(0, b(3) + 0.1, b(3)), 0.2, b(3) + 0.1);
   assert.equal(a.h, 0);
   assert.equal(a.p2, b(3));
@@ -79,7 +79,7 @@ test("Öffnungsdruck: bei Δp = 0,1 bar und darunter bleibt der Teller zu, p2 ä
   assert.equal(c.p2, b(3));
 });
 
-test("Öffnungsdruck: bei Δp = 0,11 bar öffnet er ein wenig; p2 steigt bis auf p1 − 0,1 bar und nicht weiter", () => {
+test("Öffnungsdruck: bei Δp = 0,11 bar öffnet er ein wenig; p2 steigt bis auf p1 − 0,1 bar und nicht weiter", () => {
   // soll = (0,11 - 0,1) / 0,4 = 0,025; the flow stops when the drop is back at 0,1 bar: p2 → p1 - 0,1 = b(3) + 0,01
   const z = lauf(zustand(0, b(3) + 0.11, b(3)), 0.5, b(3) + 0.11);
   assert.ok(z.p2 > b(3) + 0.009, `p2 = ${z.p2}`);
@@ -187,7 +187,7 @@ test("tellerZustand: zu unter 2 %, offen über 98 %, dazwischen halb", () => {
   assert.equal(tellerZustand(zustand(1, 1, 1), M), "offen");
 });
 
-test("anzeige rundet: Überdruck und Δp auf 0,1 bar, Durchfluss auf ganze l/min", () => {
+test("anzeige rundet: Überdruck und Δp auf 0,1 bar, Durchfluss auf ganze l/min", () => {
   // h 0,6666, p1 4,04 bar, p2 3,04 bar gauge: drop 1,0 bar -> 1000 · 0,6666 · 1 = 666,6 -> 667
   const a = anzeige(zustand(0.6666, b(4.04), b(3.04)), M);
   assert.deepEqual(a, { p1: 4, p2: 3, dp: 1, teller: "halb", q: 667, begrenzt: false, gegendruck: false });
@@ -205,15 +205,15 @@ test("anzeige: Gegendruck zeigt negatives Δp, Teller zu, Durchfluss 0; Begrenzu
 
 test("anzeigeZeilen: zwei Zeilen, deutsches Komma, echtes Minus, feste Leerzeichen zwischen Zahl und Einheit, nennt Gegendruck und Begrenzung", () => {
   assert.deepEqual(anzeigeZeilen(anzeige(zustand(1, b(6), b(5)), M)), [
-    "Eingang 1 6,0 bar · Ausgang 2 5,0 bar · Δp 1,0 bar",
+    "Eingang 1 6,0 bar · Ausgang 2 5,0 bar · Δp 1,0 bar",
     "Teller offen · Durchfluss 1000 l/min",
   ]);
   assert.deepEqual(anzeigeZeilen(anzeige(zustand(0, b(3), b(6)), M)), [
-    "Eingang 1 3,0 bar · Ausgang 2 6,0 bar · Δp −3,0 bar",
+    "Eingang 1 3,0 bar · Ausgang 2 6,0 bar · Δp −3,0 bar",
     "Teller zu (Gegendruck) · Durchfluss 0 l/min",
   ]);
   assert.deepEqual(anzeigeZeilen(anzeige(zustand(0.5, b(0.3), b(0)), M)), [
-    "Eingang 1 0,3 bar · Ausgang 2 0,0 bar · Δp 0,3 bar",
+    "Eingang 1 0,3 bar · Ausgang 2 0,0 bar · Δp 0,3 bar",
     "Teller halb offen · Durchfluss 150 l/min",
   ]);
   assert.match(anzeigeZeilen(anzeige(zustand(1, b(6), b(0)), M))[1], /^Teller offen · Durchfluss 2000\u00a0l\/min \(begrenzt\)$/);
